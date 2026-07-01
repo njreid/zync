@@ -18,6 +18,19 @@ zync is a personal Android app supporting ADHD executive function through GTD (G
 - WorkManager for transcription jobs and agent runs.
 - VCS: jj (jujutsu, git backend).
 
+### 2.1 Development workflow — Android CLI
+
+Development uses the official **Android CLI** (developer.android.com/tools/agents/android-cli), the agent-oriented entry point to Android tooling:
+
+- `android create` scaffolds the project from the `empty-activity-agp-9` template (M1 setup step).
+- `android init` / `android skills add --agent=CLAUDE` installs the official Android skills so agent sessions follow current Android best practices.
+- `android studio version-lookup` resolves current versions for AGP, Kotlin, Compose BOM, and libraries — no guessed dependency versions.
+- `android emulator list|start|stop` manages a virtual device for development; USB/hardware flows still verified on the physical Pixel 9.
+- `android run --apks=…` deploys builds; **Journeys** drives UI-level agent testing of the Inbox/clarify flows.
+- `android update` run periodically to stay current.
+
+**Setup prerequisite:** Android CLI is not yet installed on the dev machine — download from developer.android.com/tools/agents, then run `android update && android init`.
+
 ## 3. Data model (Room/SQLite)
 
 ### 3.1 Nodes — one recursive table
@@ -140,7 +153,7 @@ Modeled on nanocode/glaforge's minimal agent: a plain bounded `while` loop + typ
 
 | M | Scope |
 |---|-------|
-| M1 | GTD core: node/context/attachment schema, repository + nesting rules, Inbox/folders/projects/contexts UI, clarify actions |
+| M1 | Project setup via Android CLI (`android create`), then GTD core: node/context/attachment schema, repository + nesting rules, Inbox/folders/projects/contexts UI, clarify actions |
 | M2 | USB sync + Moonshine transcription → Inbox capture |
 | M3 | ML Kit doc scanner + OCR capture |
 | M4 | Agent loop: operators, tools, limits, journal/undo, run history |
@@ -153,4 +166,5 @@ Modeled on nanocode/glaforge's minimal agent: a plain bounded `while` loop + typ
 - Unit: nesting-rule enforcement, recursive context CTE, task→project conversion, ledger diffing, VAD segmentation, agent limit enforcement, mutation revert (incl. conflict-skip), geofence trigger dispatch + cooldown.
 - Instrumented: Moonshine inference on a fixture WAV; Room migrations.
 - Agent loop tested against a scripted fake `ChatBackend` (deterministic tool-call sequences).
+- UI journeys: Android CLI **Journeys** tests on an emulator for Inbox capture → clarify → project flows.
 - Manual on Pixel 9: USB attach flow, scanner flow.
