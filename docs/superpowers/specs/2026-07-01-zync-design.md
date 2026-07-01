@@ -137,7 +137,18 @@ Modeled on nanocode/glaforge's minimal agent: a plain bounded `while` loop + typ
 - **Guided weekly review:** wizard — empty Inbox → stale check → Someday scan → project-by-project next-action check.
 - **Stale nudges:** gentle notification when Inbox items sit > N days (configurable).
 
+## 10a. Backup (local-first)
+
+- `Documents/Zync/` is the single self-contained data root: all attachments, plus DB snapshots. Attachment paths in the DB are stored **relative to this root**, so the folder is portable.
+- A WorkManager job (daily + after each USB sync) runs SQLite `VACUUM INTO` — an atomic, consistent snapshot safe during use — writing `Documents/Zync/backup/zync-<date>.db`. Retention: last 14 dailies + monthly tail.
+- Alongside it, a human-readable `backup/nodes.jsonl` export (nodes, contexts, attachments metadata) as a schema-independent escape hatch.
+- Replication is delegated to any folder syncer (Syncthing → desktop/NAS). No cloud dependency, no server code.
+- Restore: copy a snapshot over the app DB (import action in Settings), folder supplies the files.
+- This is backup, not multi-device sync — one writing device. Multi-device is M8.
+
 ## 11. Later milestones (sketched, not designed)
+
+- **M8 — Multi-device sync:** CRDT-based SQLite sync (e.g. cr-sqlite) or sync service (e.g. PowerSync). Hard problems: merging tree moves, agent-journal semantics across devices. The JSONL export keeps data portable until then.
 
 - **M6 — Calendar sync:** Android `CalendarProvider` (device Google accounts, no OAuth). Time-specific tasks appear as calendar entries; a Today view merges calendar events with next actions. GTD's "sacred calendar" rule: only genuinely day-specific items.
 - **M7 — Messages/WhatsApp capture:** WhatsApp has no public API. Paths: share-sheet (free from M5) and a `NotificationListenerService` capturing starred/flagged messages into Inbox. Revisit when reached.
@@ -158,8 +169,10 @@ Modeled on nanocode/glaforge's minimal agent: a plain bounded `while` loop + typ
 | M3 | ML Kit doc scanner + OCR capture |
 | M4 | Agent loop: operators, tools, limits, journal/undo, run history |
 | M5 | ADHD layer: focus view, tiny-first-step, quick capture, defer/review/nudges |
+| M5.5 | Backup: VACUUM INTO snapshots + JSONL export + restore action |
 | M6 | Calendar sync (sketch) |
 | M7 | Messages/WhatsApp capture (sketch) |
+| M8 | Multi-device sync (sketch) |
 
 ## 14. Testing
 
