@@ -53,6 +53,8 @@ fun Route.apiRoutes(db: ZyncDatabase, repo: NodeRepository) {
             call.respond(HttpStatusCode.Created, ctx.toDto())
         }
         get("/contexts/{id}/tasks") {
+            if (repo.observeContexts().first().none { it.id == id() })
+                return@get call.respond(HttpStatusCode.NotFound, ErrorDto("no such context"))
             call.respond(repo.observeTasksInContext(id()).first().map { it.toDto() })
         }
 
@@ -74,6 +76,8 @@ fun Route.apiRoutes(db: ZyncDatabase, repo: NodeRepository) {
                 call.respond(node.toDto())
             }
             get("/children") {
+                val node = repo.get(id()) ?: return@get call.respond(
+                    HttpStatusCode.NotFound, ErrorDto("no such node"))
                 call.respond(repo.observeChildren(id()).first().map { it.toDto() })
             }
             patch {
@@ -100,6 +104,8 @@ fun Route.apiRoutes(db: ZyncDatabase, repo: NodeRepository) {
             post("/reopen") { repo.reopen(id()); call.respond(repo.get(id())!!.toDto()) }
             post("/trash") { repo.trash(id()); call.respond(repo.get(id())!!.toDto()) }
             get("/contexts") {
+                val node = repo.get(id()) ?: return@get call.respond(
+                    HttpStatusCode.NotFound, ErrorDto("no such node"))
                 call.respond(repo.observeContextsFor(id()).first().map { it.toDto() })
             }
             put("/contexts") {

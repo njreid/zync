@@ -71,4 +71,9 @@ class ContextsApiTest {
             }
         }
     }
+
+    @Test
+    fun `tasks of unknown context is 404`() = zyncTestApplication { _, _, client ->
+        assertEquals(HttpStatusCode.NotFound, client.get("/api/contexts/9999/tasks").status)
+    }
 }

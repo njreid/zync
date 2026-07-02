@@ -135,4 +135,10 @@ class NodesApiTest {
     fun `non-numeric id is 400`() = zyncTestApplication { _, _, client ->
         assertEquals(HttpStatusCode.BadRequest, client.get("/api/nodes/abc").status)
     }
+
+    @Test
+    fun `children of unknown node is 404 not empty list`() = zyncTestApplication { _, _, client ->
+        assertEquals(HttpStatusCode.NotFound, client.get("/api/nodes/9999/children").status)
+        assertEquals(HttpStatusCode.NotFound, client.get("/api/nodes/9999/contexts").status)
+    }
 }
