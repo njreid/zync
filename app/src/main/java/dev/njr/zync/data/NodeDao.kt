@@ -31,4 +31,21 @@ interface NodeDao {
 
     @Query("SELECT * FROM attachment WHERE nodeId = :nodeId")
     suspend fun attachmentsFor(nodeId: Long): List<AttachmentEntity>
+
+    @Query(
+        """
+        WITH RECURSIVE tagged(id) AS (
+            SELECT nodeId FROM node_context WHERE contextId = :contextId
+            UNION
+            SELECT n.id FROM node n JOIN tagged t ON n.parentId = t.id
+        )
+        SELECT * FROM node
+        WHERE id IN (SELECT id FROM tagged)
+          AND kind = 'TASK'
+          AND status = 'ACTIVE'
+          AND (deferUntil IS NULL OR deferUntil <= :now)
+        ORDER BY createdAt DESC
+        """
+    )
+    fun observeTasksInContext(contextId: Long, now: Long): Flow<List<NodeEntity>>
 }

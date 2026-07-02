@@ -1,5 +1,7 @@
 package dev.njr.zync.domain
 
+import dev.njr.zync.data.ContextEntity
+import dev.njr.zync.data.NodeContextCrossRef
 import dev.njr.zync.data.NodeEntity
 import dev.njr.zync.data.NodeKind
 import dev.njr.zync.data.NodeStatus
@@ -64,6 +66,23 @@ class NodeRepository(
 
     suspend fun trash(id: Long) =
         updateMutable(id) { it.copy(status = NodeStatus.DROPPED) }
+
+    fun observeTasksInContext(contextId: Long): Flow<List<NodeEntity>> =
+        dao.observeTasksInContext(contextId, now())
+
+    suspend fun createContext(name: String): Long =
+        db.contextDao().insert(ContextEntity(name = name))
+
+    fun observeContexts(): Flow<List<ContextEntity>> = db.contextDao().observeAll()
+
+    fun observeContextsFor(nodeId: Long): Flow<List<ContextEntity>> =
+        db.contextDao().observeContextsFor(nodeId)
+
+    suspend fun setContexts(nodeId: Long, contextIds: Set<Long>) {
+        requireNode(nodeId)
+        db.contextDao().clearTags(nodeId)
+        contextIds.forEach { db.contextDao().tag(NodeContextCrossRef(nodeId, it)) }
+    }
 
     private suspend fun requireNode(id: Long): NodeEntity =
         requireNotNull(dao.getById(id)) { "No node $id" }

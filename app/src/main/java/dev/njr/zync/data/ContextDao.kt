@@ -16,6 +16,9 @@ interface ContextDao {
     @Query("DELETE FROM node_context WHERE nodeId = :nodeId AND contextId = :contextId")
     suspend fun untag(nodeId: Long, contextId: Long)
 
+    @Query("DELETE FROM node_context WHERE nodeId = :nodeId")
+    suspend fun clearTags(nodeId: Long)
+
     @Query("SELECT * FROM context ORDER BY name")
     fun observeAll(): Flow<List<ContextEntity>>
 
