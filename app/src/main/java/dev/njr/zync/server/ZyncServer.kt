@@ -5,7 +5,8 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
-import io.ktor.server.application.createApplicationPlugin
+import io.ktor.server.application.ApplicationCallPipeline
+import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
@@ -22,13 +23,14 @@ import kotlinx.serialization.json.Json
 const val TOKEN_COOKIE = "zync_token"
 const val TOKEN_HEADER = "X-Zync-Token"
 
-private fun tokenGuard(token: String) = createApplicationPlugin("ZyncTokenGuard") {
-    onCall { call ->
+private fun Application.tokenGuard(token: String) {
+    intercept(ApplicationCallPipeline.ApplicationPhase.Plugins) {
         val presented = call.request.headers[TOKEN_HEADER]
             ?: call.request.queryParameters["token"]
             ?: call.request.cookies[TOKEN_COOKIE]
         if (presented != token) {
             call.respond(HttpStatusCode.Unauthorized, ErrorDto("missing or invalid token"))
+            finish()
         } else if (call.request.queryParameters["token"] == token) {
             call.response.cookies.append(TOKEN_COOKIE, token, path = "/", httpOnly = true)
         }
@@ -47,7 +49,7 @@ fun Application.zyncModule(
             call.respond(HttpStatusCode.BadRequest, ErrorDto(cause.message ?: "invalid request"))
         }
     }
-    install(tokenGuard(token))
+    tokenGuard(token)
     routing {
         apiRoutes(repo)   // defined in Tasks 4-5; empty stub for now
         get("/{path...}") {
@@ -73,9 +75,7 @@ class ZyncServer(
             zyncModule(repo, token, assets)
         }.also { engine = it }
         e.start(wait = false)
-        return runCatching {
-            kotlinx.coroutines.runBlocking { e.engine.resolvedConnectors().first().port }
-        }.getOrElse { port }
+        return kotlinx.coroutines.runBlocking { e.engine.resolvedConnectors().first().port }
     }
 
     fun stop() {
