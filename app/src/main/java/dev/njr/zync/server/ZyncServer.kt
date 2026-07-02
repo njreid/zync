@@ -84,5 +84,3 @@ class ZyncServer(
     }
 }
 
-// Task 4 moves this to ApiRoutes.kt and fills it in.
-fun io.ktor.server.routing.Route.apiRoutes(repo: NodeRepository) { /* Task 4 */ }
