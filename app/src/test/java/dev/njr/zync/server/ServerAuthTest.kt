@@ -21,14 +21,14 @@ import org.robolectric.RobolectricTestRunner
 class ServerAuthTest {
 
     @Test
-    fun `request without token is rejected`() = zyncTestApplication { _, _ ->
+    fun `request without token is rejected`() = zyncTestApplication { _, _, _ ->
         val bare = createClient { }   // no default token header
         assertEquals(HttpStatusCode.Unauthorized, bare.get("/index.html").status)
     }
 
     @Test
     fun `unauthenticated POST to inbox is rejected and has no side effect`() =
-        zyncTestApplication { _, client ->
+        zyncTestApplication { _, _, client ->
             val bare = createClient { install(ContentNegotiation) { json() } }   // no default token header
             val res = bare.post("/api/inbox") {
                 contentType(ContentType.Application.Json)
@@ -42,21 +42,21 @@ class ServerAuthTest {
         }
 
     @Test
-    fun `header token grants access to static assets`() = zyncTestApplication { _, client ->
+    fun `header token grants access to static assets`() = zyncTestApplication { _, _, client ->
         val res = client.get("/index.html")
         assertEquals(HttpStatusCode.OK, res.status)
         assertTrue(res.bodyAsText().contains("ok"))
     }
 
     @Test
-    fun `query token sets cookie and cookie works afterwards`() = zyncTestApplication { _, _ ->
+    fun `query token sets cookie and cookie works afterwards`() = zyncTestApplication { _, _, _ ->
         val bare = createClient { install(io.ktor.client.plugins.cookies.HttpCookies) }
         assertEquals(HttpStatusCode.OK, bare.get("/index.html?token=test-token").status)
         assertEquals(HttpStatusCode.OK, bare.get("/index.html").status) // cookie now carries auth
     }
 
     @Test
-    fun `unknown path with valid token is 404`() = zyncTestApplication { _, client ->
+    fun `unknown path with valid token is 404`() = zyncTestApplication { _, _, client ->
         assertEquals(HttpStatusCode.NotFound, client.get("/nope.js").status)
     }
 }

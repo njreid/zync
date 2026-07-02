@@ -13,14 +13,14 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 
 fun zyncTestApplication(
-    block: suspend ApplicationTestBuilder.(NodeRepository, HttpClient) -> Unit,
+    block: suspend ApplicationTestBuilder.(ZyncDatabase, NodeRepository, HttpClient) -> Unit,
 ) {
     val db = ZyncDatabase.inMemory(ApplicationProvider.getApplicationContext<Context>())
     val repo = NodeRepository(db)
     try {
         testApplication {
             application {
-                zyncModule(repo, token = "test-token", assets = { path ->
+                zyncModule(db, repo, token = "test-token", assets = { path ->
                     if (path == "index.html")
                         "<html>ok</html>".toByteArray() to ContentType.Text.Html
                     else null
@@ -30,7 +30,7 @@ fun zyncTestApplication(
                 install(ContentNegotiation) { json() }
                 defaultRequest { headers.append(TOKEN_HEADER, "test-token") }
             }
-            block(repo, client)
+            block(db, repo, client)
         }
     } finally {
         db.close()

@@ -1,6 +1,7 @@
 package dev.njr.zync.server
 
 import dev.njr.zync.data.NodeKind
+import dev.njr.zync.data.ZyncDatabase
 import dev.njr.zync.domain.NodeRepository
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
@@ -9,9 +10,16 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
 import io.ktor.server.routing.route
+import io.ktor.server.websocket.webSocket
+import io.ktor.websocket.Frame
+import io.ktor.websocket.send
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 @Serializable data class TitleBody(val title: String)
 @Serializable data class CreateNodeBody(val kind: NodeKind, val parentId: Long?, val title: String)
@@ -19,8 +27,11 @@ import kotlinx.serialization.Serializable
 @Serializable data class DeferBody(val until: Long?)
 @Serializable data class MoveBody(val parentId: Long)
 @Serializable data class ConvertBody(val folderId: Long)
+@Serializable data class NameBody(val name: String)
+@Serializable data class ContextIdsBody(val contextIds: List<Long>)
+@Serializable data class EventDto(val type: String)
 
-fun Route.apiRoutes(repo: NodeRepository) {
+fun Route.apiRoutes(db: ZyncDatabase, repo: NodeRepository) {
     route("/api") {
         get("/roots") { call.respond(repo.observeRoots().first().map { it.toDto() }) }
 
@@ -33,6 +44,27 @@ fun Route.apiRoutes(repo: NodeRepository) {
             val b = call.receive<CreateNodeBody>()
             val id = repo.createNode(b.kind, b.parentId, b.title)
             call.respond(HttpStatusCode.Created, repo.get(id)!!.toDto())
+        }
+
+        get("/contexts") { call.respond(repo.observeContexts().first().map { it.toDto() }) }
+        post("/contexts") {
+            val id = repo.createContext(call.receive<NameBody>().name)
+            val ctx = repo.observeContexts().first().first { it.id == id }
+            call.respond(HttpStatusCode.Created, ctx.toDto())
+        }
+        get("/contexts/{id}/tasks") {
+            call.respond(repo.observeTasksInContext(id()).first().map { it.toDto() })
+        }
+
+        get("/destinations") {
+            call.respond(repo.observeDestinations().first().map { it.toDto() })
+        }
+
+        webSocket("/events") {
+            send(Frame.Text(Json.encodeToString(EventDto("hello"))))
+            db.changesFlow().collect {
+                send(Frame.Text(Json.encodeToString(EventDto("changed"))))
+            }
         }
 
         route("/nodes/{id}") {
@@ -67,6 +99,13 @@ fun Route.apiRoutes(repo: NodeRepository) {
             post("/complete") { repo.complete(id()); call.respond(repo.get(id())!!.toDto()) }
             post("/reopen") { repo.reopen(id()); call.respond(repo.get(id())!!.toDto()) }
             post("/trash") { repo.trash(id()); call.respond(repo.get(id())!!.toDto()) }
+            get("/contexts") {
+                call.respond(repo.observeContextsFor(id()).first().map { it.toDto() })
+            }
+            put("/contexts") {
+                repo.setContexts(id(), call.receive<ContextIdsBody>().contextIds.toSet())
+                call.respond(repo.observeContextsFor(id()).first().map { it.toDto() })
+            }
         }
     }
 }

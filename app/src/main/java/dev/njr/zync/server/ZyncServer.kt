@@ -1,5 +1,6 @@
 package dev.njr.zync.server
 
+import dev.njr.zync.data.ZyncDatabase
 import dev.njr.zync.domain.NodeRepository
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -18,6 +19,11 @@ import io.ktor.server.response.respondBytes
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.serialization.json.Json
 
 const val TOKEN_COOKIE = "zync_token"
@@ -37,7 +43,20 @@ private fun Application.tokenGuard(token: String) {
     }
 }
 
+@OptIn(FlowPreview::class)
+fun ZyncDatabase.changesFlow(): Flow<Unit> =
+    callbackFlow {
+        val observer = object : androidx.room.InvalidationTracker.Observer(
+            arrayOf("node", "context", "node_context")
+        ) {
+            override fun onInvalidated(tables: Set<String>) { trySend(Unit) }
+        }
+        invalidationTracker.addObserver(observer)
+        awaitClose { invalidationTracker.removeObserver(observer) }
+    }.debounce(100)
+
 fun Application.zyncModule(
+    db: ZyncDatabase,
     repo: NodeRepository,
     token: String,
     assets: (String) -> Pair<ByteArray, ContentType>?,
@@ -51,7 +70,7 @@ fun Application.zyncModule(
     }
     tokenGuard(token)
     routing {
-        apiRoutes(repo)
+        apiRoutes(db, repo)
         get("/{path...}") {
             val path = call.parameters.getAll("path")?.joinToString("/").orEmpty()
                 .ifEmpty { "index.html" }
@@ -63,6 +82,7 @@ fun Application.zyncModule(
 }
 
 class ZyncServer(
+    private val db: ZyncDatabase,
     private val repo: NodeRepository,
     private val token: String,
     private val assets: (String) -> Pair<ByteArray, ContentType>?,
@@ -72,7 +92,7 @@ class ZyncServer(
 
     fun start(): Int {
         val e = embeddedServer(CIO, port = port, host = "127.0.0.1") {
-            zyncModule(repo, token, assets)
+            zyncModule(db, repo, token, assets)
         }.also { engine = it }
         e.start(wait = false)
         return kotlinx.coroutines.runBlocking { e.engine.resolvedConnectors().first().port }

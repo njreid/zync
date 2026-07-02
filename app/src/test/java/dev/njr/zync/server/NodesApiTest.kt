@@ -22,14 +22,14 @@ import org.robolectric.RobolectricTestRunner
 class NodesApiTest {
 
     @Test
-    fun `roots lists seeded builtin folders`() = zyncTestApplication { _, client ->
+    fun `roots lists seeded builtin folders`() = zyncTestApplication { _, _, client ->
         val roots: List<NodeDto> = client.get("/api/roots").body()
         assertEquals(listOf("Inbox", "Someday"), roots.map { it.title })
         assertTrue(roots.all { it.builtin && it.kind == NodeKind.FOLDER })
     }
 
     @Test
-    fun `quick add creates task in inbox`() = zyncTestApplication { _, client ->
+    fun `quick add creates task in inbox`() = zyncTestApplication { _, _, client ->
         val res = client.post("/api/inbox") {
             contentType(ContentType.Application.Json); setBody(TitleBody("buy milk"))
         }
@@ -41,7 +41,7 @@ class NodesApiTest {
     }
 
     @Test
-    fun `create move convert complete trash roundtrip`() = zyncTestApplication { _, client ->
+    fun `create move convert complete trash roundtrip`() = zyncTestApplication { _, _, client ->
         suspend fun create(kind: NodeKind, parentId: Long?, title: String): NodeDto =
             client.post("/api/nodes") {
                 contentType(ContentType.Application.Json)
@@ -78,7 +78,7 @@ class NodesApiTest {
     }
 
     @Test
-    fun `patch edits title and notes`() = zyncTestApplication { _, client ->
+    fun `patch edits title and notes`() = zyncTestApplication { _, _, client ->
         val task: NodeDto = client.post("/api/inbox") {
             contentType(ContentType.Application.Json); setBody(TitleBody("draft"))
         }.body()
@@ -91,7 +91,7 @@ class NodesApiTest {
     }
 
     @Test
-    fun `defer sets and clears`() = zyncTestApplication { _, client ->
+    fun `defer sets and clears`() = zyncTestApplication { _, _, client ->
         val task: NodeDto = client.post("/api/inbox") {
             contentType(ContentType.Application.Json); setBody(TitleBody("later"))
         }.body()
@@ -106,7 +106,7 @@ class NodesApiTest {
     }
 
     @Test
-    fun `rule violations map to 400 with message`() = zyncTestApplication { _, client ->
+    fun `rule violations map to 400 with message`() = zyncTestApplication { _, _, client ->
         val res = client.post("/api/nodes") {
             contentType(ContentType.Application.Json)
             setBody(CreateNodeBody(NodeKind.TASK, null, "root task"))
@@ -119,12 +119,12 @@ class NodesApiTest {
     }
 
     @Test
-    fun `get unknown node is 404`() = zyncTestApplication { _, client ->
+    fun `get unknown node is 404`() = zyncTestApplication { _, _, client ->
         assertEquals(HttpStatusCode.NotFound, client.get("/api/nodes/9999").status)
     }
 
     @Test
-    fun `patch unknown node with empty body is 404 not 500`() = zyncTestApplication { _, client ->
+    fun `patch unknown node with empty body is 404 not 500`() = zyncTestApplication { _, _, client ->
         val res = client.patch("/api/nodes/9999") {
             contentType(ContentType.Application.Json); setBody(PatchNodeBody())
         }

@@ -48,4 +48,7 @@ interface NodeDao {
         """
     )
     fun observeTasksInContext(contextId: Long, now: Long): Flow<List<NodeEntity>>
+
+    @Query("SELECT * FROM node WHERE kind IN ('FOLDER','PROJECT') AND status = 'ACTIVE' ORDER BY kind, title")
+    fun observeDestinations(): Flow<List<NodeEntity>>
 }

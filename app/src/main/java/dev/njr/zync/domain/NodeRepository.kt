@@ -70,6 +70,8 @@ class NodeRepository(
     fun observeTasksInContext(contextId: Long): Flow<List<NodeEntity>> =
         dao.observeTasksInContext(contextId, now())
 
+    fun observeDestinations(): Flow<List<NodeEntity>> = dao.observeDestinations()
+
     suspend fun createContext(name: String): Long =
         db.contextDao().insert(ContextEntity(name = name))
 
