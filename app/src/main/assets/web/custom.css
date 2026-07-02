@@ -1,0 +1,9 @@
+nav { padding: 0 1rem; }
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.chips button { width: auto; margin: 0; padding: .2rem .8rem; }
+.chips button[aria-pressed="true"] { background: var(--pico-primary); color: var(--pico-primary-inverse); }
+.tree-children { margin-left: 1.25rem; }
+article.task { padding: .6rem .9rem; margin-bottom: .5rem; }
+article.task h4 { margin-bottom: .2rem; }
+details.clarify summary { width: auto; }
+.muted { color: var(--pico-muted-color); font-size: .85em; }
