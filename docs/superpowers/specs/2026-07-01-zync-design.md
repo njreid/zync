@@ -13,9 +13,10 @@ zync is a personal Android app supporting ADHD executive function through GTD (G
 
 ## 2. Stack
 
-- Kotlin, Jetpack Compose, single module, minSdk 34, manual DI (no framework).
+- Kotlin, single module Android app, minSdk 34, manual DI (no framework).
 - Room over SQLite for all persistence.
 - WorkManager for transcription jobs and agent runs.
+- **UI: a single vanilla-JS web app** (no framework, no build step) served by an embedded **Ktor** server running inside the Android app. The phone renders it in an in-app WebView; desktops render it in a **Tauri** (Rust) shell that connects to the phone over the LAN. No Jetpack Compose screens — native Android surfaces are limited to: WebView host activity, pairing camera, scanner launch, share-sheet target, notifications.
 - VCS: jj (jujutsu, git backend).
 
 ### 2.1 Development workflow — Android CLI
@@ -100,13 +101,37 @@ The recorder presents as **USB Mass Storage**. Event-driven, no persistent servi
 
 ## 8. UI (M1 + capture integration)
 
-- **Main screen = Inbox folder**: newest-first task list — icon (mic/doc/text), title, date, duration/page count, two-line preview, status chips (transcribing…, ✨ AI-touched), scan FAB, quick-add text field.
-- **Clarify actions** on each Inbox task (swipe/menu), mirroring GTD: **Do** (done) · **Move to project** (tree picker) · **Make a project** (kind flip + folder choice) · **Someday** · **Trash**.
-- **Navigation** (drawer or bottom bar): Inbox · Someday · folder/project tree · Contexts · Run history · Settings.
+One vanilla-JS web app, served by the embedded Ktor server (§8a), rendered in the phone's in-app WebView and in the desktop Tauri shell. No JS framework, no bundler: ES modules + `fetch`/WebSocket against the JSON API. Screens:
+
+- **Main screen = Inbox folder**: newest-first task list — icon (mic/doc/text), title, date, duration/page count, two-line preview, status chips (transcribing…, ✨ AI-touched), scan button (phone only — invokes the native scanner via a JS bridge), quick-add text field.
+- **Clarify actions** on each Inbox task (menu), mirroring GTD: **Do** (done) · **Move to project** (tree picker) · **Make a project** (kind flip + folder choice) · **Someday** · **Trash**.
+- **Navigation** (sidebar on desktop, bottom bar on phone via responsive CSS): Inbox · Someday · folder/project tree · Contexts · Run history · Settings.
 - **Project view**: recursive task tree, collapsible subtasks, add-task inline.
 - **Context view**: flat filtered list of active tasks across the whole tree.
-- **Task detail**: editable title/notes, contexts, defer date, attachments (audio player bar; PDF opens via intent), AI-run badge with revert.
-- Plug-in auto-launch lands on Inbox with a live sync banner.
+- **Task detail**: editable title/notes, contexts, defer date, attachments (HTML5 audio player; PDF in new tab/viewer), AI-run badge with revert.
+- Plug-in auto-launch opens the app on Inbox with a live sync banner (WebSocket-pushed sync events).
+- Native-side JS bridge (`@JavascriptInterface` on phone): launch scanner, launch pairing camera, share-sheet ingestion. The Tauri side needs no bridge — desktop is a pure client.
+
+## 8a. Embedded server & JSON API (M1)
+
+- **Ktor** embedded server inside the Android app (foreground-friendly: starts with the app / on demand; lifecycle-aware).
+- Serves: static web-UI assets (from app assets) + JSON API over the `NodeRepository` (nodes CRUD, clarify ops, contexts, attachments streaming) + WebSocket for change-push (Room invalidation → clients).
+- Binds `127.0.0.1` for the in-app WebView by default; binds the LAN interface only when remote access is enabled (§8b).
+
+## 8b. Remote access, pairing & security (desktop)
+
+No Let's Encrypt, no public domain — the Tauri client's Rust side lets us pin certificates:
+
+- **Transport:** phone generates a **self-signed TLS certificate** on first run; LAN endpoint is HTTPS-only. The Tauri client **pins the certificate fingerprint** learned during pairing and refuses anything else. The in-app WebView uses loopback HTTP (never leaves the device).
+- **Device identity:** each desktop generates an **Ed25519 keypair** on first run.
+- **Pairing flow:** desktop shows QR = `{device pubkey, device name, one-time pairing nonce}`. Phone: "Pair browser" → camera (ML Kit barcode) → user confirms → pubkey inserted into `allowed_device` table (Room: `id`, `name`, `pubkey`, `added_at`, `last_seen`, `revoked`). Pairing response (shown as a short confirmation code on both screens) delivers the server's cert fingerprint + port to the desktop.
+- **Session auth:** desktop authenticates each session via challenge–response (server nonce signed with the device key); server issues a short-lived session token for subsequent API/WebSocket calls. Unpaired/revoked keys get 403 and the LAN listener never serves UI assets to them.
+- **Discovery:** phone advertises `_zync._tcp` via NSD/mDNS; the Tauri app lists discovered phones — no IP typing.
+- **Revocation:** Settings screen lists allowed devices with last-seen; one tap revokes.
+
+## 8c. Desktop shell (Tauri)
+
+- Minimal Tauri (Rust) app: mDNS discovery, pairing (QR display, key generation, keychain storage), pinned-TLS HTTP/WebSocket client, then hosts the same web UI served by the phone. Lives in `desktop/` in the repo as a Rust crate; vanilla-JS pairing screens are Tauri-local assets.
 
 ## 9. Agent loop — operators (M4)
 
@@ -164,7 +189,9 @@ Modeled on nanocode/glaforge's minimal agent: a plain bounded `while` loop + typ
 
 | M | Scope |
 |---|-------|
-| M1 | Project setup via Android CLI (`android create`), then GTD core: node/context/attachment schema, repository + nesting rules, Inbox/folders/projects/contexts UI, clarify actions |
+| M1a | Project setup via Android CLI + GTD domain core: node/context/attachment schema, repository + nesting rules (**done**) |
+| M1b | Embedded Ktor server + JSON API + WebSocket push; vanilla-JS web UI (Inbox/tree/contexts/detail, clarify actions) in in-app WebView |
+| M1c | Remote access: self-signed TLS + LAN listener, QR pairing (Ed25519 + allowed_device), mDNS, Tauri desktop shell, revocation UI |
 | M2 | USB sync + Moonshine transcription → Inbox capture |
 | M3 | ML Kit doc scanner + OCR capture |
 | M4 | Agent loop: operators, tools, limits, journal/undo, run history |
@@ -179,5 +206,7 @@ Modeled on nanocode/glaforge's minimal agent: a plain bounded `while` loop + typ
 - Unit: nesting-rule enforcement, recursive context CTE, task→project conversion, ledger diffing, VAD segmentation, agent limit enforcement, mutation revert (incl. conflict-skip), geofence trigger dispatch + cooldown.
 - Instrumented: Moonshine inference on a fixture WAV; Room migrations.
 - Agent loop tested against a scripted fake `ChatBackend` (deterministic tool-call sequences).
-- UI journeys: Android CLI **Journeys** tests on an emulator for Inbox capture → clarify → project flows.
-- Manual on Pixel 9: USB attach flow, scanner flow.
+- API: Ktor `testApplication` tests over an in-memory `ZyncDatabase` (routes, auth rejection for unpaired keys, challenge–response).
+- Web UI: kept framework-free and thin; exercised end-to-end via Android CLI **Journeys** on an emulator (WebView) for Inbox capture → clarify → project flows, plus targeted JS unit tests only where logic accumulates.
+- Pairing: unit tests for QR payload encode/decode, signature verification, token issuance/revocation.
+- Manual on Pixel 9 + desktop: USB attach flow, scanner flow, QR pairing, pinned-TLS rejection of unknown certs.
