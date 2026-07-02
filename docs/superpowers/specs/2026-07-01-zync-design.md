@@ -62,7 +62,7 @@ Key operations are single-row updates: complete (`status`), move (`parent_id`), 
 ### 3.5 Agent tables
 
 - `operator`: `id`, `name`, `prompt`, `trigger_rules` (JSON: event `add|edit|move|geofence_enter|geofence_exit` + folder/project matcher or place reference, or manual-only), `apply_mode` (`auto` | `propose`), `enabled`, `max_iterations` (≤ 25).
-- `place`: `id`, `name`, `lat`, `lng`, `radius_m` — user-defined locations for geofence triggers; optionally linked to a `context` (e.g. place "Supermarket" ↔ context "Errands").
+- `place`: `id`, `name`, `lat`, `lng`, `radius_m` — user-defined locations for geofence triggers; linked to one or more contexts via `place_context(place_id, context_id)` (e.g. place "Supermarket" ↔ contexts "@groceries", "@errands").
 - `agent_run`: `id`, `operator_id`, `trigger` info, `status` (`running|done|halted_limit|failed|reverted`), started/finished, token usage.
 - `agent_mutation`: `id`, `run_id`, `seq`, `node_id`, `field`, `before` JSON, `after` JSON.
 
@@ -101,7 +101,11 @@ The recorder presents as **USB Mass Storage**. Event-driven, no persistent servi
 
 ## 8. UI (M1 + capture integration)
 
-One vanilla-JS web app, served by the embedded Ktor server (§8a), rendered in the phone's in-app WebView and in the desktop Tauri shell. No JS framework, no bundler: ES modules + `fetch`/WebSocket against the JSON API. Screens:
+One vanilla-JS web app, served by the embedded Ktor server (§8a), rendered in the phone's in-app WebView and in the desktop Tauri shell. No JS framework, no bundler: ES modules + `fetch`/WebSocket against the JSON API.
+
+**Styling: PicoCSS v2 (vendored in assets, classless/semantic mode).** Lean on semantic HTML — `<nav>`, `<main>`, `<article>`, `<details>`, `<dialog>`, `<button>` — so Pico styles them natively; custom classes only where semantics genuinely run out (e.g. tree indentation, status chips). Responsive phone/desktop layout via Pico's grid + a small `custom.css`.
+
+Screens:
 
 - **Main screen = Inbox folder**: newest-first task list — icon (mic/doc/text), title, date, duration/page count, two-line preview, status chips (transcribing…, ✨ AI-touched), scan button (phone only — invokes the native scanner via a JS bridge), quick-add text field.
 - **Clarify actions** on each Inbox task (menu), mirroring GTD: **Do** (done) · **Move to project** (tree picker) · **Make a project** (kind flip + folder choice) · **Someday** · **Trash**.
@@ -117,6 +121,8 @@ One vanilla-JS web app, served by the embedded Ktor server (§8a), rendered in t
 - **Ktor** embedded server inside the Android app (foreground-friendly: starts with the app / on demand; lifecycle-aware).
 - Serves: static web-UI assets (from app assets) + JSON API over the `NodeRepository` (nodes CRUD, clarify ops, contexts, attachments streaming) + WebSocket for change-push (Room invalidation → clients).
 - Binds `127.0.0.1` for the in-app WebView by default; binds the LAN interface only when remote access is enabled (§8b).
+- Loopback is not free of auth: any app on the device can reach a localhost port. The host activity injects a per-boot random **loopback token** into the WebView (header/query on first load → session cookie); the server rejects loopback requests without it.
+- JSON via `kotlinx.serialization`; Ktor CIO engine. Server lifecycle: starts with the app process (M1b); a foreground service keeps it alive for remote access sessions (M1c).
 
 ## 8b. Remote access, pairing & security (desktop)
 
@@ -144,7 +150,7 @@ Modeled on nanocode/glaforge's minimal agent: a plain bounded `while` loop + typ
   - Read (subtree + ancestors + project + contexts): `get_task`, `list_children`, `get_ancestors`, `list_contexts`.
   - Write (the run's working set + descendants only — the triggering task for task-event runs, the scope-matched tasks for geofence runs): `update_task`, `create_subtask`, `create_sibling`, `set_contexts`, `move_task` (within the subtree's project). Deletes only of nodes created in the same run.
 - **Triggering:** operators declare trigger rules (event + scope matcher) or manual-only; manual "Run operator…" on any task. Rapid edits debounced into one firing. **AI-originated mutations never fire triggers** (runs are tagged; dispatcher skips them) — cascades structurally impossible.
-- **Geofence triggers:** operators may bind to `place` enter/exit events via the Play services Geofencing API (`GeofencingClient` + broadcast receiver — OS-managed, no polling, minimal battery). Since a geofence event has no triggering task, the operator's scope matcher (folder/project/context) selects the working set — e.g. entering "Supermarket" runs an operator over active tasks tagged "Errands" (surface as a notification, reorder, or propose a shopping checklist). Geofence-triggered runs count against the same global run limits; a per-place cooldown (default 30 min) prevents boundary-jitter refiring.
+- **Geofence triggers:** operators may bind to `place` enter/exit events via the Play services Geofencing API (`GeofencingClient` + broadcast receiver — OS-managed, no polling, minimal battery). Each place can be associated with one or more contexts (`place_context` join table). All tasks matching those contexts (via the recursive context filter) are in scope for a geofence-triggered operator — e.g. entering "Supermarket" runs an operator over active tasks tagged "@groceries" (surface as a notification, reorder, or propose a shopping checklist). "@" prefix denotes a context (display convention — names are stored plain, rendered and parsed as `@name` in UI and operator prompts). Geofence-triggered runs count against the same global run limits; a per-place cooldown (default 30 min) prevents boundary-jitter refiring.
 - **Hard limits (code-enforced):** ≤ 12 iterations/run default (per-operator override, ceiling 25) · ≤ 30 mutations/run · 60 s wall-clock/run · ≤ 10 runs/hour globally. Limit hit → halt, journal, notify.
 - **Journal & undo:** every run logged (`agent_run` + ordered `agent_mutation` before/after).
   - `auto` apply-mode: changes land live, tasks badged ✨, one-tap **Revert run** replays mutations backward; if a human edited a field since, that mutation is skipped and flagged.
@@ -176,7 +182,8 @@ Modeled on nanocode/glaforge's minimal agent: a plain bounded `while` loop + typ
 - **M8 — Multi-device sync:** CRDT-based SQLite sync (e.g. cr-sqlite) or sync service (e.g. PowerSync). Hard problems: merging tree moves, agent-journal semantics across devices. The JSONL export keeps data portable until then.
 
 - **M6 — Calendar sync:** Android `CalendarProvider` (device Google accounts, no OAuth). Time-specific tasks appear as calendar entries; a Today view merges calendar events with next actions. GTD's "sacred calendar" rule: only genuinely day-specific items.
-- **M7 — Messages/WhatsApp capture:** WhatsApp has no public API. Paths: share-sheet (free from M5) and a `NotificationListenerService` capturing starred/flagged messages into Inbox. Revisit when reached.
+
+- **M7 — Messages/WhatsApp capture:** WhatsApp has no public API. Paths: share-sheet (free from M5) and a `NotificationListenerService` capturing starred/flagged messages into Inbox. Revisit when reached. Android Messages (SMS, RCS) has a full native API.
 
 ## 12. Error handling
 
