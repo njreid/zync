@@ -1,11 +1,39 @@
 package dev.njr.zync
 
+import android.annotation.SuppressLint
 import android.os.Bundle
+import android.webkit.WebChromeClient
+import android.webkit.WebView
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-/** Placeholder host — becomes the WebView host in the M1b web-UI plan. */
 class MainActivity : ComponentActivity() {
+    private lateinit var webView: WebView
+
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        webView = WebView(this).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            webChromeClient = WebChromeClient()
+        }
+        setContentView(webView)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) webView.goBack() else { isEnabled = false; onBackPressedDispatcher.onBackPressed() }
+            }
+        })
+        val app = application as ZyncApp
+        lifecycleScope.launch(Dispatchers.IO) {
+            val port = app.ensureServerStarted()
+            withContext(Dispatchers.Main) {
+                webView.loadUrl("http://127.0.0.1:$port/?token=${app.serverToken}")
+            }
+        }
     }
 }
