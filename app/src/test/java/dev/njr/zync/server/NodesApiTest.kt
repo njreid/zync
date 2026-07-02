@@ -122,4 +122,12 @@ class NodesApiTest {
     fun `get unknown node is 404`() = zyncTestApplication { _, client ->
         assertEquals(HttpStatusCode.NotFound, client.get("/api/nodes/9999").status)
     }
+
+    @Test
+    fun `patch unknown node with empty body is 404 not 500`() = zyncTestApplication { _, client ->
+        val res = client.patch("/api/nodes/9999") {
+            contentType(ContentType.Application.Json); setBody(PatchNodeBody())
+        }
+        assertEquals(HttpStatusCode.NotFound, res.status)
+    }
 }

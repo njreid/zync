@@ -45,6 +45,8 @@ fun Route.apiRoutes(repo: NodeRepository) {
                 call.respond(repo.observeChildren(id()).first().map { it.toDto() })
             }
             patch {
+                val node = repo.get(id()) ?: return@patch call.respond(
+                    HttpStatusCode.NotFound, ErrorDto("no such node"))
                 val b = call.receive<PatchNodeBody>()
                 b.title?.let { repo.rename(id(), it) }
                 b.notes?.let { repo.setNotes(id(), it) }

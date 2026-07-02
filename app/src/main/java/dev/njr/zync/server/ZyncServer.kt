@@ -51,7 +51,7 @@ fun Application.zyncModule(
     }
     tokenGuard(token)
     routing {
-        apiRoutes(repo)   // defined in Tasks 4-5; empty stub for now
+        apiRoutes(repo)
         get("/{path...}") {
             val path = call.parameters.getAll("path")?.joinToString("/").orEmpty()
                 .ifEmpty { "index.html" }
