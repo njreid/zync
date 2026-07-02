@@ -130,4 +130,9 @@ class NodesApiTest {
         }
         assertEquals(HttpStatusCode.NotFound, res.status)
     }
+
+    @Test
+    fun `non-numeric id is 400`() = zyncTestApplication { _, _, client ->
+        assertEquals(HttpStatusCode.BadRequest, client.get("/api/nodes/abc").status)
+    }
 }

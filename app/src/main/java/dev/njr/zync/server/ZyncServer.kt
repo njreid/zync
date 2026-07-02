@@ -72,8 +72,12 @@ fun Application.zyncModule(
     routing {
         apiRoutes(db, repo)
         get("/{path...}") {
-            val path = call.parameters.getAll("path")?.joinToString("/").orEmpty()
-                .ifEmpty { "index.html" }
+            val segments = call.parameters.getAll("path").orEmpty()
+            if (segments.any { it == ".." || it.contains('\u0000') }) {
+                call.respond(HttpStatusCode.NotFound, ErrorDto("not found"))
+                return@get
+            }
+            val path = segments.joinToString("/").ifEmpty { "index.html" }
             val hit = assets(path)
             if (hit == null) call.respond(HttpStatusCode.NotFound, ErrorDto("not found"))
             else call.respondBytes(hit.first, hit.second)
@@ -90,6 +94,10 @@ class ZyncServer(
 ) {
     private var engine: EmbeddedServer<*, *>? = null
 
+    /**
+     * Blocks the calling thread while awaiting the server's port binding — call from a
+     * background thread, not the Android main thread.
+     */
     fun start(): Int {
         val e = embeddedServer(CIO, port = port, host = "127.0.0.1") {
             zyncModule(db, repo, token, assets)
