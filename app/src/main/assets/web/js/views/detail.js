@@ -3,6 +3,23 @@ import { rerender, toast } from '../app.js';
 
 const DAY = 86400000;
 
+function dirtyKey(id) { return `dirty:${id}`; }
+
+function loadDirty(id) {
+  try {
+    const raw = sessionStorage.getItem(dirtyKey(id));
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveDirty(id, title, notes) {
+  sessionStorage.setItem(dirtyKey(id), JSON.stringify({ title, notes }));
+}
+
+function clearDirty(id) {
+  sessionStorage.removeItem(dirtyKey(id));
+}
+
 export async function renderDetail(el, id) {
   let node;
   try { node = await get(`/api/nodes/${id}`); }
@@ -32,25 +49,61 @@ export async function renderDetail(el, id) {
     </div>
     <p class="muted" id="f-defer-state"></p>`;
 
-  el.querySelector('#f-title').value = node.title;
-  el.querySelector('#f-notes').value = node.notes;
+  const titleEl = el.querySelector('#f-title');
+  const notesEl = el.querySelector('#f-notes');
+
+  titleEl.value = node.title;
+  notesEl.value = node.notes;
+
+  // Re-apply any unsaved edits left over from before this render (e.g. a
+  // background push or an in-view action triggered a rerender while dirty).
+  const pending = loadDirty(id);
+  if (pending) {
+    titleEl.value = pending.title;
+    notesEl.value = pending.notes;
+  }
+
+  const isDirty = () =>
+    titleEl.value !== node.title || notesEl.value !== node.notes;
+
+  const persistDirty = () => saveDirty(id, titleEl.value, notesEl.value);
+  titleEl.addEventListener('input', persistDirty);
+  notesEl.addEventListener('input', persistDirty);
+  if (pending) persistDirty();
+
   el.querySelector('#f-defer-state').textContent =
     node.deferUntil ? `Deferred until ${new Date(node.deferUntil).toLocaleDateString()}` : '';
+
+  // Flush any dirty title/notes to the server before performing an action
+  // that would otherwise trigger a rerender and discard them.
+  const flushIfDirty = async () => {
+    if (!isDirty()) return;
+    await patch(`/api/nodes/${id}`, {
+      title: titleEl.value.trim(),
+      notes: notesEl.value,
+    });
+    node.title = titleEl.value.trim();
+    node.notes = notesEl.value;
+    clearDirty(id);
+  };
 
   el.querySelector('#edit').onsubmit = async (e) => {
     e.preventDefault();
     await patch(`/api/nodes/${id}`, {
-      title: el.querySelector('#f-title').value.trim(),
-      notes: el.querySelector('#f-notes').value,
+      title: titleEl.value.trim(),
+      notes: notesEl.value,
     });
+    clearDirty(id);
     await rerender();
   };
   el.querySelector('#f-done').onclick = async () => {
+    await flushIfDirty();
     await post(`/api/nodes/${id}/${node.status === 'DONE' ? 'reopen' : 'complete'}`);
     await rerender();
   };
   for (const btn of el.querySelectorAll('[data-defer]')) {
     btn.onclick = async () => {
+      await flushIfDirty();
       const v = btn.dataset.defer;
       await post(`/api/nodes/${id}/defer`,
         { until: v === 'clear' ? null : Date.now() + Number(v) * DAY });
@@ -64,6 +117,7 @@ export async function renderDetail(el, id) {
     b.textContent = `@${c.name}`;
     b.setAttribute('aria-pressed', String(mineIds.has(c.id)));
     b.onclick = async () => {
+      await flushIfDirty();
       const next = new Set(mineIds);
       next.has(c.id) ? next.delete(c.id) : next.add(c.id);
       await put(`/api/nodes/${id}/contexts`, { contextIds: [...next] });

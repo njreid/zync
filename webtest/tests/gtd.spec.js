@@ -230,6 +230,48 @@ test.describe('GTD web functional suite', () => {
     await expect(page.locator('#ctx-tasks .task', { hasText: renamed })).toBeVisible();
   });
 
+  test('i. Detail: unsaved title survives a chip-toggle rerender, then Save persists it', async ({ page }) => {
+    await withToken(page);
+    const ctxName = uniq('dirtyctx').replace(/\s/g, '');
+    const original = uniq('dirty task');
+    const typed = uniq('typed but unsaved title');
+
+    await quickAdd(page, original);
+    await page.locator('article.task', { hasText: original }).locator('h4 a').click();
+    await expect(page).toHaveURL(/#\/node\/(\d+)/);
+    const url = page.url();
+    const nodeId = url.match(/#\/node\/(\d+)/)[1];
+
+    // create a context to toggle from the detail view.
+    await page.goto('/#/contexts');
+    await settle(page);
+    page.once('dialog', (d) => d.accept(ctxName));
+    await page.locator('#new-context').click();
+    await settle(page);
+    await page.goto(`/#/node/${nodeId}`);
+    await settle(page);
+
+    // type into the title WITHOUT saving, then toggle a context chip.
+    await page.locator('#f-title').fill(typed);
+    const detailChip = page.locator('#f-chips button', { hasText: `@${ctxName}` });
+    await detailChip.click();
+    await settle(page);
+
+    // the rerender triggered by the chip toggle must not discard the typed title,
+    // and the chip toggle itself must have taken effect.
+    await expect(page.locator('#f-title')).toHaveValue(typed);
+    await expect(detailChip).toHaveAttribute('aria-pressed', 'true');
+
+    // now Save, navigate away and back -> the typed title persisted.
+    await page.locator('#edit button[type=submit]').click();
+    await settle(page);
+    await page.goto('/#/inbox');
+    await settle(page);
+    await page.goto(`/#/node/${nodeId}`);
+    await settle(page);
+    await expect(page.locator('#f-title')).toHaveValue(typed);
+  });
+
   test('h. unauthenticated load fails and UI does not render', async ({ browser }) => {
     const context = await browser.newContext();
     const page = await context.newPage();
