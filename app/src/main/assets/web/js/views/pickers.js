@@ -10,14 +10,29 @@ export async function pickDestination({ foldersOnly = false } = {}) {
       <footer><button class="secondary" id="dest-cancel">Cancel</button></footer></article>`;
     document.body.append(dlg);
     const list = dlg.querySelector('#dest-list');
+
+    let resolved = false;
+    const doResolve = (value) => {
+      if (!resolved) {
+        resolved = true;
+        dlg.remove();
+        resolve(value);
+      }
+    };
+
     for (const n of options) {
       const b = document.createElement('button');
       b.className = 'outline';
       b.textContent = `${n.kind === 'FOLDER' ? '📁' : '🗂'} ${n.title}`;
-      b.onclick = () => { dlg.close(); dlg.remove(); resolve(n.id); };
+      b.onclick = () => { dlg.close(); doResolve(n.id); };
       list.append(b);
     }
-    dlg.querySelector('#dest-cancel').onclick = () => { dlg.close(); dlg.remove(); resolve(null); };
+    dlg.querySelector('#dest-cancel').onclick = () => { dlg.close(); doResolve(null); };
+
+    dlg.addEventListener('close', () => {
+      doResolve(null);
+    });
+
     dlg.showModal();
   });
 }
