@@ -9,9 +9,12 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
 import io.ktor.server.application.install
-import io.ktor.server.cio.CIO
+import io.ktor.server.engine.ConnectorType
 import io.ktor.server.engine.EmbeddedServer
+import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.engine.sslConnector
+import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respond
@@ -19,6 +22,7 @@ import io.ktor.server.response.respondBytes
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
+import java.security.KeyStore
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -85,30 +89,76 @@ fun Application.zyncModule(
     }
 }
 
+/**
+ * Configuration for an additional LAN-facing HTTPS connector, served alongside the loopback
+ * HTTP connector. [keyStore] must already contain [keyAlias] (see
+ * `Crypto.generateSelfSignedCert` / `ServerIdentity`).
+ */
+data class LanConfig(
+    val keyStore: KeyStore,
+    val keyStorePassword: CharArray,
+    val keyAlias: String,
+    val host: String,
+    val tlsPort: Int = 0,
+)
+
 class ZyncServer(
     private val db: ZyncDatabase,
     private val repo: NodeRepository,
     private val token: String,
     private val assets: (String) -> Pair<ByteArray, ContentType>?,
     private val port: Int = 0,
+    private val lan: LanConfig? = null,
 ) {
     private var engine: EmbeddedServer<*, *>? = null
+    private var httpPort: Int? = null
+    private var httpsPort: Int? = null
 
     /**
      * Blocks the calling thread while awaiting the server's port binding — call from a
      * background thread, not the Android main thread.
+     *
+     * Returns the loopback HTTP port. When a [LanConfig] is supplied, a second HTTPS connector
+     * is also bound on `lan.host`/`lan.tlsPort`; its resolved port is available via [tlsPort]
+     * once this call returns.
      */
     fun start(): Int {
-        val e = embeddedServer(CIO, port = port, host = "127.0.0.1") {
+        val currentLan = lan
+        val e = embeddedServer(Netty, configure = {
+            connector {
+                this.port = this@ZyncServer.port
+                host = "127.0.0.1"
+            }
+            if (currentLan != null) {
+                sslConnector(
+                    keyStore = currentLan.keyStore,
+                    keyAlias = currentLan.keyAlias,
+                    keyStorePassword = { currentLan.keyStorePassword },
+                    privateKeyPassword = { currentLan.keyStorePassword },
+                ) {
+                    this.port = currentLan.tlsPort
+                    host = currentLan.host
+                }
+            }
+        }) {
             zyncModule(db, repo, token, assets)
         }.also { engine = it }
         e.start(wait = false)
-        return kotlinx.coroutines.runBlocking { e.engine.resolvedConnectors().first().port }
+        val resolved = kotlinx.coroutines.runBlocking { e.engine.resolvedConnectors() }
+        val resolvedHttp = resolved.first { it.type == ConnectorType.HTTP }.port
+        httpPort = resolvedHttp
+        httpsPort = resolved.firstOrNull { it.type == ConnectorType.HTTPS }?.port
+        return resolvedHttp
     }
+
+    /** The resolved LAN HTTPS port, or `null` if this server was started without a [LanConfig]. */
+    fun tlsPort(): Int? = httpsPort
 
     fun stop() {
         engine?.stop(500, 1000)
         engine = null
+        httpPort = null
+        httpsPort = null
     }
 }
 
