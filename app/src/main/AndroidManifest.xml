@@ -2,6 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
         android:name=".ZyncApp"
@@ -21,6 +26,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          Keeps the pairing/sync server (and its NSD advertisement) alive while remote access is
+          enabled, even if the app is backgrounded — Android will otherwise kill the process's
+          network/socket state shortly after it loses foreground/visibility. `dataSync` is the
+          closest fit for "syncing data with a paired desktop over the LAN"; no notification UI is
+          implemented as part of this task, only the manifest declaration Task 7/8 wire up to.
+        -->
+        <service
+            android:name=".RemoteAccessForegroundService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 
 </manifest>
