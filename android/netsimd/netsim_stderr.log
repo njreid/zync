@@ -1,0 +1,109 @@
+netsimd I 07-03 00:22:40.276 daemon/src/rust_main.rs:112 - netsim artifacts path: "/home/njr/code/zync/android/netsimd"
+netsimd I 07-03 00:22:40.276 daemon/src/rust_main.rs:113 - NetsimdArgs {
+    fd_startup_str: None,
+    no_cli_ui: true,
+    no_web_ui: true,
+    pcap: false,
+    disable_address_reuse: false,
+    hci_port: None,
+    connector_instance: None,
+    instance: None,
+    logtostderr: false,
+    dev: false,
+    forward_host_mdns: false,
+    vsock: None,
+    config: None,
+    host_dns: Some(
+        "127.0.0.53",
+    ),
+    http_proxy: None,
+    wifi_tap: None,
+    wifi: None,
+    test_beacons: false,
+    no_test_beacons: false,
+    no_shutdown: false,
+    verbose: false,
+    version: false,
+    debug: DebugArgs {
+        debug_no_traffic: false,
+        debug_no_network: false,
+        debug_no_wmedium: false,
+        debug_no_mdns_wmedium: false,
+        debug_no_guest_to_host_mdns: false,
+    },
+    rssi: None,
+}
+netsimd I 07-03 00:22:40.276 daemon/src/rust_main.rs:266 - Netsim Version: 0.3.81, OS: linux, Arch: x86_64
+netsimd E 07-03 00:22:40.276 common/src/util/ini_file.rs:162 - Unable to find netsim ini file: "/home/njr/code/zync/netsim.ini"
+netsimd I 07-03 00:22:40.276 daemon/src/rust_main.rs:453 - get_server_address(1) returned None. Retrying...
+netsimd E 07-03 00:22:41.276 common/src/util/ini_file.rs:162 - Unable to find netsim ini file: "/home/njr/code/zync/netsim.ini"
+netsimd W 07-03 00:22:41.276 daemon/src/rust_main.rs:450 - get_server_address(1) returned None.
+netsimd I 07-03 00:22:41.279 daemon/src/rust_main.rs:304 - Config {
+    bluetooth: MessageField(
+        Some(
+            Bluetooth {
+                properties: MessageField(
+                    None,
+                ),
+                disable_address_reuse: None,
+                test_beacons: Some(
+                    false,
+                ),
+                special_fields: SpecialFields {
+                    unknown_fields: UnknownFields {
+                        fields: None,
+                    },
+                    cached_size: CachedSize {
+                        size: 0,
+                    },
+                },
+            },
+        ),
+    ),
+    wifi: MessageField(
+        None,
+    ),
+    capture: MessageField(
+        None,
+    ),
+    special_fields: SpecialFields {
+        unknown_fields: UnknownFields {
+            fields: None,
+        },
+        cached_size: CachedSize {
+            size: 0,
+        },
+    },
+}
+netsimd I 07-03 00:22:41.282 libslirp-rs/src/libslirp.rs:970 - libslirp: initialization completed.
+netsimd W 07-03 00:22:41.282 hostapd.rs:538 - Unable to set virtio driver socket. Retrying...
+netsimd I 07-03 00:22:41.282 daemon/src/wireless/uwb.rs:126 - PICA STARTED
+netsimd I 07-03 00:22:41.283 daemon/src/grpc_server/server.rs:70 - Rust gRPC listening on localhost:41753
+netsimd W 07-03 00:22:41.283 daemon/src/service.rs:147 - run_websocket_server error: environment variable not found
+netsimd I 07-03 00:22:41.283 daemon/src/service.rs:80 - netsim generated zip files in temp directory has been removed.
+netsimd I 07-03 00:22:41.283 daemon/src/transport/socket.rs:72 - Hci socket server is listening on: 6402
+netsimd I 07-03 00:22:43.265 daemon/src/grpc_server/backend.rs:84 - grpc_server new packet_stream for peer ipv6:%5B::1%5D:56330
+netsimd I 07-03 00:22:43.265 daemon/src/grpc_server/backend.rs:84 - grpc_server new packet_stream for peer ipv6:%5B::1%5D:56330
+netsimd I 07-03 00:22:43.268 daemon/src/events.rs:120 - DeviceAdded(DeviceAdded { id: 1, name: "Medium Phone API 36.1", builtin: false, device_stats: NetsimDeviceStats { device_id: Some(1), kind: Some("EMULATOR"), version: Some("36.3.10.0"), sdk_version: Some("36"), build_id: Some("BE4B.251210.005"), variant: Some("generic_system_google-user"), arch: Some("x86_64"), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } } })
+netsimd I 07-03 00:22:43.268 daemon/src/events.rs:120 - ChipAdded(ChipAdded { chip_id: 1000, chip_kind: UWB, device_name: "Medium Phone API 36.1", builtin: false })
+netsimd I 07-03 00:22:43.269 daemon/src/captures/capture.rs:283 - Capture event: ChipAdded chip_id: 1000 device_name: Medium Phone API 36.1
+netsimd I 07-03 00:22:43.269 daemon/src/wireless/packet.rs:89 - register_transport: started thread chip_id: 1000
+netsimd I 07-03 00:22:43.269 hci_packet_transport.cc:80 - hci_packet_transport: registered
+netsimd I 07-03 00:22:43.269 bluetooth_facade.cc:402 - Creating HCI rootcanal_id: 0 for chip_id: 1001
+netsimd I 07-03 00:22:43.269 daemon/src/wireless/bluetooth.rs:184 - Bluetooth WirelessChip created with rootcanal_id: 0 chip_id: 1001
+netsimd I 07-03 00:22:43.269 daemon/src/events.rs:120 - ChipAdded(ChipAdded { chip_id: 1001, chip_kind: BLUETOOTH, device_name: "Medium Phone API 36.1", builtin: false })
+netsimd I 07-03 00:22:43.269 daemon/src/captures/capture.rs:283 - Capture event: ChipAdded chip_id: 1001 device_name: Medium Phone API 36.1
+netsimd I 07-03 00:22:43.269 daemon/src/wireless/packet.rs:89 - register_transport: started thread chip_id: 1001
+netsimd I 07-03 06:13:10.862 bluetooth_facade.cc:332 - Removing HCI chip rootcanal_id: 0.
+netsimd I 07-03 06:13:10.863 daemon/src/wireless/packet.rs:93 - register_transport: finished thread chip_id: 1001
+netsimd I 07-03 06:13:10.863 hci_packet_transport.cc:136 - hci_packet_transport remove from netsim
+netsimd I 07-03 06:13:10.863 hci_packet_transport.cc:151 - hci_packet_transport close from rootcanal
+netsimd I 07-03 06:13:10.863 daemon/src/events.rs:120 - ChipRemoved(ChipRemoved { chip_id: 1001, device_id: 1, remaining_nonbuiltin_devices: 1, radio_stats: [NetsimRadioStats { device_id: None, kind: Some(BLUETOOTH_LOW_ENERGY), duration_secs: Some(21027), tx_count: Some(0), rx_count: Some(0), tx_bytes: None, rx_bytes: None, invalid_packets: [], special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }, NetsimRadioStats { device_id: None, kind: Some(BLUETOOTH_CLASSIC), duration_secs: Some(21027), tx_count: Some(0), rx_count: Some(0), tx_bytes: None, rx_bytes: None, invalid_packets: [], special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }] })
+netsimd I 07-03 06:13:10.863 daemon/src/captures/capture.rs:287 - Capture event: ChipRemoved chip_id: 1001
+netsimd I 07-03 06:13:10.863 daemon/src/wireless/packet.rs:93 - register_transport: finished thread chip_id: 1000
+netsimd I 07-03 06:13:10.863 daemon/src/events.rs:120 - DeviceRemoved(DeviceRemoved { id: 1, name: "Medium Phone API 36.1", builtin: false })
+netsimd I 07-03 06:13:10.863 daemon/src/events.rs:120 - ChipRemoved(ChipRemoved { chip_id: 1000, device_id: 1, remaining_nonbuiltin_devices: 0, radio_stats: [NetsimRadioStats { device_id: None, kind: Some(UWB), duration_secs: Some(21027), tx_count: Some(3), rx_count: Some(5), tx_bytes: None, rx_bytes: None, invalid_packets: [], special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }] })
+netsimd I 07-03 06:13:10.863 daemon/src/captures/capture.rs:287 - Capture event: ChipRemoved chip_id: 1000
+netsimd I 07-03 06:13:10.863 daemon/src/events.rs:120 - ShutDown(ShutDown { reason: "last device disconnected" })
+netsimd I 07-03 06:13:10.863 daemon/src/rust_main.rs:161 - Netsim is shutdown: last device disconnected
+netsimd I 07-03 06:13:10.863 daemon/src/rust_main.rs:430 - Removed netsim ini file
