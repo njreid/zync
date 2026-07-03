@@ -270,4 +270,60 @@ class PairingServiceTest {
 
         assertNull(token)
     }
+
+    // ---- revoke immediacy ----------------------------------------------------
+
+    @Test
+    fun `revoke invalidates an already-issued session immediately`() = runTest {
+        val id = dao.insert(AllowedDeviceEntity(name = "Laptop", pubkey = pubkeyB64, addedAt = clock, lastSeen = null))
+        val challenge = service.newChallenge()
+        val token = service.issueSession(pubkeyB64, challenge, sign(challenge.toByteArray(Charsets.UTF_8)))!!
+        assertTrue(service.validateSession(token))
+
+        service.revoke(id)
+
+        assertFalse(
+            "a revoked device's previously-issued session token must stop validating immediately, " +
+                "not merely expire after the session TTL",
+            service.validateSession(token),
+        )
+    }
+
+    // ---- TOCTOU: concurrent completePairingRequest on the same nonce ----------------------
+
+    @Test
+    fun `concurrent completePairingRequest calls let exactly one succeed`() {
+        val pending = service.beginPairing()
+        kotlinx.coroutines.runBlocking { service.approveScanned(qrPayload(pending.nonce)) }
+
+        val successes = java.util.concurrent.atomic.AtomicInteger(0)
+        val alreadyUsedFailures = java.util.concurrent.atomic.AtomicInteger(0)
+        val otherFailures = java.util.concurrent.atomic.AtomicInteger(0)
+
+        // Real threads (not coroutines sharing one dispatcher) to actually create the race that
+        // exposed the bug: many callers hitting completePairingRequest for the same nonce at
+        // once, as could plausibly happen under Ktor's multithreaded request dispatcher.
+        val threads = (1..20).map {
+            Thread {
+                kotlinx.coroutines.runBlocking {
+                    try {
+                        service.completePairingRequest(pubkeyB64, pending.nonce)
+                        successes.incrementAndGet()
+                    } catch (e: IllegalStateException) {
+                        if (e.message == "pairing nonce already used") {
+                            alreadyUsedFailures.incrementAndGet()
+                        } else {
+                            otherFailures.incrementAndGet()
+                        }
+                    }
+                }
+            }
+        }
+        threads.forEach { it.start() }
+        threads.forEach { it.join() }
+
+        assertEquals("exactly one caller must win the race", 1, successes.get())
+        assertEquals(0, otherFailures.get())
+        assertEquals(19, alreadyUsedFailures.get())
+    }
 }

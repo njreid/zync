@@ -18,8 +18,22 @@ export const post = (p, b) => request('POST', p, b);
 export const patch = (p, b) => request('PATCH', p, b);
 export const put = (p, b) => request('PUT', p, b);
 
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30000;
+let reconnectDelay = RECONNECT_BASE_MS;
+
 export function connectEvents(onChanged) {
-  const ws = new WebSocket(`ws://${location.host}/api/events`);
+  const wsScheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${wsScheme}//${location.host}/api/events`);
+  ws.onopen = () => { reconnectDelay = RECONNECT_BASE_MS; };
   ws.onmessage = (e) => { if (JSON.parse(e.data).type === 'changed') onChanged(); };
-  ws.onclose = () => setTimeout(() => connectEvents(onChanged), 2000);
+  ws.onclose = () => {
+    // Exponential backoff with jitter, capped at RECONNECT_MAX_MS, reset to RECONNECT_BASE_MS
+    // on the next successful open (above) — avoids a thundering herd of reconnects and avoids
+    // hammering a server that's briefly unreachable.
+    const delay = reconnectDelay;
+    const jitter = delay * (0.5 + Math.random() * 0.5);
+    reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS);
+    setTimeout(() => connectEvents(onChanged), jitter);
+  };
 }

@@ -4,6 +4,8 @@ import dev.njr.zync.data.AllowedDeviceDao
 import dev.njr.zync.data.AllowedDeviceEntity
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
@@ -71,9 +73,20 @@ class PairingService(
     // Single in-flight pairing attempt: a new beginPairing() supersedes whatever was pending.
     @Volatile private var pending: PendingState? = null
 
-    // token -> expiresAt. In-memory only: sessions do not survive a process restart, which is
-    // fine for a local pairing/sync server (the desktop just re-authenticates).
-    private val sessions = ConcurrentHashMap<String, Long>()
+    // Guards all read-then-mutate sequences on `pending`'s fields (`consumed`, `approvedPubkey`).
+    // @Volatile above only publishes the *reference*; without this mutex, two concurrent
+    // completePairingRequest calls (plausible under Ktor's multithreaded dispatcher) could both
+    // observe `consumed == false` before either sets it, letting a single-use nonce complete a
+    // pairing twice. Every check-then-set on `pending`'s fields must happen inside this lock.
+    private val pendingMutex = Mutex()
+
+    // token -> (devicePubkey, expiresAt). In-memory only: sessions do not survive a process
+    // restart, which is fine for a local pairing/sync server (the desktop just re-authenticates).
+    // The device pubkey is retained so validateSession can re-check revocation status live,
+    // rather than trusting a snapshot taken at issuance time — this is what makes revoke()
+    // effectively immediate instead of merely capping exposure at the session TTL.
+    private data class SessionInfo(val devicePubkey: String, val expiresAt: Long)
+    private val sessions = ConcurrentHashMap<String, SessionInfo>()
 
     // challenge -> expiresAt. Removed (consumed) the moment it's looked at in issueSession,
     // whether or not the accompanying signature turns out to be valid, so a challenge can never
@@ -101,61 +114,70 @@ class PairingService(
             throw IllegalArgumentException("malformed QR payload", e)
         }
 
-        val current = pending
-            ?: throw IllegalArgumentException("no pairing in progress")
-        if (now() > current.expiresAt) {
-            throw IllegalArgumentException("pairing nonce expired")
-        }
-        if (!Crypto.constantTimeEquals(current.nonce, payload.nonce)) {
-            throw IllegalArgumentException("nonce mismatch")
-        }
+        return pendingMutex.withLock {
+            val current = pending
+                ?: throw IllegalArgumentException("no pairing in progress")
+            if (now() > current.expiresAt) {
+                throw IllegalArgumentException("pairing nonce expired")
+            }
+            if (!Crypto.constantTimeEquals(current.nonce, payload.nonce)) {
+                throw IllegalArgumentException("nonce mismatch")
+            }
 
-        val id = dao.insert(
-            AllowedDeviceEntity(
-                name = payload.deviceName,
+            val id = dao.insert(
+                AllowedDeviceEntity(
+                    name = payload.deviceName,
+                    pubkey = payload.devicePubkey,
+                    addedAt = now(),
+                    lastSeen = null,
+                    revoked = false,
+                ),
+            )
+            current.approvedPubkey = payload.devicePubkey
+
+            ApprovedDevice(
+                id = id,
                 pubkey = payload.devicePubkey,
-                addedAt = now(),
-                lastSeen = null,
-                revoked = false,
-            ),
-        )
-        current.approvedPubkey = payload.devicePubkey
-
-        return ApprovedDevice(
-            id = id,
-            pubkey = payload.devicePubkey,
-            name = payload.deviceName,
-            confirmCode = current.confirmCode,
-        )
+                name = payload.deviceName,
+                confirmCode = current.confirmCode,
+            )
+        }
     }
 
     suspend fun completePairingRequest(devicePubkeyB64: String, nonceFromDesktop: String): PairingResult {
-        val current = pending
-            ?: throw IllegalStateException("no pairing in progress")
-        if (current.consumed) {
-            throw IllegalStateException("pairing nonce already used")
-        }
-        val approvedPubkey = current.approvedPubkey
-            ?: throw IllegalStateException("pairing not yet approved by phone")
-        if (now() > current.expiresAt) {
-            throw IllegalStateException("pairing nonce expired")
-        }
-        if (!Crypto.constantTimeEquals(approvedPubkey, devicePubkeyB64)) {
-            throw IllegalArgumentException("pubkey mismatch")
-        }
-        if (!Crypto.constantTimeEquals(current.nonce, nonceFromDesktop)) {
-            throw IllegalArgumentException("nonce mismatch")
-        }
+        // The consumed-check and consumed-set must be atomic w.r.t. each other: without this
+        // lock, two concurrent callers could both read `consumed == false` and both proceed,
+        // defeating the single-use guarantee (see the note on `pendingMutex` above).
+        return pendingMutex.withLock {
+            val current = pending
+                ?: throw IllegalStateException("no pairing in progress")
+            if (current.consumed) {
+                throw IllegalStateException("pairing nonce already used")
+            }
+            val approvedPubkey = current.approvedPubkey
+                ?: throw IllegalStateException("pairing not yet approved by phone")
+            if (now() > current.expiresAt) {
+                throw IllegalStateException("pairing nonce expired")
+            }
+            if (!Crypto.constantTimeEquals(approvedPubkey, devicePubkeyB64)) {
+                throw IllegalArgumentException("pubkey mismatch")
+            }
+            if (!Crypto.constantTimeEquals(current.nonce, nonceFromDesktop)) {
+                throw IllegalArgumentException("nonce mismatch")
+            }
 
-        val device = dao.byPubkey(devicePubkeyB64)
-        if (device == null || device.revoked) {
-            throw IllegalStateException("device is no longer allowed")
+            val device = dao.byPubkey(devicePubkeyB64)
+            if (device == null || device.revoked) {
+                throw IllegalStateException("device is no longer allowed")
+            }
+
+            // One-time: this nonce can never complete a second pairing request. Setting this
+            // flag is still inside the critical section started above, so the check above and
+            // this set form one atomic compare-and-set.
+            current.consumed = true
+
+            PairingResult(certFingerprint = certFingerprint, confirmCode = current.confirmCode)
         }
-
-        // One-time: this nonce can never complete a second pairing request.
-        current.consumed = true
-
-        return PairingResult(certFingerprint = certFingerprint, confirmCode = current.confirmCode)
     }
 
     suspend fun issueSession(devicePubkeyB64: String, challenge: String, signatureB64: String): String? {
@@ -171,23 +193,32 @@ class PairingService(
         if (!Crypto.verifyEd25519(devicePubkeyB64, challengeBytes, signatureB64)) return null
 
         val token = randomNonce()
-        sessions[token] = now() + SESSION_TTL_MS
+        sessions[token] = SessionInfo(devicePubkeyB64, now() + SESSION_TTL_MS)
         dao.touch(device.id, now())
         return token
     }
 
-    fun validateSession(token: String): Boolean {
+    /**
+     * True iff [token] is a live, unexpired session for a device that is not (as of *right now*)
+     * revoked. Re-checking revocation here — rather than trusting a flag captured at
+     * [issueSession] time — is what makes [revoke] take effect immediately instead of merely
+     * bounding exposure by the session TTL.
+     */
+    suspend fun validateSession(token: String): Boolean {
         val nowMs = now()
         // Walk every live session rather than doing a direct map lookup by the raw token, and
         // compare with a constant-time comparator, so a caller can't use response timing to
         // learn how many characters of a guessed token were correct.
-        var valid = false
-        for ((storedToken, expiresAt) in sessions) {
-            if (Crypto.constantTimeEquals(storedToken, token) && nowMs < expiresAt) {
-                valid = true
+        var match: SessionInfo? = null
+        for ((storedToken, info) in sessions) {
+            if (Crypto.constantTimeEquals(storedToken, token)) {
+                match = info
             }
         }
-        return valid
+        val info = match ?: return false
+        if (nowMs >= info.expiresAt) return false
+        val device = dao.byPubkey(info.devicePubkey) ?: return false
+        return !device.revoked
     }
 
     fun newChallenge(): String {

@@ -59,7 +59,9 @@ class ContextsApiTest {
         val ws = createClient {
             install(WebSockets)
         }
-        ws.webSocket("/api/events?token=test-token") {
+        // ?token= is scoped to the document route only (never /api/**) — authenticate the
+        // websocket upgrade with the header instead.
+        ws.webSocket("/api/events", request = { header(TOKEN_HEADER, "test-token") }) {
             val hello = (incoming.receive() as Frame.Text).readText()
             assertTrue(hello.contains("hello"))
             client.post("/api/inbox") {

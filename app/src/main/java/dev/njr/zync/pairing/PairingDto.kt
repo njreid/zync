@@ -47,3 +47,9 @@ data class SessionRequestBody(
 data class SessionDto(
     val token: String,
 )
+
+/** Returned by `POST /pair/request` while the phone hasn't approved the pairing attempt yet. */
+@Serializable
+data class PairPendingDto(
+    val status: String = "pending",
+)

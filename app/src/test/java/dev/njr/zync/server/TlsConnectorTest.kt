@@ -64,9 +64,10 @@ class TlsConnectorTest {
             assertEquals(200, httpOk.responseCode)
 
             // The HTTPS connector is live and serving the generated cert: prove the TLS
-            // handshake succeeds and the request reaches the app (401 without a valid session
-            // is expected — no device is paired in this test — the handshake itself is the
-            // point).
+            // handshake succeeds and the request reaches the app (403, empty body, is expected
+            // on the LAN connector without a valid session — no device is paired in this test,
+            // and the LAN connector never honors the loopback token; the handshake itself is
+            // the point).
             val trustAllClient = HttpClient(CIO) {
                 engine {
                     https {
@@ -97,7 +98,7 @@ class TlsConnectorTest {
                 val res = trustAllClient.get("https://127.0.0.1:$tlsPort/api/roots") {
                     header(TOKEN_HEADER, "wrong-token")
                 }
-                assertEquals(HttpStatusCode.Unauthorized, res.status)
+                assertEquals(HttpStatusCode.Forbidden, res.status)
             }
             trustAllClient.close()
         } finally {
