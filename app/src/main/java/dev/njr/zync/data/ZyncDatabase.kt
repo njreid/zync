@@ -4,16 +4,18 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [NodeEntity::class, ContextEntity::class, NodeContextCrossRef::class, AttachmentEntity::class],
-    version = 1,
+    entities = [NodeEntity::class, ContextEntity::class, NodeContextCrossRef::class, AttachmentEntity::class, AllowedDeviceEntity::class],
+    version = 2,
     exportSchema = true,
 )
 abstract class ZyncDatabase : RoomDatabase() {
     abstract fun nodeDao(): NodeDao
     abstract fun contextDao(): ContextDao
+    abstract fun allowedDeviceDao(): AllowedDeviceDao
 
     companion object {
         const val INBOX_ID = 1L
@@ -33,6 +35,7 @@ abstract class ZyncDatabase : RoomDatabase() {
         fun build(context: Context): ZyncDatabase =
             Room.databaseBuilder(context, ZyncDatabase::class.java, "zync.db")
                 .addCallback(seedCallback)
+                .addMigrations(Migration_1_2)
                 .build()
 
         fun inMemory(context: Context): ZyncDatabase =
@@ -40,5 +43,18 @@ abstract class ZyncDatabase : RoomDatabase() {
                 .addCallback(seedCallback)
                 .allowMainThreadQueries()
                 .build()
+    }
+}
+
+val Migration_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `allowed_device` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+            "`name` TEXT NOT NULL, `pubkey` TEXT NOT NULL, `addedAt` INTEGER NOT NULL, " +
+            "`lastSeen` INTEGER, `revoked` INTEGER NOT NULL)"
+        )
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_allowed_device_pubkey` ON `allowed_device` (`pubkey`)"
+        )
     }
 }

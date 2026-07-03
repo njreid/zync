@@ -42,6 +42,15 @@ android {
             isIncludeAndroidResources = true
         }
     }
+
+    // Robolectric unit tests (with isIncludeAndroidResources) read assets from the merged
+    // debug-variant assets, not a test-specific assets dir — so the exported Room schemas
+    // (needed by MigrationTestHelper) must be wired onto the "debug" sourceSet's assets.
+    sourceSets {
+        getByName("debug") {
+            assets.srcDirs("$projectDir/schemas")
+        }
+    }
 }
 
 ksp {
@@ -77,6 +86,7 @@ dependencies {
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
   testImplementation(libs.androidx.test.core)
+  testImplementation(libs.room.testing)
   testImplementation(libs.ktor.server.test.host)
   testImplementation(libs.ktor.client.content.negotiation)
 
