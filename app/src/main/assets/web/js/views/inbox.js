@@ -5,7 +5,8 @@ import { rerender } from '../app.js';
 const INBOX_ID = 1;
 
 export async function renderInbox(el) {
-  const tasks = await get(`/api/nodes/${INBOX_ID}/children`);
+  const all = await get(`/api/nodes/${INBOX_ID}/children`);
+  const tasks = all.filter(t => t.status === 'ACTIVE');
   el.innerHTML = `
     <form id="quick-add" role="group">
       <input id="quick-title" placeholder="Quick add to Inbox…" autocomplete="off">

@@ -1,0 +1,12 @@
+{
+  "name": "zync-webtest",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Playwright web-level functional test suite for the zync web UI, hosted by a Robolectric-backed dev server.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

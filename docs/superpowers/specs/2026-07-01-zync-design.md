@@ -214,6 +214,6 @@ Modeled on nanocode/glaforge's minimal agent: a plain bounded `while` loop + typ
 - Instrumented: Moonshine inference on a fixture WAV; Room migrations.
 - Agent loop tested against a scripted fake `ChatBackend` (deterministic tool-call sequences).
 - API: Ktor `testApplication` tests over an in-memory `ZyncDatabase` (routes, auth rejection for unpaired keys, challenge–response).
-- Web UI: kept framework-free and thin; exercised end-to-end via Android CLI **Journeys** on an emulator (WebView) for Inbox capture → clarify → project flows, plus targeted JS unit tests only where logic accumulates.
+- Web UI: kept framework-free and thin; exercised functionally by a Playwright suite (`webtest/`) driving a real Chromium against a Robolectric-hosted `ZyncServer` dev instance (`DevServer` test, gated by `ZYNC_DEV_SERVER=1`) — no emulator required for UI iteration; the emulator smoke is reduced to WebView wiring only (token injection, back-button handling, native chrome).
 - Pairing: unit tests for QR payload encode/decode, signature verification, token issuance/revocation.
 - Manual on Pixel 9 + desktop: USB attach flow, scanner flow, QR pairing, pinned-TLS rejection of unknown certs.
