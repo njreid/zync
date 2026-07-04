@@ -46,6 +46,16 @@ pub fn discover_logic(timeout: Duration) -> Result<Vec<DiscoveredPhone>> {
     discovery::browse(timeout)
 }
 
+/// Find a previously-discovered phone by its exact instance name. Factored
+/// out of the `pair` command so the (otherwise `AppHandle`/`State`-bound)
+/// lookup is unit-testable.
+pub fn find_discovered_phone(
+    discovered: &[DiscoveredPhone],
+    name: &str,
+) -> Option<DiscoveredPhone> {
+    discovered.iter().find(|p| p.name == name).cloned()
+}
+
 /// Drive the pairing handshake against `phone`, forwarding the confirm code
 /// to `on_confirm_code` (so a real command wrapper can `app.emit("confirm-code",
 /// ..)`), then persist the result under `phone_name` via `store`.
@@ -124,11 +134,16 @@ pub async fn connect_logic(store: &dyn PairedStore, name: &str) -> Result<(Proxy
 // ---------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn discover() -> Result<Vec<DiscoveredPhone>, String> {
-    tauri::async_runtime::spawn_blocking(|| discover_logic(DISCOVER_TIMEOUT))
+pub async fn discover(state: tauri::State<'_, AppState>) -> Result<Vec<DiscoveredPhone>, String> {
+    let phones = tauri::async_runtime::spawn_blocking(|| discover_logic(DISCOVER_TIMEOUT))
         .await
         .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    // Cache the result so `pair(phone_name)` can resolve the name to a
+    // host/port without re-browsing. Without this the last_discovered set
+    // stays empty and every `pair` call fails "unknown phone".
+    *state.last_discovered.lock().unwrap() = phones.clone();
+    Ok(phones)
 }
 
 #[tauri::command]
@@ -141,7 +156,7 @@ pub async fn pair(
 
     let phone = {
         let discovered = state.last_discovered.lock().unwrap();
-        discovered.iter().find(|p| p.name == phone_name).cloned()
+        find_discovered_phone(&discovered, &phone_name)
     };
     let Some(phone) = phone else {
         let _ = app.emit("pair-failed", format!("unknown phone: {phone_name}"));
@@ -241,6 +256,29 @@ mod tests {
         let store = InMemoryPairedStore::default();
         // Nothing to forget yet — should be a no-op Ok, not an error.
         assert!(forget_logic(&store, "nope").is_ok());
+    }
+
+    fn phone(name: &str) -> DiscoveredPhone {
+        DiscoveredPhone {
+            name: name.to_string(),
+            host: std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+            port: 8443,
+            fp_hint: None,
+        }
+    }
+
+    #[test]
+    fn find_discovered_phone_matches_by_exact_name() {
+        let discovered = vec![phone("alice"), phone("bob")];
+        let found = find_discovered_phone(&discovered, "bob").expect("bob is present");
+        assert_eq!(found.name, "bob");
+    }
+
+    #[test]
+    fn find_discovered_phone_returns_none_for_unknown_or_empty() {
+        let discovered = vec![phone("alice")];
+        assert!(find_discovered_phone(&discovered, "carol").is_none());
+        assert!(find_discovered_phone(&[], "alice").is_none());
     }
 
     #[test]
