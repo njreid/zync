@@ -277,6 +277,16 @@ class ZyncServer(
     fun start(): Int {
         val currentLan = lan
         val e = embeddedServer(Netty, configure = {
+            // Serve HTTP/1.1 only. When HTTP/2 is enabled (Ktor's Netty default), the TLS
+            // sslConnector advertises `h2` via ALPN using Netty's `JdkAlpnSslEngine` — and on
+            // Android that engine throws a fatal `AssertionError`
+            // (`JdkAlpnSslEngine$AlpnSelector.checkUnsupported`) during the handshake the instant a
+            // client negotiates ALPN, dropping the connection ("peer closed connection without
+            // close_notify" on the client). That broke real desktop⇄phone pairing outright once the
+            // cert was strong enough for the handshake to reach ALPN at all. This API is
+            // HTTP/1.1 + WebSocket-upgrade only (WS can't run over h2 here anyway), so HTTP/2 is
+            // neither needed nor safe to advertise from this Netty-on-Android server.
+            enableHttp2 = false
             connector {
                 this.port = this@ZyncServer.port
                 host = "127.0.0.1"

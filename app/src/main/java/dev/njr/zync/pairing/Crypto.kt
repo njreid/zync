@@ -1,6 +1,7 @@
 package dev.njr.zync.pairing
 
 import io.ktor.network.tls.certificates.buildKeyStore
+import io.ktor.network.tls.extensions.HashAlgorithm
 import java.io.ByteArrayOutputStream
 import java.security.KeyStore
 import java.security.MessageDigest
@@ -53,6 +54,17 @@ object Crypto {
     // that a paired device needs to keep trusting across sessions. 10 years is effectively
     // "as long as this install lives" for a local pairing/sync server.
     private const val CERT_VALIDITY_DAYS = 3650L
+
+    // Ktor's `certificate` DSL defaults to a 1024-bit RSA key signed with SHA-1. That key is
+    // rejected outright by modern TLS clients that use rustls/aws-lc-rs (or ring): those providers
+    // enforce a *minimum 2048-bit RSA modulus* for handshake-signature verification, so the
+    // desktop Tauri client could not complete the TLS handshake against a real phone at all
+    // (`invalid peer certificate: BadSignature`). 1024-bit RSA + SHA-1 is also a genuine on-device
+    // weakness. Ktor's DSL cannot emit an EC key (its `KeyType` enum is CA/Server/Client, not a
+    // curve selector — every generated key is RSA), so we use RSA-2048, which aws-lc-rs accepts,
+    // and upgrade the self-signature hash to SHA-256. Enforced by CryptoTest so it can never
+    // silently regress to 1024.
+    private const val KEY_SIZE_BITS = 2048
 
     init {
         if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
@@ -108,6 +120,8 @@ object Crypto {
                 domains = listOf("127.0.0.1", "0.0.0.0")
                 subject = X500Principal("CN=$cn, OU=zync, O=zync")
                 daysValid = CERT_VALIDITY_DAYS
+                keySizeInBits = KEY_SIZE_BITS
+                hash = HashAlgorithm.SHA256
             }
         }
 

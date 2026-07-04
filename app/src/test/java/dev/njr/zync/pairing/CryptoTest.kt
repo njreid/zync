@@ -146,6 +146,41 @@ class CryptoTest {
     }
 
     @Test
+    fun selfSignedCert_usesStrongKey_notLegacyRsa1024() {
+        // Regression guard for the desktop⇄phone pairing bug: Ktor's `certificate` DSL defaults to
+        // a 1024-bit RSA key signed with SHA-1, which rustls/aws-lc-rs (the desktop Tauri client's
+        // TLS provider, and `ring`) reject outright during handshake-signature verification
+        // (minimum 2048-bit RSA modulus), so real-device pairing could never complete. This asserts
+        // the generated leaf public key is RSA >= 2048 bits (or, if Ktor ever gains EC support,
+        // an EC P-256+ key) so it can never silently regress to 1024.
+        val id = Crypto.generateSelfSignedCert()
+        val keyStore = KeyStore.getInstance(Crypto.KEYSTORE_TYPE, "BC")
+        keyStore.load(id.keyStoreBytes.inputStream(), id.keyStorePassword)
+        val cert = keyStore.getCertificate(id.keyAlias)
+        val pub = cert.publicKey
+
+        when (pub) {
+            is java.security.interfaces.RSAPublicKey -> {
+                val bits = pub.modulus.bitLength()
+                assertTrue(
+                    "RSA key must be >= 2048 bits (aws-lc-rs rejects weaker); was $bits",
+                    bits >= 2048,
+                )
+            }
+            is java.security.interfaces.ECPublicKey -> {
+                val bits = pub.params.curve.field.fieldSize
+                assertTrue(
+                    "EC key must be >= P-256 (256-bit field); was $bits",
+                    bits >= 256,
+                )
+            }
+            else -> throw AssertionError(
+                "Unexpected server cert key type: ${pub.algorithm} / ${pub.javaClass.name}",
+            )
+        }
+    }
+
+    @Test
     fun selfSignedCert_generatesDistinctKeysEachCall() {
         val id1 = Crypto.generateSelfSignedCert()
         val id2 = Crypto.generateSelfSignedCert()
