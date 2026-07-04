@@ -10,7 +10,6 @@ import dev.njr.zync.pairing.NsdAdvertiser
 import dev.njr.zync.pairing.PairingService
 import dev.njr.zync.pairing.QrPayload
 import dev.njr.zync.pairing.RemoteAccessManager
-import dev.njr.zync.pairing.ServerBinding
 import dev.njr.zync.pairing.ServerCertStore
 import dev.njr.zync.pairing.ServerController
 import dev.njr.zync.pairing.SessionRequestBody
@@ -48,8 +47,8 @@ import org.robolectric.RobolectricTestRunner
 
 /** Fake [ServerController] — just records the last `LanConfig` it was asked to (re)start with. */
 private class FakeServerController : ServerController {
-    override fun restart(lan: LanConfig?): ServerBinding =
-        ServerBinding(httpPort = 8080, tlsPort = if (lan != null) 8443 else null)
+    override fun enableLan(lan: LanConfig): Int = 8443
+    override fun disableLan() = Unit
 }
 
 private class FakeNsdAdvertiser : NsdAdvertiser {

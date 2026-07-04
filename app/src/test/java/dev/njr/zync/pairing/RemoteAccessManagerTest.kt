@@ -52,11 +52,18 @@ private class FakeWifiIpAddressProvider(private val ip: String?) : WifiIpAddress
 private class FakeServerController : ServerController {
     var restartCount = 0
     var lastLan: LanConfig? = null
+    var lanRunning = false
 
-    override fun restart(lan: LanConfig?): ServerBinding {
+    override fun enableLan(lan: LanConfig): Int {
         restartCount++
         lastLan = lan
-        return ServerBinding(httpPort = 8080, tlsPort = if (lan != null) 8443 else null)
+        lanRunning = true
+        return 8443
+    }
+
+    override fun disableLan() {
+        lastLan = null
+        lanRunning = false
     }
 }
 

@@ -9,7 +9,6 @@ import dev.njr.zync.pairing.AndroidNsdAdvertiser
 import dev.njr.zync.pairing.ConnectivityWifiIpAddressProvider
 import dev.njr.zync.pairing.PairingService
 import dev.njr.zync.pairing.RemoteAccessManager
-import dev.njr.zync.pairing.ServerBinding
 import dev.njr.zync.pairing.ServerCertStore
 import dev.njr.zync.pairing.ServerController
 import dev.njr.zync.server.LanConfig
@@ -20,7 +19,6 @@ import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 
 private const val TAG = "zync"
-private const val OLD_SERVER_STOP_DELAY_MS = 3000L
 
 class ZyncApp : Application() {
     val database: ZyncDatabase by lazy { ZyncDatabase.build(this) }
@@ -42,114 +40,103 @@ class ZyncApp : Application() {
         ).also { pairingService.remoteAccess = it }
     }
 
-    @Volatile private var server: ZyncServer? = null
-    @Volatile private var boundPort: Int = -1
+    /**
+     * The PERMANENT loopback server: started once, on first [ensureServerStarted] call, bound to
+     * `127.0.0.1` on a port that never changes for the life of the process. The in-app WebView
+     * loads `http://127.0.0.1:<port>/...` once at launch and never again — so this server (and
+     * this port) must never be restarted or replaced, or the WebView's connection dies underneath
+     * it (see m1c final-review CRIT-A: the old single-server `restart()` design killed the very
+     * server the WebView was talking to a few seconds after any remote-access toggle).
+     */
+    @Volatile private var loopbackServer: ZyncServer? = null
+    @Volatile private var loopbackPort: Int = -1
+
+    /** The separate LAN (HTTPS) server, created by [RemoteAccessManager.enable] and destroyed by
+     * [RemoteAccessManager.disable]. `null` when remote access is disabled. Never affects
+     * [loopbackServer] — the two are independent Netty engines sharing the same [repository]/
+     * [pairingService]/[database]/assets. */
+    @Volatile private var lanServer: ZyncServer? = null
 
     /**
-     * All server start/swap work is serialized onto this single dedicated background thread —
-     * never the caller's thread. This matters because `restart()` can be invoked from inside a
-     * Ktor/Netty request-handling coroutine (`POST /remote/enable`, `/remote/disable`), which by
-     * default runs *on the Netty engine's own event-loop worker threads*. Being a single thread
-     * also gives us the mutual exclusion previously spread across three separate `@Synchronized`
-     * locks (this class, the anonymous `ServerController`, and `RemoteAccessManager`) for free,
-     * without any lock-ordering hazard between them.
+     * Serializes all server start/stop work onto a single dedicated background thread — never the
+     * caller's thread. This matters because [ServerController] methods can be invoked from inside
+     * a Ktor/Netty request-handling coroutine (`POST /remote/enable`, `/remote/disable`), which by
+     * default runs on the Netty engine's own event-loop worker threads. Unlike the old single-
+     * server design, `/remote/enable` and `/remote/disable` are only ever served by the *loopback*
+     * engine (see `requireLoopbackConnector` in `PairingRoutes.kt`) and only ever start/stop the
+     * *LAN* engine — a different `EmbeddedServer` instance — so there is no self-shutdown/circular
+     * -wait hazard here: a handler can safely await the LAN engine's stop()/start() synchronously
+     * without ever blocking on itself. Being a single thread also gives us the mutual exclusion
+     * previously spread across separate locks, without any lock-ordering hazard between them.
      */
-    private val restartExecutor =
-        Executors.newSingleThreadExecutor { r -> Thread(r, "zync-server-restart") }
+    private val serverExecutor =
+        Executors.newSingleThreadExecutor { r -> Thread(r, "zync-server") }
 
-    /**
-     * Stops old (superseded) [ZyncServer] instances, always off the [restartExecutor] and never
-     * synchronously awaited by [restartOnExecutor] — see that function's doc for why.
-     */
-    private val stopExecutor =
-        Executors.newCachedThreadPool { r -> Thread(r, "zync-server-stop").apply { isDaemon = true } }
-
-    /**
-     * On-device root cause (see m1c-task-8 report): the previous implementation called
-     * `server?.stop()` *before* creating/starting the replacement server, and did so
-     * synchronously from whatever thread called `restart()` — including, for `POST
-     * /remote/enable`/`/remote/disable`, the very request-handling coroutine currently being
-     * served *by the server being stopped*. `EmbeddedServer.stop(gracePeriodMillis,
-     * timeoutMillis)` waits (up to `gracePeriodMillis`) for in-flight requests — including this
-     * one — to finish before closing connections, but this request can't finish until its handler
-     * returns, and its handler is blocked inside `stop()` waiting for exactly that: a circular
-     * wait. After the grace/timeout period elapsed, Netty force-closed the connection with no
-     * response ever sent — exactly the "Failed to fetch" symptom observed on-device, and (in the
-     * single-threaded call path) could wedge the Netty event loop outright.
-     *
-     * The fix is ordering, not just threading: build and start the *new* server first (a fresh
-     * engine, unrelated to any in-flight request), swap the app's live reference to it, and only
-     * *afterwards* stop the *old* one — asynchronously, on [stopExecutor], without ever awaiting
-     * that stop. By the time the old engine is asked to shut down, the handler that triggered
-     * this restart has already returned its response (using the *new* server's resolved ports),
-     * and Ktor/Netty is free to flush that response over the old engine's still-open connection
-     * before this task ever touches it. No thread ever blocks waiting for a server to stop, so
-     * there is no self-shutdown/deadlock hazard regardless of which thread/dispatcher called
-     * `restart()`.
-     */
-    private fun restartOnExecutor(lan: LanConfig?): ServerBinding =
-        restartExecutor.submit(
-            Callable {
-                try {
-                    val oldServer = server
-                    val newServer = ZyncServer(
-                        database,
-                        repository,
-                        serverToken,
-                        androidAssets(assets),
-                        lan = lan,
-                        pairing = pairingService,
-                    )
-                    val httpPort = newServer.start()
-                    server = newServer
-                    boundPort = httpPort
-                    val binding = ServerBinding(httpPort = httpPort, tlsPort = newServer.tlsPort())
-                    if (oldServer != null) {
-                        stopExecutor.execute {
-                            try {
-                                // Give the response to *this* restart's own triggering request
-                                // (e.g. POST /remote/enable, served by `oldServer`) time to
-                                // actually flush before the old engine is asked to shut down.
-                                // That response is composed by the caller *after* this whole
-                                // restart() call returns, so without this delay the old engine's
-                                // stop() (and its own grace/timeout window) can race the still
-                                // in-flight response and win, closing the connection before a
-                                // single byte of the reply goes out — observed on-device as
-                                // "Failed to fetch" despite the restart itself having fully
-                                // succeeded (both connectors up, NSD registered).
-                                Thread.sleep(OLD_SERVER_STOP_DELAY_MS)
-                                oldServer.stop()
-                            } catch (t: Throwable) {
-                                Log.e(TAG, "stopping superseded server failed", t)
-                            }
-                        }
-                    }
-                    binding
-                } catch (t: Throwable) {
-                    Log.e(TAG, "server restart failed (lan=${lan != null})", t)
-                    throw t
-                }
-            },
-        ).get()
-
-    /**
-     * Bridges [RemoteAccessManager] to the actual [ZyncServer] instance: `ZyncServer`'s
-     * [LanConfig] is fixed at construction, so toggling remote access on/off means stopping the
-     * current server and starting a new one with (or without) a `LanConfig` bound to it.
-     */
     private val serverController = object : ServerController {
-        override fun restart(lan: LanConfig?): ServerBinding = restartOnExecutor(lan)
+        override fun enableLan(lan: LanConfig): Int =
+            serverExecutor.submit(
+                Callable {
+                    try {
+                        lanServer?.stop()
+                        val newLan = ZyncServer(
+                            database,
+                            repository,
+                            serverToken,
+                            androidAssets(assets),
+                            lan = lan,
+                            pairing = pairingService,
+                        )
+                        newLan.start()
+                        lanServer = newLan
+                        newLan.tlsPort()
+                            ?: error("LAN ZyncServer.start() returned no TLS port despite a LanConfig")
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "enabling LAN server failed", t)
+                        throw t
+                    }
+                },
+            ).get()
+
+        override fun disableLan() {
+            serverExecutor.submit(
+                Callable {
+                    try {
+                        lanServer?.stop()
+                        lanServer = null
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "disabling LAN server failed", t)
+                        throw t
+                    }
+                },
+            ).get()
+        }
     }
 
     /**
-     * Blocks while binding — call from a background thread. Starts the server loopback-only;
-     * call [remoteAccess]`.enable()` to additionally bind a LAN HTTPS connector.
+     * Blocks while binding — call from a background thread. Starts (once) the permanent loopback
+     * server; a no-op on subsequent calls. Call [remoteAccess]`.enable()` to additionally start a
+     * separate LAN HTTPS server.
      */
     fun ensureServerStarted(): Int {
-        if (server == null) {
-            restartOnExecutor(null)
+        if (loopbackServer == null) {
+            serverExecutor.submit(
+                Callable {
+                    if (loopbackServer == null) {
+                        val s = ZyncServer(
+                            database,
+                            repository,
+                            serverToken,
+                            androidAssets(assets),
+                            lan = null,
+                            pairing = pairingService,
+                        )
+                        loopbackPort = s.start()
+                        loopbackServer = s
+                    }
+                },
+            ).get()
         }
-        return boundPort
+        return loopbackPort
     }
 
     override fun onCreate() {

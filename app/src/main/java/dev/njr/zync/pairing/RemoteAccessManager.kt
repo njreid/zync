@@ -3,20 +3,20 @@ package dev.njr.zync.pairing
 import dev.njr.zync.server.LanConfig
 import java.security.KeyStore
 
-/** The bound ports of a (re)started server, as reported by [ServerController.restart]. */
-data class ServerBinding(val httpPort: Int, val tlsPort: Int?)
-
 /**
- * Thin seam between [RemoteAccessManager] and the actual running [dev.njr.zync.server.ZyncServer]
- * instance, owned by `ZyncApp`. `ZyncServer`'s `LanConfig` is fixed at construction time, so
- * enabling/disabling remote access means stopping the current server and starting a new one
- * with/without a [LanConfig] — that lifecycle is owned by whoever holds the `ZyncServer`
- * reference (`ZyncApp`), not by this manager. Kept as an interface so [RemoteAccessManager] is
- * JVM-testable without booting a real Ktor/Netty server.
+ * Thin seam between [RemoteAccessManager] and the actual running LAN
+ * [dev.njr.zync.server.ZyncServer] instance, owned by `ZyncApp`. The permanent loopback server
+ * (used by the in-app WebView) is never touched by this interface — it is started once and lives
+ * for the process lifetime. Enabling/disabling remote access only starts/stops a *separate* LAN
+ * server instance. Kept as an interface so [RemoteAccessManager] is JVM-testable without booting a
+ * real Ktor/Netty server.
  */
 interface ServerController {
-    /** (Re)starts the server. Pass `null` to bind loopback-only. */
-    fun restart(lan: LanConfig?): ServerBinding
+    /** Starts (or restarts, if already running) the LAN server. Returns the resolved TLS port. */
+    fun enableLan(lan: LanConfig): Int
+
+    /** Stops the LAN server, if one is running. Idempotent. */
+    fun disableLan()
 }
 
 /** [RemoteAccessManager.state] result. */
@@ -72,9 +72,7 @@ class RemoteAccessManager(
             keyAlias = identity.keyAlias,
             host = "0.0.0.0",
         )
-        val binding = server.restart(lan)
-        val tlsPort = binding.tlsPort
-            ?: error("server.restart() returned no TLS port despite being given a LanConfig")
+        val tlsPort = server.enableLan(lan)
 
         val ip = wifiIp.currentIpv4() ?: "0.0.0.0"
         nsd.register(tlsPort, deviceName, shortFingerprintHint(identity.certFingerprintSha256))
@@ -89,7 +87,7 @@ class RemoteAccessManager(
     fun disable() {
         if (state == RemoteState.Disabled) return
         nsd.unregister()
-        server.restart(null)
+        server.disableLan()
         state = RemoteState.Disabled
     }
 

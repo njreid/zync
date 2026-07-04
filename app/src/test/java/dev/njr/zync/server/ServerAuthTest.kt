@@ -10,6 +10,7 @@ import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
@@ -65,6 +66,29 @@ class ServerAuthTest {
         assertEquals(HttpStatusCode.OK, bare.get("/index.html?token=test-token").status)
         assertEquals(HttpStatusCode.OK, bare.get("/index.html").status) // cookie now carries auth
     }
+
+    @Test
+    fun `cold-start stale cookie does not shadow a fresh correct query token`() =
+        zyncTestApplication { _, _, _ ->
+            // Regression for m1c final-review CRIT-B: a WebView cold start carries a stale
+            // `zync_token` cookie from a previous process (whose `serverToken` differed) alongside
+            // a fresh, correct `?token=` from the newly-launched intent URL. The fresh query token
+            // on the document route must win, not 401.
+            val badCookieClient = createClient {
+                install(io.ktor.client.plugins.cookies.HttpCookies)
+            }
+            // Seed a wrong cookie value directly (simulating a stale cookie jar from a prior
+            // process's serverToken) alongside the correct query token.
+            val res = badCookieClient.get("/index.html?token=test-token") {
+                header("Cookie", "$TOKEN_COOKIE=wrong-stale-token")
+            }
+            assertEquals(HttpStatusCode.OK, res.status)
+            val setCookie = res.headers.getAll("Set-Cookie").orEmpty()
+            assertTrue(
+                "expected the cookie to be refreshed to the correct token",
+                setCookie.any { it.contains("$TOKEN_COOKIE=test-token") },
+            )
+        }
 
     @Test
     fun `unknown path with valid token is 404`() = zyncTestApplication { _, _, client ->

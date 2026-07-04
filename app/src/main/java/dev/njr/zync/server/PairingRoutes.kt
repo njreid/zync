@@ -165,7 +165,7 @@ fun Route.pairingRoutes(pairing: PairingService) {
                 call.respond(HttpStatusCode.OK, RemoteInfoDto(info.ip, info.tlsPort, info.certFingerprint))
             } catch (t: Throwable) {
                 Log.e(TAG, "remote enable failed", t)
-                call.respond(HttpStatusCode.InternalServerError, ErrorDto(t.message ?: "remote enable failed"))
+                call.respond(HttpStatusCode.InternalServerError, ErrorDto("internal error"))
             }
         }
 
@@ -176,7 +176,7 @@ fun Route.pairingRoutes(pairing: PairingService) {
                 call.respond(HttpStatusCode.OK, RemoteStateDto(enabled = false))
             } catch (t: Throwable) {
                 Log.e(TAG, "remote disable failed", t)
-                call.respond(HttpStatusCode.InternalServerError, ErrorDto(t.message ?: "remote disable failed"))
+                call.respond(HttpStatusCode.InternalServerError, ErrorDto("internal error"))
             }
         }
 

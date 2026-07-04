@@ -143,9 +143,19 @@ private fun Application.tokenGuard(token: String, pairing: PairingService?) {
             call.response.cookies.append(TOKEN_COOKIE, token, path = "/", httpOnly = true)
         }
 
+        // Precedence: header, then a *valid* ?token= on the document route, then the cookie. A
+        // fresh, correct ?token= must win over a stale zync_token cookie left over from a
+        // previous process's serverToken — otherwise cold start (new process -> new serverToken,
+        // but the WebView's cookie jar still has the old one) presents the stale cookie, which
+        // beats the fresh query token under the old (cookie-before-query) ordering, and the
+        // in-app WebView gets an unrecoverable 401 on the document itself. The cookie is still
+        // re-set above (and so refreshed to the correct value) whenever the query token matches.
+        val validQueryToken = queryToken?.takeIf {
+            AuthGuard.isDocumentPath(path) && Crypto.constantTimeEquals(it, token)
+        }
         val presentedLoopbackToken = call.request.headers[TOKEN_HEADER]
+            ?: validQueryToken
             ?: call.request.cookies[TOKEN_COOKIE]
-            ?: queryToken?.takeIf { AuthGuard.isDocumentPath(path) }
 
         val sessionToken = call.request.headers[io.ktor.http.HttpHeaders.Authorization]
             ?.removePrefix("Bearer ")
@@ -202,9 +212,14 @@ fun Application.zyncModule(
         // Without a logging backend AND a catch-all here, any other uncaught exception inside a
         // route handler is swallowed by Ktor and vanishes with no logcat trace at all (see
         // m1c-task-8 report) — surface it, then still answer the request rather than hanging it.
+        // The real `cause.message` is logged server-side only: this catch-all is reachable on the
+        // LAN (HTTPS) connector by any session-authed (paired) client, and unexpected-exception
+        // messages can carry internal details (paths, stack info, library error text) that must
+        // not be echoed back over the network — see m1c final-review info-leak finding. A generic,
+        // fixed message goes in the response body instead.
         exception<Throwable> { call, cause ->
             android.util.Log.e("zync", "unhandled exception in route handler", cause)
-            call.respond(HttpStatusCode.InternalServerError, ErrorDto(cause.message ?: "internal error"))
+            call.respond(HttpStatusCode.InternalServerError, ErrorDto("internal error"))
         }
     }
     tokenGuard(token, pairing)
