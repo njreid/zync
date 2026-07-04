@@ -7,6 +7,7 @@ import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.lifecycle.lifecycleScope
+import dev.njr.zync.pairing.QrScanBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -14,13 +15,14 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
 
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             webChromeClient = WebChromeClient()
+            addJavascriptInterface(QrScanBridge(this@MainActivity, this), "ZyncNative")
         }
         setContentView(webView)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -29,6 +31,11 @@ class MainActivity : ComponentActivity() {
             }
         })
         val app = application as ZyncApp
+        // Force the lazy `remoteAccess` manager into existence (and wired into
+        // `pairingService.remoteAccess`, see ZyncApp) up front, so the settings view's
+        // `/remote/*` routes are functional as soon as the WebView loads, not only after
+        // whatever first touches `app.remoteAccess` on some other path.
+        app.remoteAccess
         lifecycleScope.launch(Dispatchers.IO) {
             val port = app.ensureServerStarted()
             withContext(Dispatchers.Main) {

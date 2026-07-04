@@ -83,6 +83,9 @@ dependencies {
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.bouncycastle.bcpkix)
 
+  // On-device QR scanning for pairing (no camera permission required)
+  implementation(libs.play.services.code.scanner)
+
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)

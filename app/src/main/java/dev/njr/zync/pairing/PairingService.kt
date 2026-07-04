@@ -4,6 +4,7 @@ import dev.njr.zync.data.AllowedDeviceDao
 import dev.njr.zync.data.AllowedDeviceEntity
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerializationException
@@ -95,9 +96,21 @@ class PairingService(
 
     @Volatile private var certFingerprint: String = ""
 
+    /**
+     * Settable back-reference to the [RemoteAccessManager] that owns the remote-access lifecycle,
+     * so the remote-access device-management routes (mounted from [dev.njr.zync.server.pairingRoutes],
+     * which only receives this [PairingService]) can reach it. `ZyncApp` wires this once
+     * `remoteAccess` is constructed. Nullable/settable rather than a constructor parameter because
+     * `RemoteAccessManager` itself depends on this `PairingService` — a constructor cycle.
+     */
+    var remoteAccess: RemoteAccessManager? = null
+
     fun setCertFingerprint(fp: String) {
         certFingerprint = fp
     }
+
+    /** All allowed devices (paired, revoked or not), most-recently-added first. */
+    suspend fun listDevices(): List<AllowedDeviceEntity> = dao.observeAll().first()
 
     fun beginPairing(): PendingPairing {
         val nonce = randomNonce()

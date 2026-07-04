@@ -8,13 +8,15 @@ let lazyLoaded = false;
 
 async function loadLazyRoutes() {
   if (lazyLoaded) return;
-  const [{ renderTree }, { renderContexts }, { renderDetail }] = await Promise.all([
+  const [{ renderTree }, { renderContexts }, { renderDetail }, { renderSettings }] = await Promise.all([
     import('./views/tree.js'), import('./views/contexts.js'), import('./views/detail.js'),
+    import('./views/settings.js'),
   ]);
   routes.push(
     { re: /^#\/tree$/, render: renderTree },
     { re: /^#\/contexts$/, render: renderContexts },
     { re: /^#\/node\/(\d+)$/, render: (el, m) => renderDetail(el, Number(m[1])) },
+    { re: /^#\/settings$/, render: renderSettings },
   );
   lazyLoaded = true;
 }

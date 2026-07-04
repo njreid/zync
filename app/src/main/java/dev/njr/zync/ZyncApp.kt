@@ -33,7 +33,7 @@ class ZyncApp : Application() {
             nsd = AndroidNsdAdvertiser(this),
             wifiIp = ConnectivityWifiIpAddressProvider(this),
             deviceName = android.os.Build.MODEL ?: "zync",
-        )
+        ).also { pairingService.remoteAccess = it }
     }
 
     private var server: ZyncServer? = null
