@@ -296,8 +296,16 @@ class PairingServiceTest {
         kotlinx.coroutines.runBlocking { service.approveScanned(qrPayload("desktop-nonce-1")) }
 
         val successes = java.util.concurrent.atomic.AtomicInteger(0)
-        val alreadyUsedFailures = java.util.concurrent.atomic.AtomicInteger(0)
-        val otherFailures = java.util.concurrent.atomic.AtomicInteger(0)
+        // A loser can observe either "pairing nonce already used" (it saw the record before a
+        // winner's consumed flag got swept) or "no pairing in progress" (the winner's now-consumed
+        // record was already evicted by sweepApprovedPairings() by the time this call looked).
+        // Both are equivalent from every caller's point of view — PairingRoutes maps every
+        // IllegalStateException from this call to the same 202 "pending" response — so the
+        // eviction of consumed entries (hygiene fix) doesn't change externally observable
+        // behavior; only which of these two equivalent internal messages a loser sees.
+        val expectedLoserMessages = setOf("pairing nonce already used", "no pairing in progress")
+        val loserFailures = java.util.concurrent.atomic.AtomicInteger(0)
+        val unexpectedFailures = java.util.concurrent.atomic.AtomicInteger(0)
 
         // Real threads (not coroutines sharing one dispatcher) to actually create the race that
         // exposed the bug: many callers hitting completePairingRequest for the same approved
@@ -309,10 +317,10 @@ class PairingServiceTest {
                         service.completePairingRequest(pubkeyB64, "desktop-nonce-1")
                         successes.incrementAndGet()
                     } catch (e: IllegalStateException) {
-                        if (e.message == "pairing nonce already used") {
-                            alreadyUsedFailures.incrementAndGet()
+                        if (e.message in expectedLoserMessages) {
+                            loserFailures.incrementAndGet()
                         } else {
-                            otherFailures.incrementAndGet()
+                            unexpectedFailures.incrementAndGet()
                         }
                     }
                 }
@@ -322,7 +330,107 @@ class PairingServiceTest {
         threads.forEach { it.join() }
 
         assertEquals("exactly one caller must win the race", 1, successes.get())
-        assertEquals(0, otherFailures.get())
-        assertEquals(19, alreadyUsedFailures.get())
+        assertEquals(0, unexpectedFailures.get())
+        assertEquals(19, loserFailures.get())
+    }
+
+    // ---- lazy eviction of stale entries ----------------------------------------------------
+
+    @Test
+    fun `stale approved pairings are evicted once expired and a later call touches the map`() = runTest {
+        service.approveScanned(qrPayload("desktop-nonce-1"))
+        assertEquals(1, service.approvedPairingsSizeForTest())
+
+        clock += 5 * 60 * 1000L + 1 // past the approval TTL
+
+        // A second, unrelated call that also locks approvedPairings should sweep the stale entry.
+        val otherKey = Ed25519PrivateKeyParameters(SecureRandom())
+        val otherPubkey = Base64.getEncoder().encodeToString(otherKey.generatePublicKey().encoded)
+        service.approveScanned(qrPayload("desktop-nonce-2", pubkey = otherPubkey))
+
+        // Only the fresh entry should remain; the expired one was swept.
+        assertEquals(1, service.approvedPairingsSizeForTest())
+
+        // Behaviorally: the expired pairing can no longer be completed.
+        try {
+            service.completePairingRequest(pubkeyB64, "desktop-nonce-1")
+            fail("expected the swept, expired pairing to no longer be completable")
+        } catch (e: IllegalStateException) {
+            // expected
+        }
+    }
+
+    @Test
+    fun `consumed approved pairings are evicted on the next mutating call`() = runTest {
+        service.approveScanned(qrPayload("desktop-nonce-1"))
+        service.completePairingRequest(pubkeyB64, "desktop-nonce-1")
+        assertEquals(1, service.approvedPairingsSizeForTest())
+
+        val otherKey = Ed25519PrivateKeyParameters(SecureRandom())
+        val otherPubkey = Base64.getEncoder().encodeToString(otherKey.generatePublicKey().encoded)
+        service.approveScanned(qrPayload("desktop-nonce-2", pubkey = otherPubkey))
+
+        assertEquals(1, service.approvedPairingsSizeForTest())
+    }
+
+    @Test
+    fun `stale sessions are evicted once expired and a later call touches the map`() = runTest {
+        dao.insert(AllowedDeviceEntity(name = "Laptop", pubkey = pubkeyB64, addedAt = clock, lastSeen = null))
+        val challenge = service.newChallenge()
+        val token = service.issueSession(pubkeyB64, challenge, sign(challenge.toByteArray(Charsets.UTF_8)))!!
+        assertEquals(1, service.sessionsSizeForTest())
+
+        clock += 24 * 60 * 60 * 1000L + 1 // past the session TTL
+
+        assertFalse(service.validateSession(token))
+        assertEquals(0, service.sessionsSizeForTest())
+    }
+
+    @Test
+    fun `stale challenges are evicted once expired and a later call touches the map`() = runTest {
+        service.newChallenge()
+        assertEquals(1, service.challengesSizeForTest())
+
+        clock += 2 * 60 * 1000L + 1 // past the challenge TTL
+
+        service.newChallenge()
+
+        // Only the fresh challenge should remain; the expired one was swept.
+        assertEquals(1, service.challengesSizeForTest())
+    }
+
+    // ---- re-pairing a known device (Fix 2) ----------------------------------------------------
+
+    @Test
+    fun `approveScanned for an already-paired device re-pairs cleanly instead of throwing`() = runTest {
+        val first = service.approveScanned(qrPayload("desktop-nonce-1"))
+
+        // Re-scan (e.g. desktop lost its pairing state and re-shows a fresh QR for the same key).
+        val second = service.approveScanned(qrPayload("desktop-nonce-2"))
+
+        assertEquals(first.id, second.id)
+        assertEquals(pubkeyB64, second.pubkey)
+        assertTrue(second.confirmCode.isNotBlank())
+
+        // The fresh nonce is the one that can complete the pairing now.
+        val result = service.completePairingRequest(pubkeyB64, "desktop-nonce-2")
+        assertEquals(second.confirmCode, result.confirmCode)
+
+        assertEquals(1, service.listDevices().size)
+    }
+
+    @Test
+    fun `approveScanned for a previously-revoked device un-revokes it and pairing completes`() = runTest {
+        val first = service.approveScanned(qrPayload("desktop-nonce-1"))
+        service.revoke(first.id)
+        assertTrue(dao.byPubkey(pubkeyB64)!!.revoked)
+
+        val second = service.approveScanned(qrPayload("desktop-nonce-2"))
+
+        assertEquals(first.id, second.id)
+        assertFalse(dao.byPubkey(pubkeyB64)!!.revoked)
+
+        val result = service.completePairingRequest(pubkeyB64, "desktop-nonce-2")
+        assertEquals(second.confirmCode, result.confirmCode)
     }
 }

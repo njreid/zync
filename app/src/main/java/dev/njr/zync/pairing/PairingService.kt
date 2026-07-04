@@ -137,15 +137,30 @@ class PairingService(
         val confirmCode = deriveConfirmCode(payload.nonce)
 
         return approvalMutex.withLock {
-            val id = dao.insert(
-                AllowedDeviceEntity(
-                    name = payload.deviceName,
-                    pubkey = payload.devicePubkey,
-                    addedAt = now(),
-                    lastSeen = null,
-                    revoked = false,
-                ),
-            )
+            sweepApprovedPairings()
+
+            // Re-pairing a device we already know about (re-scan after e.g. a factory reset, or
+            // the user deliberately re-adding a previously revoked device) must be a clean,
+            // idempotent success rather than bubbling up the DAO's unique-constraint exception —
+            // that would otherwise surface to the desktop as an unhandled 500. If the device is
+            // currently revoked, re-approving it here is a deliberate re-add, so un-revoke it.
+            val existing = dao.byPubkey(payload.devicePubkey)
+            val id = if (existing != null) {
+                if (existing.revoked) {
+                    dao.setRevoked(existing.id, false)
+                }
+                existing.id
+            } else {
+                dao.insert(
+                    AllowedDeviceEntity(
+                        name = payload.deviceName,
+                        pubkey = payload.devicePubkey,
+                        addedAt = now(),
+                        lastSeen = null,
+                        revoked = false,
+                    ),
+                )
+            }
             approvedPairings[payload.devicePubkey] = ApprovedPairing(
                 nonce = payload.nonce,
                 confirmCode = confirmCode,
@@ -161,6 +176,29 @@ class PairingService(
         }
     }
 
+    /** Must be called while holding [approvalMutex]. Drops consumed and time-expired approvals. */
+    private fun sweepApprovedPairings() {
+        val nowMs = now()
+        approvedPairings.entries.removeIf { (_, pairing) -> pairing.consumed || nowMs > pairing.expiresAt }
+    }
+
+    /** Drops sessions past [SessionInfo.expiresAt]. Safe to call without a lock: [ConcurrentHashMap]. */
+    private fun sweepSessions() {
+        val nowMs = now()
+        sessions.entries.removeIf { (_, info) -> nowMs >= info.expiresAt }
+    }
+
+    /** Drops challenges past their expiry. Safe to call without a lock: [ConcurrentHashMap]. */
+    private fun sweepChallenges() {
+        val nowMs = now()
+        challenges.entries.removeIf { (_, expiresAt) -> nowMs > expiresAt }
+    }
+
+    // ---- test-only visibility into map sizes, to assert sweeping actually evicts entries ----
+    internal fun approvedPairingsSizeForTest(): Int = approvedPairings.size
+    internal fun sessionsSizeForTest(): Int = sessions.size
+    internal fun challengesSizeForTest(): Int = challenges.size
+
     /**
      * The desktop polls this with the same `{devicePubkey, nonce}` it put in its QR. Succeeds
      * only once [approveScanned] has recorded a matching, unexpired, not-yet-consumed approval
@@ -172,6 +210,8 @@ class PairingService(
         // this lock, two concurrent callers could both find the same not-yet-consumed record and
         // both proceed, defeating the single-use guarantee (see the note on `approvalMutex` above).
         return approvalMutex.withLock {
+            sweepApprovedPairings()
+
             // Walk every recorded approval and compare the pubkey in constant time, rather than a
             // direct map lookup by the raw key, so a caller can't use response timing to learn how
             // many characters of a guessed pubkey matched a real, approved one.
@@ -210,6 +250,9 @@ class PairingService(
     }
 
     suspend fun issueSession(devicePubkeyB64: String, challenge: String, signatureB64: String): String? {
+        sweepSessions()
+        sweepChallenges()
+
         val device = dao.byPubkey(devicePubkeyB64) ?: return null
         if (device.revoked) return null
 
@@ -234,6 +277,7 @@ class PairingService(
      * bounding exposure by the session TTL.
      */
     suspend fun validateSession(token: String): Boolean {
+        sweepSessions()
         val nowMs = now()
         // Walk every live session rather than doing a direct map lookup by the raw token, and
         // compare with a constant-time comparator, so a caller can't use response timing to
@@ -251,6 +295,7 @@ class PairingService(
     }
 
     fun newChallenge(): String {
+        sweepChallenges()
         val challenge = randomNonce()
         challenges[challenge] = now() + CHALLENGE_TTL_MS
         return challenge
