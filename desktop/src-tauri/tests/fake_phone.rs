@@ -7,6 +7,7 @@
 //! public surface small and stable: `spawn_fake_phone`, `FakePhoneConfig`,
 //! `FakePhone`.
 
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -214,6 +215,21 @@ async fn api_roots(State(state): State<SharedState>, headers: HeaderMap) -> Resp
     Json(serde_json::json!([{"title": "Inbox"}, {"title": "Someday"}])).into_response()
 }
 
+async fn api_events(ws: WebSocketUpgrade) -> Response {
+    ws.on_upgrade(handle_events_socket)
+}
+
+async fn handle_events_socket(mut socket: WebSocket) {
+    let _ = socket.send(Message::Text(r#"{"type":"hello"}"#.into())).await;
+    // Keep the socket open, echoing anything the client sends, until it
+    // closes — enough for a bridging test without needing real event data.
+    while let Some(Ok(msg)) = socket.recv().await {
+        if let Message::Close(_) = msg {
+            break;
+        }
+    }
+}
+
 /// Handle to a running fake phone. Dropping this does not stop the server;
 /// hold onto it for the lifetime of the test (the underlying task is
 /// detached but bound to an ephemeral port that's freed when the process
@@ -271,6 +287,7 @@ pub async fn spawn_fake_phone_with(config: FakePhoneConfig) -> FakePhone {
         .route("/pair/challenge", get(pair_challenge))
         .route("/pair/session", post(pair_session))
         .route("/api/roots", get(api_roots))
+        .route("/api/events", get(api_events))
         .with_state(state);
 
     let key_der = PrivateKeyDer::Pkcs8(key_pair.serialize_der().into());
