@@ -122,7 +122,17 @@ fn to_discovered_phone(resolved: &ResolvedService) -> DiscoveredPhone {
         .map(|scoped| scoped.to_ip_addr())
         .find(|ip| ip.is_ipv4())
         .or_else(|| resolved.addresses.iter().next().map(|s| s.to_ip_addr()))
-        .unwrap_or(IpAddr::from([0, 0, 0, 0]));
+        .unwrap_or_else(|| {
+            // A resolved service with no addresses at all is unusual (the
+            // phone should always advertise at least one). Surface it rather
+            // than silently handing the UI an unconnectable 0.0.0.0.
+            log::warn!(
+                "discovered zync service {:?} advertised no resolvable address; \
+                 using 0.0.0.0 placeholder (it will not be connectable)",
+                resolved.fullname
+            );
+            IpAddr::from([0, 0, 0, 0])
+        });
 
     let fp_hint = resolved
         .txt_properties
