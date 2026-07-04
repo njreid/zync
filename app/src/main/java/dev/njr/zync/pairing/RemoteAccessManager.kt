@@ -60,7 +60,10 @@ class RemoteAccessManager(
         val identity = certStore.loadOrCreate()
         pairingService.setCertFingerprint(identity.certFingerprintSha256)
 
-        val keyStore = KeyStore.getInstance("PKCS12").apply {
+        val keyStore = KeyStore.getInstance(
+            Crypto.KEYSTORE_TYPE,
+            org.bouncycastle.jce.provider.BouncyCastleProvider.PROVIDER_NAME,
+        ).apply {
             load(identity.keyStoreBytes.inputStream(), identity.keyStorePassword)
         }
         val lan = LanConfig(

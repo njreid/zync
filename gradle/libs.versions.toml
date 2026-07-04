@@ -18,6 +18,7 @@ robolectric = "4.16.1"
 coroutinesTest = "1.10.2"
 bouncycastle = "1.84"
 playServicesCodeScanner = "16.1.0"
+slf4jAndroid = "1.7.36"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -47,6 +48,7 @@ ktor-network-tls-certificates = { group = "io.ktor", name = "ktor-network-tls-ce
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 bouncycastle-bcpkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
 play-services-code-scanner = { group = "com.google.android.gms", name = "play-services-code-scanner", version.ref = "playServicesCodeScanner" }
+slf4j-android = { group = "org.slf4j", name = "slf4j-android", version.ref = "slf4jAndroid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }

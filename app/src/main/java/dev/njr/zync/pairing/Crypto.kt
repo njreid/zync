@@ -2,6 +2,7 @@ package dev.njr.zync.pairing
 
 import io.ktor.network.tls.certificates.buildKeyStore
 import java.io.ByteArrayOutputStream
+import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.Security
@@ -34,6 +35,19 @@ data class ServerIdentity(
 object Crypto {
 
     private const val KEY_ALIAS = "zync-server"
+
+    /**
+     * The PKCS12 keystore type used end-to-end for the server identity: generation (here),
+     * persistence (`ServerCertStore`), reload (`ServerCertStore.load`), and the Netty
+     * `sslConnector` (`RemoteAccessManager.enable`). Explicitly requesting the BouncyCastle ("BC")
+     * provider's PKCS12 implementation — rather than relying on `KeyStore.getDefaultType()` /
+     * the platform's default provider — is what makes this consistent across a desktop JVM
+     * (where the default happens to be PKCS12 already) and real Android (where
+     * `KeyStore.getDefaultType()` is "BKS", which caused a hard `IOException` when read back with
+     * a hardcoded "PKCS12" instance). BC is already a project dependency and its PKCS12
+     * implementation is understood by Netty/JSSE's TLS stack on both platforms.
+     */
+    const val KEYSTORE_TYPE = "PKCS12"
 
     // buildKeyStore defaults to a 3-day validity, which is far too short for a server identity
     // that a paired device needs to keep trusting across sessions. 10 years is effectively
@@ -83,13 +97,26 @@ object Crypto {
      * UI.
      */
     fun generateSelfSignedCert(cn: String = "zync", password: CharArray = randomPassword()): ServerIdentity {
-        val keyStore = buildKeyStore {
+        // ktor's buildKeyStore always calls KeyStore.getInstance(KeyStore.getDefaultType()),
+        // which is "PKCS12" on a desktop JVM but "BKS" on real Android — so the keystore it
+        // returns cannot be relied on to be any particular type. Use it only for the cert/key
+        // generation logic, then copy the resulting private key + cert chain into an explicit,
+        // platform-independent PKCS12 (BC) keystore before ever serializing to bytes.
+        val generated = buildKeyStore {
             certificate(KEY_ALIAS) {
                 this.password = String(password)
                 domains = listOf("127.0.0.1", "0.0.0.0")
                 subject = X500Principal("CN=$cn, OU=zync, O=zync")
                 daysValid = CERT_VALIDITY_DAYS
             }
+        }
+
+        val privateKey = generated.getKey(KEY_ALIAS, password) as java.security.PrivateKey
+        val chain = generated.getCertificateChain(KEY_ALIAS)
+
+        val keyStore = KeyStore.getInstance(KEYSTORE_TYPE, BouncyCastleProvider.PROVIDER_NAME).apply {
+            load(null, null)
+            setKeyEntry(KEY_ALIAS, privateKey, password, chain)
         }
 
         val cert = keyStore.getCertificate(KEY_ALIAS)

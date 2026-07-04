@@ -34,6 +34,8 @@ android {
     packaging {
       resources {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        excludes += "/META-INF/INDEX.LIST"
+        excludes += "/META-INF/io.netty.versions.properties"
       }
     }
 
@@ -82,6 +84,9 @@ dependencies {
   implementation(libs.ktor.network.tls.certificates)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.bouncycastle.bcpkix)
+  // Ktor/Netty log via SLF4J; without a binding, exceptions inside route handlers/the Netty
+  // engine vanish silently instead of reaching logcat.
+  implementation(libs.slf4j.android)
 
   // On-device QR scanning for pairing (no camera permission required)
   implementation(libs.play.services.code.scanner)

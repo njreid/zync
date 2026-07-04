@@ -9,6 +9,7 @@ import dev.njr.zync.pairing.PairingService
 import dev.njr.zync.pairing.RemoteState
 import dev.njr.zync.pairing.SessionDto
 import dev.njr.zync.pairing.SessionRequestBody
+import android.util.Log
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
@@ -18,7 +19,11 @@ import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+
+private const val TAG = "zync"
 
 /** Body of `POST /pair/approve` — the raw JSON the phone camera scanned off the desktop's QR. */
 @Serializable
@@ -146,14 +151,33 @@ fun Route.pairingRoutes(pairing: PairingService) {
             if (!requireLoopbackConnector()) return@post
             val manager = pairing.remoteAccess
                 ?: return@post call.respond(HttpStatusCode.ServiceUnavailable, ErrorDto("remote access unavailable"))
-            val info = manager.enable()
-            call.respond(HttpStatusCode.OK, RemoteInfoDto(info.ip, info.tlsPort, info.certFingerprint))
+            try {
+                // Certificate generation/loading, the server stop/start swap, and NSD
+                // registration are all blocking, multi-second-scale work. Running them on the
+                // suspend function's default dispatcher would tie up the Netty engine's own
+                // event-loop thread for that entire window — which was observed on-device to make
+                // the *response to this very request* undeliverable ("Failed to fetch": the
+                // connection this request arrived on stalled for the whole blocking window instead
+                // of promptly ACKing/framing the eventual response). Dispatchers.IO keeps the
+                // event loop free to service this (and other) connections while the heavy lifting
+                // runs elsewhere; the coroutine resumes back onto the call pipeline to respond.
+                val info = withContext(Dispatchers.IO) { manager.enable() }
+                call.respond(HttpStatusCode.OK, RemoteInfoDto(info.ip, info.tlsPort, info.certFingerprint))
+            } catch (t: Throwable) {
+                Log.e(TAG, "remote enable failed", t)
+                call.respond(HttpStatusCode.InternalServerError, ErrorDto(t.message ?: "remote enable failed"))
+            }
         }
 
         post("/disable") {
             if (!requireLoopbackConnector()) return@post
-            pairing.remoteAccess?.disable()
-            call.respond(HttpStatusCode.OK, RemoteStateDto(enabled = false))
+            try {
+                withContext(Dispatchers.IO) { pairing.remoteAccess?.disable() }
+                call.respond(HttpStatusCode.OK, RemoteStateDto(enabled = false))
+            } catch (t: Throwable) {
+                Log.e(TAG, "remote disable failed", t)
+                call.respond(HttpStatusCode.InternalServerError, ErrorDto(t.message ?: "remote disable failed"))
+            }
         }
 
         get("/state") {

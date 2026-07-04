@@ -199,6 +199,13 @@ fun Application.zyncModule(
         exception<IllegalStateException> { call, cause ->
             call.respond(HttpStatusCode.BadRequest, ErrorDto(cause.message ?: "invalid request"))
         }
+        // Without a logging backend AND a catch-all here, any other uncaught exception inside a
+        // route handler is swallowed by Ktor and vanishes with no logcat trace at all (see
+        // m1c-task-8 report) — surface it, then still answer the request rather than hanging it.
+        exception<Throwable> { call, cause ->
+            android.util.Log.e("zync", "unhandled exception in route handler", cause)
+            call.respond(HttpStatusCode.InternalServerError, ErrorDto(cause.message ?: "internal error"))
+        }
     }
     tokenGuard(token, pairing)
     routing {

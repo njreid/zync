@@ -11,3 +11,6 @@ local.properties
 
 # Task/session tooling, not part of the app
 /.superpowers/
+
+# adb capture logs from emulator verification
+adb*.log

@@ -1,7 +1,0 @@
---- adb starting (pid 894959) ---
-07-02 17:22:20.138 894959 894959 I adb     : main.cpp:66 Android Debug Bridge version 1.0.41
-07-02 17:22:20.138 894959 894959 I adb     : main.cpp:66 Version 36.0.2-14143358
-07-02 17:22:20.138 894959 894959 I adb     : main.cpp:66 Installed as /home/njr/Android/Sdk/platform-tools/adb
-07-02 17:22:20.138 894959 894959 I adb     : main.cpp:66 Running on Linux 7.1.1-2-cachyos (x86_64)
-07-02 17:22:20.138 894959 894959 I adb     : main.cpp:66 
-07-02 23:13:11.918 894959 895651 I adb     : transport.cpp:1171 emulator-5554: connection terminated: read failed

@@ -26,7 +26,10 @@ class ServerCertStore(
         val keyStoreBytes = keystoreFile.readBytes()
         val password = protector.unprotect(passwordFile.readBytes())
 
-        val keyStore = KeyStore.getInstance("PKCS12").apply {
+        val keyStore = KeyStore.getInstance(
+            Crypto.KEYSTORE_TYPE,
+            org.bouncycastle.jce.provider.BouncyCastleProvider.PROVIDER_NAME,
+        ).apply {
             load(keyStoreBytes.inputStream(), password)
         }
         val alias = keyStore.aliases().toList().first { keyStore.isKeyEntry(it) }
