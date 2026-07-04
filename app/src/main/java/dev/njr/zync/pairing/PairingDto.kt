@@ -3,9 +3,10 @@ package dev.njr.zync.pairing
 import kotlinx.serialization.Serializable
 
 /**
- * Payload encoded into the QR code shown by the desktop during pairing. The phone camera scans
- * this; there is no other channel involved, so the [nonce] is what binds this payload to the
- * specific `beginPairing()` call it answers.
+ * Payload encoded into the QR code shown by the desktop during pairing (spec §8b: the desktop
+ * originates this nonce, not the phone). The phone camera scans this; there is no other channel
+ * involved, so the [nonce] is what a later `POST /pair/request` from the desktop must present
+ * back to `completePairingRequest` to prove it's the same pairing attempt the phone approved.
  */
 @Serializable
 data class QrPayload(

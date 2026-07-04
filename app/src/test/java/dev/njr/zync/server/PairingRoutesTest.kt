@@ -110,24 +110,24 @@ class PairingRoutesTest {
             val privateKey = Ed25519PrivateKeyParameters(SecureRandom())
             val pubkeyB64 = Base64.getEncoder().encodeToString(privateKey.generatePublicKey().encoded)
             pairing.setCertFingerprint("AB:CD:EF")
-            val pending = pairing.beginPairing() // phone side, simulated directly against the service
+            val nonce = UUID.randomUUID().toString() // desktop-originated nonce (spec §8b)
 
             val pendingRes = client.post("/pair/request") {
                 contentType(ContentType.Application.Json)
-                setBody(PairRequestBody(pubkeyB64, pending.nonce))
+                setBody(PairRequestBody(pubkeyB64, nonce))
             }
             assertEquals(HttpStatusCode.Accepted, pendingRes.status)
 
-            pairing.approveScanned(qrPayload(pubkeyB64, pending.nonce)) // phone scans desktop's QR
+            val approved = pairing.approveScanned(qrPayload(pubkeyB64, nonce)) // phone scans desktop's QR
 
             val approvedRes = client.post("/pair/request") {
                 contentType(ContentType.Application.Json)
-                setBody(PairRequestBody(pubkeyB64, pending.nonce))
+                setBody(PairRequestBody(pubkeyB64, nonce))
             }
             assertEquals(HttpStatusCode.OK, approvedRes.status)
             val result: PairResultDto = approvedRes.body()
             assertEquals("AB:CD:EF", result.certFingerprint)
-            assertEquals(pending.confirmCode, result.confirmCode)
+            assertEquals(approved.confirmCode, result.confirmCode)
         }
 
     // ---- session bootstrap + using the session token -----------------------------------------
@@ -137,9 +137,9 @@ class PairingRoutesTest {
         runWithApp { pairing, client ->
             val privateKey = Ed25519PrivateKeyParameters(SecureRandom())
             val pubkeyB64 = Base64.getEncoder().encodeToString(privateKey.generatePublicKey().encoded)
-            val pending = pairing.beginPairing()
-            pairing.approveScanned(qrPayload(pubkeyB64, pending.nonce))
-            pairing.completePairingRequest(pubkeyB64, pending.nonce)
+            val nonce = UUID.randomUUID().toString()
+            pairing.approveScanned(qrPayload(pubkeyB64, nonce))
+            pairing.completePairingRequest(pubkeyB64, nonce)
 
             val challengeRes = client.get("/pair/challenge") { parameter("devicePubkey", pubkeyB64) }
             assertEquals(HttpStatusCode.OK, challengeRes.status)
@@ -183,9 +183,9 @@ class PairingRoutesTest {
         runWithApp { pairing, client ->
             val privateKey = Ed25519PrivateKeyParameters(SecureRandom())
             val pubkeyB64 = Base64.getEncoder().encodeToString(privateKey.generatePublicKey().encoded)
-            val pending = pairing.beginPairing()
-            val approved = pairing.approveScanned(qrPayload(pubkeyB64, pending.nonce))
-            pairing.completePairingRequest(pubkeyB64, pending.nonce)
+            val nonce = UUID.randomUUID().toString()
+            val approved = pairing.approveScanned(qrPayload(pubkeyB64, nonce))
+            pairing.completePairingRequest(pubkeyB64, nonce)
             val challenge = pairing.newChallenge()
             val token = pairing.issueSession(pubkeyB64, challenge, sign(privateKey, challenge.toByteArray(Charsets.UTF_8)))!!
 

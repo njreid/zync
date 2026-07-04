@@ -56,12 +56,22 @@ test.describe('Settings view', () => {
     await expect(page.locator('#pair-result')).toHaveText('Scanning…');
     expect(await page.evaluate(() => window.__zyncScanCalled)).toBe(true);
 
-    // Simulate the native side calling back with a scanned payload; since no pairing is in
-    // progress on the (Robolectric-hosted) dev server, /pair/approve correctly rejects it —
-    // this only proves the JS round-trip (native callback -> POST /pair/approve -> UI update)
-    // wires up, not that a full end-to-end pairing succeeds (that needs a real phone/desktop).
-    await page.evaluate(() => window.__zyncQrScanResult('not-real-json', null));
+    // Simulate the native side calling back with a scanned payload, as if the phone's camera
+    // had just scanned a desktop's pairing QR. Per spec §8b the desktop originates the nonce and
+    // its own Ed25519 keypair; approveScanned() only *records* the pubkey (it verifies no
+    // signature at this stage — that happens later, in the challenge-response session handshake),
+    // so a syntactically valid-looking base64 pubkey is sufficient here without generating a real
+    // keypair in JS. This is a static, fixed constant — not a real device's key.
+    const fakeDevicePubkey = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=';
+    const payload = JSON.stringify({
+      devicePubkey: fakeDevicePubkey,
+      deviceName: 'Test Desktop',
+      nonce: 'test-nonce-e2e',
+    });
+    await page.evaluate((p) => window.__zyncQrScanResult(p, null), payload);
     await settle(page);
-    await expect(page.locator('#pair-result')).toContainText('Pairing failed');
+    // approveScanned() is now self-sufficient (no prior beginPairing() needed), so this succeeds
+    // and the phone displays the confirm code the user compares against the desktop's screen.
+    await expect(page.locator('#pair-result')).toContainText('Confirm code:');
   });
 });

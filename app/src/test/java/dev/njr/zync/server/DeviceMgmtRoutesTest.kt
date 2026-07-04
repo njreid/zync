@@ -133,8 +133,7 @@ class DeviceMgmtRoutesTest {
 
     @Test
     fun `GET devices lists inserted devices with lastSeen`() = runWithApp { pairing, client ->
-        val pending = pairing.beginPairing()
-        val approved = pairing.approveScanned(qrPayload("pubkey-a", pending.nonce))
+        val approved = pairing.approveScanned(qrPayload("pubkey-a", UUID.randomUUID().toString()))
 
         val res = client.get("/devices") { header(TOKEN_HEADER, loopbackToken) }
         assertEquals(HttpStatusCode.OK, res.status)
@@ -150,9 +149,9 @@ class DeviceMgmtRoutesTest {
         runWithApp { pairing, client ->
             val privateKey = Ed25519PrivateKeyParameters(SecureRandom())
             val pubkeyB64 = Base64.getEncoder().encodeToString(privateKey.generatePublicKey().encoded)
-            val pending = pairing.beginPairing()
-            val approved = pairing.approveScanned(qrPayload(pubkeyB64, pending.nonce))
-            pairing.completePairingRequest(pubkeyB64, pending.nonce)
+            val nonce = UUID.randomUUID().toString()
+            val approved = pairing.approveScanned(qrPayload(pubkeyB64, nonce))
+            pairing.completePairingRequest(pubkeyB64, nonce)
 
             val revokeRes = client.post("/devices/${approved.id}/revoke") { header(TOKEN_HEADER, loopbackToken) }
             assertEquals(HttpStatusCode.OK, revokeRes.status)
@@ -177,9 +176,9 @@ class DeviceMgmtRoutesTest {
         runWithApp { pairing, client ->
             val privateKey = Ed25519PrivateKeyParameters(SecureRandom())
             val pubkeyB64 = Base64.getEncoder().encodeToString(privateKey.generatePublicKey().encoded)
-            val pending = pairing.beginPairing()
-            pairing.approveScanned(qrPayload(pubkeyB64, pending.nonce))
-            pairing.completePairingRequest(pubkeyB64, pending.nonce)
+            val nonce = UUID.randomUUID().toString()
+            pairing.approveScanned(qrPayload(pubkeyB64, nonce))
+            pairing.completePairingRequest(pubkeyB64, nonce)
             val challenge = pairing.newChallenge()
             val token = pairing.issueSession(
                 pubkeyB64, challenge, sign(privateKey, challenge.toByteArray(Charsets.UTF_8)),
@@ -230,24 +229,24 @@ class DeviceMgmtRoutesTest {
 
     @Test
     fun `pair approve over loopback returns the confirm code`() = runWithApp { pairing, client ->
-        val pending = pairing.beginPairing()
+        val nonce = UUID.randomUUID().toString()
         val res = client.post("/pair/approve") {
             header(TOKEN_HEADER, loopbackToken)
             contentType(ContentType.Application.Json)
-            setBody(PairApproveBody(qrPayload("some-pubkey", pending.nonce)))
+            setBody(PairApproveBody(qrPayload("some-pubkey", nonce)))
         }
         assertEquals(HttpStatusCode.OK, res.status)
         val dto: ConfirmCodeDto = res.body()
-        assertEquals(pending.confirmCode, dto.confirmCode)
+        assertTrue(dto.confirmCode.isNotBlank())
     }
 
     @Test
     fun `pair approve is 403 over the LAN connector regardless of token`() = runWithApp { pairing, client ->
-        val pending = pairing.beginPairing()
+        val nonce = UUID.randomUUID().toString()
         val res = client.post("/pair/approve") {
             url { protocol = URLProtocol.HTTPS }
             contentType(ContentType.Application.Json)
-            setBody(PairApproveBody(qrPayload("some-pubkey", pending.nonce)))
+            setBody(PairApproveBody(qrPayload("some-pubkey", nonce)))
         }
         assertEquals(HttpStatusCode.Forbidden, res.status)
     }

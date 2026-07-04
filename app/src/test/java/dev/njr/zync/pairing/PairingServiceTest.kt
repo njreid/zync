@@ -15,6 +15,7 @@ import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -53,6 +54,11 @@ private class FakeAllowedDeviceDao : AllowedDeviceDao {
     }
 }
 
+/**
+ * Per spec §8b, the desktop originates the pairing nonce: it generates its own Ed25519 keypair
+ * and a random nonce, shows both (plus its name) as a QR, and the phone's `approveScanned` scans
+ * that QR directly — no prior `beginPairing()` handshake step exists on the phone side anymore.
+ */
 class PairingServiceTest {
 
     private lateinit var dao: FakeAllowedDeviceDao
@@ -82,108 +88,102 @@ class PairingServiceTest {
     private fun qrPayload(nonce: String, pubkey: String = pubkeyB64, name: String = "Laptop") =
         json.encodeToString(QrPayload.serializer(), QrPayload(pubkey, name, nonce))
 
-    // ---- beginPairing ----------------------------------------------------
-
-    @Test
-    fun `beginPairing produces a nonce and a derived confirm code`() {
-        val pending = service.beginPairing()
-        assertTrue(pending.nonce.isNotBlank())
-        assertTrue(pending.confirmCode.isNotBlank())
-        assertEquals(clock + 2 * 60 * 1000L, pending.expiresAt)
-    }
-
-    @Test
-    fun `beginPairing pending nonce expires after TTL`() = runTest {
-        val pending = service.beginPairing()
-        clock += 2 * 60 * 1000L + 1 // one ms past the 2-minute TTL
-
-        try {
-            service.approveScanned(qrPayload(pending.nonce))
-            fail("expected expired nonce to be rejected")
-        } catch (e: IllegalArgumentException) {
-            // expected
-        }
-        assertNull(dao.byPubkey(pubkeyB64))
-    }
-
     // ---- approveScanned ----------------------------------------------------
 
     @Test
-    fun `approveScanned with matching nonce inserts the device`() = runTest {
-        val pending = service.beginPairing()
+    fun `approveScanned with a well-formed payload and no prior beginPairing inserts the device and returns a confirm code`() =
+        runTest {
+            val approved = service.approveScanned(qrPayload("desktop-nonce-1"))
 
-        val approved = service.approveScanned(qrPayload(pending.nonce))
+            assertEquals(pubkeyB64, approved.pubkey)
+            assertEquals("Laptop", approved.name)
+            assertTrue(approved.confirmCode.isNotBlank())
 
-        assertEquals(pubkeyB64, approved.pubkey)
-        assertEquals("Laptop", approved.name)
-        assertEquals(pending.confirmCode, approved.confirmCode)
-
-        val stored = dao.byPubkey(pubkeyB64)
-        assertNotNull(stored)
-        assertFalse(stored!!.revoked)
-    }
+            val stored = dao.byPubkey(pubkeyB64)
+            assertNotNull(stored)
+            assertFalse(stored!!.revoked)
+        }
 
     @Test
-    fun `approveScanned with wrong nonce throws and does not insert`() = runTest {
-        service.beginPairing()
-
+    fun `approveScanned rejects a malformed payload`() = runTest {
         try {
-            service.approveScanned(qrPayload("not-the-real-nonce"))
-            fail("expected wrong nonce to be rejected")
+            service.approveScanned("not-real-json")
+            fail("expected malformed payload to be rejected")
         } catch (e: IllegalArgumentException) {
             // expected
         }
         assertNull(dao.byPubkey(pubkeyB64))
-    }
-
-    @Test
-    fun `approveScanned with no pairing in progress throws`() = runTest {
-        try {
-            service.approveScanned(qrPayload("whatever"))
-            fail("expected missing pairing to be rejected")
-        } catch (e: IllegalArgumentException) {
-            // expected
-        }
     }
 
     // ---- completePairingRequest ----------------------------------------------------
 
     @Test
-    fun `completePairingRequest before approval fails`() = runTest {
-        val pending = service.beginPairing()
-
+    fun `completePairingRequest with no prior approval fails`() = runTest {
         try {
-            service.completePairingRequest(pubkeyB64, pending.nonce)
-            fail("expected completePairingRequest to fail before phone approval")
+            service.completePairingRequest(pubkeyB64, "desktop-nonce-1")
+            fail("expected completePairingRequest to fail with no approval on record")
         } catch (e: IllegalStateException) {
             // expected
         }
     }
 
     @Test
-    fun `completePairingRequest after approval returns fingerprint and confirm code`() = runTest {
+    fun `completePairingRequest after approval returns fingerprint and the same confirm code`() = runTest {
         service.setCertFingerprint("AB:CD:EF")
-        val pending = service.beginPairing()
-        service.approveScanned(qrPayload(pending.nonce))
+        val approved = service.approveScanned(qrPayload("desktop-nonce-1"))
 
-        val result = service.completePairingRequest(pubkeyB64, pending.nonce)
+        val result = service.completePairingRequest(pubkeyB64, "desktop-nonce-1")
 
         assertEquals("AB:CD:EF", result.certFingerprint)
-        assertEquals(pending.confirmCode, result.confirmCode)
+        assertEquals(approved.confirmCode, result.confirmCode)
+    }
+
+    @Test
+    fun `completePairingRequest with the wrong nonce fails`() = runTest {
+        service.approveScanned(qrPayload("desktop-nonce-1"))
+
+        try {
+            service.completePairingRequest(pubkeyB64, "wrong-nonce")
+            fail("expected wrong nonce to be rejected")
+        } catch (e: IllegalArgumentException) {
+            // expected
+        }
     }
 
     @Test
     fun `completePairingRequest replaying a consumed nonce fails`() = runTest {
-        val pending = service.beginPairing()
-        service.approveScanned(qrPayload(pending.nonce))
-        service.completePairingRequest(pubkeyB64, pending.nonce)
+        service.approveScanned(qrPayload("desktop-nonce-1"))
+        service.completePairingRequest(pubkeyB64, "desktop-nonce-1")
 
         try {
-            service.completePairingRequest(pubkeyB64, pending.nonce)
+            service.completePairingRequest(pubkeyB64, "desktop-nonce-1")
             fail("expected replayed nonce to be rejected")
         } catch (e: IllegalStateException) {
             // expected
         }
+    }
+
+    @Test
+    fun `completePairingRequest fails once the approval has expired`() = runTest {
+        service.approveScanned(qrPayload("desktop-nonce-1"))
+        clock += 5 * 60 * 1000L + 1 // one ms past the 5-minute approval TTL
+
+        try {
+            service.completePairingRequest(pubkeyB64, "desktop-nonce-1")
+            fail("expected expired approval to be rejected")
+        } catch (e: IllegalStateException) {
+            // expected
+        }
+    }
+
+    @Test
+    fun `confirm code is derived deterministically from the nonce`() = runTest {
+        val approvedA = service.approveScanned(qrPayload("nonce-a", pubkey = pubkeyB64))
+        val otherKey = Ed25519PrivateKeyParameters(SecureRandom())
+        val otherPubkey = Base64.getEncoder().encodeToString(otherKey.generatePublicKey().encoded)
+        val approvedB = service.approveScanned(qrPayload("nonce-b", pubkey = otherPubkey))
+
+        assertNotEquals(approvedA.confirmCode, approvedB.confirmCode)
     }
 
     // ---- issueSession ----------------------------------------------------
@@ -289,25 +289,24 @@ class PairingServiceTest {
         )
     }
 
-    // ---- TOCTOU: concurrent completePairingRequest on the same nonce ----------------------
+    // ---- TOCTOU: concurrent completePairingRequest on the same approved pairing ----------------
 
     @Test
     fun `concurrent completePairingRequest calls let exactly one succeed`() {
-        val pending = service.beginPairing()
-        kotlinx.coroutines.runBlocking { service.approveScanned(qrPayload(pending.nonce)) }
+        kotlinx.coroutines.runBlocking { service.approveScanned(qrPayload("desktop-nonce-1")) }
 
         val successes = java.util.concurrent.atomic.AtomicInteger(0)
         val alreadyUsedFailures = java.util.concurrent.atomic.AtomicInteger(0)
         val otherFailures = java.util.concurrent.atomic.AtomicInteger(0)
 
         // Real threads (not coroutines sharing one dispatcher) to actually create the race that
-        // exposed the bug: many callers hitting completePairingRequest for the same nonce at
-        // once, as could plausibly happen under Ktor's multithreaded request dispatcher.
+        // exposed the bug: many callers hitting completePairingRequest for the same approved
+        // pairing at once, as could plausibly happen under Ktor's multithreaded request dispatcher.
         val threads = (1..20).map {
             Thread {
                 kotlinx.coroutines.runBlocking {
                     try {
-                        service.completePairingRequest(pubkeyB64, pending.nonce)
+                        service.completePairingRequest(pubkeyB64, "desktop-nonce-1")
                         successes.incrementAndGet()
                     } catch (e: IllegalStateException) {
                         if (e.message == "pairing nonce already used") {

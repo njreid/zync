@@ -11,43 +11,48 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
 /**
- * Orchestrates the whole device-pairing + session lifecycle for the local pairing/sync server:
+ * Orchestrates the whole device-pairing + session lifecycle for the local pairing/sync server.
  *
- *  1. [beginPairing] — the phone mints a one-time nonce + human confirm code and displays it
- *     (e.g. as a QR / short code) so the desktop can address this specific pairing attempt.
- *  2. [approveScanned] — the phone scans a QR shown by the desktop (carrying the desktop's
- *     Ed25519 pubkey, a display name, and the nonce from step 1) and, on a match, admits the
- *     device into [AllowedDeviceDao].
- *  3. [completePairingRequest] — the desktop polls this until the phone has approved it; once
- *     approved it receives the server's cert fingerprint (for TLS pinning) and the confirm code.
+ * Per spec §8b, the **desktop** originates the pairing nonce, not the phone:
+ *
+ *  1. Desktop generates its Ed25519 keypair and a random one-time nonce, and displays a QR
+ *     encoding `{devicePubkey, deviceName, nonce}`.
+ *  2. [approveScanned] — the phone's camera scans that QR (physical proximity to the desktop's
+ *     screen is the trust anchor) and the user confirms in the UI. This call is entirely
+ *     self-sufficient: it parses the payload, admits the device into [AllowedDeviceDao], and
+ *     records an *approved* pairing for that `devicePubkey` — `{nonce, confirmCode, createdAt}`
+ *     — keyed by the pubkey. It returns the `confirmCode` for the phone to display.
+ *  3. [completePairingRequest] — the desktop polls this with `{devicePubkey, nonce}` over TLS.
+ *     It succeeds only once there is an approved record for that pubkey whose nonce matches
+ *     (constant-time), returning the server's cert fingerprint (for TLS pinning) and the same
+ *     `confirmCode`. The user visually compares the confirm code shown on phone and desktop —
+ *     this is the MITM defense for the otherwise-unauthenticated pairing handshake. The record
+ *     is consumed (single-use) on success.
  *  4. [issueSession] / [validateSession] — ongoing challenge-response auth: the desktop asks for
  *     a [newChallenge], signs it with its Ed25519 private key, and trades that signature for an
  *     opaque bearer token.
  *
- * THREAT MODEL: `beginPairing`, `approveScanned`, `completePairingRequest`, and `newChallenge`
- * are necessarily reachable pre-authentication — there is no allow-listed device yet to
- * authenticate against. Their security rests on:
- *   - possession of the phone (only someone holding the unlocked phone can trigger
- *     `beginPairing`/`approveScanned`),
- *   - the one-time, short-TTL QR nonce binding a specific desktop to a specific pairing attempt
- *     (an attacker who doesn't see the QR can't guess the nonce in time),
+ * THREAT MODEL: `approveScanned`, `completePairingRequest`, and `newChallenge` are necessarily
+ * reachable pre-authentication — there is no allow-listed device yet to authenticate against.
+ * Their security rests on:
+ *   - possession of the phone (only someone holding the unlocked phone, looking at the desktop's
+ *     screen, can trigger `approveScanned`),
+ *   - the one-time, short-TTL nonce binding a specific desktop to a specific approved pairing (an
+ *     attacker who doesn't see the QR can't guess the nonce in time),
+ *   - the confirm-code comparison, which lets the user visually catch a network attacker who
+ *     tried to race their own `/pair/request` against the real desktop's,
  *   - TLS certificate pinning using the fingerprint returned by `completePairingRequest` (so a
  *     network attacker can't MITM the *session* traffic even though the *pairing* handshake is
  *     unauthenticated).
- * Nonces and challenges are single-use and short-lived specifically to bound the window in which
- * a network observer (who is not the pinned TLS channel) could attempt to replay them.
+ * Approved-pairing records and challenges are single-use and short-lived specifically to bound
+ * the window in which a network observer (who is not the pinned TLS channel) could attempt to
+ * replay them.
  */
 class PairingService(
     private val dao: AllowedDeviceDao,
     private val now: () -> Long = System::currentTimeMillis,
     private val randomNonce: () -> String,
 ) {
-
-    data class PendingPairing(
-        val nonce: String,
-        val confirmCode: String,
-        val expiresAt: Long,
-    )
 
     data class ApprovedDevice(
         val id: Long,
@@ -61,25 +66,25 @@ class PairingService(
         val confirmCode: String,
     )
 
-    private data class PendingState(
+    /** One approved-but-not-yet-completed pairing, keyed by `devicePubkey` in [approvedPairings]. */
+    private data class ApprovedPairing(
         val nonce: String,
         val confirmCode: String,
         val expiresAt: Long,
-        var approvedPubkey: String? = null,
         var consumed: Boolean = false,
     )
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    // Single in-flight pairing attempt: a new beginPairing() supersedes whatever was pending.
-    @Volatile private var pending: PendingState? = null
+    // devicePubkey -> the approval recorded by approveScanned, awaiting completePairingRequest.
+    private val approvedPairings = ConcurrentHashMap<String, ApprovedPairing>()
 
-    // Guards all read-then-mutate sequences on `pending`'s fields (`consumed`, `approvedPubkey`).
-    // @Volatile above only publishes the *reference*; without this mutex, two concurrent
-    // completePairingRequest calls (plausible under Ktor's multithreaded dispatcher) could both
-    // observe `consumed == false` before either sets it, letting a single-use nonce complete a
-    // pairing twice. Every check-then-set on `pending`'s fields must happen inside this lock.
-    private val pendingMutex = Mutex()
+    // Guards all read-then-mutate sequences on `approvedPairings` (insert-and-record in
+    // approveScanned; the consumed-check-then-set in completePairingRequest). Without this mutex,
+    // two concurrent completePairingRequest calls for the same pubkey (plausible under Ktor's
+    // multithreaded dispatcher) could both observe `consumed == false` before either sets it,
+    // letting a single-use nonce complete a pairing twice.
+    private val approvalMutex = Mutex()
 
     // token -> (devicePubkey, expiresAt). In-memory only: sessions do not survive a process
     // restart, which is fine for a local pairing/sync server (the desktop just re-authenticates).
@@ -100,10 +105,13 @@ class PairingService(
      * Settable back-reference to the [RemoteAccessManager] that owns the remote-access lifecycle,
      * so the remote-access device-management routes (mounted from [dev.njr.zync.server.pairingRoutes],
      * which only receives this [PairingService]) can reach it. `ZyncApp` wires this once
-     * `remoteAccess` is constructed. Nullable/settable rather than a constructor parameter because
-     * `RemoteAccessManager` itself depends on this `PairingService` — a constructor cycle.
+     * `remoteAccess` is constructed, exactly once at startup, on the app's main/init thread; it is
+     * then read from server-dispatcher threads handling requests. `@Volatile` so that write is
+     * guaranteed visible to those reader threads without each one needing its own synchronization.
+     * Nullable/settable rather than a constructor parameter because `RemoteAccessManager` itself
+     * depends on this `PairingService` — a constructor cycle.
      */
-    var remoteAccess: RemoteAccessManager? = null
+    @Volatile var remoteAccess: RemoteAccessManager? = null
 
     fun setCertFingerprint(fp: String) {
         certFingerprint = fp
@@ -112,14 +120,13 @@ class PairingService(
     /** All allowed devices (paired, revoked or not), most-recently-added first. */
     suspend fun listDevices(): List<AllowedDeviceEntity> = dao.observeAll().first()
 
-    fun beginPairing(): PendingPairing {
-        val nonce = randomNonce()
-        val confirmCode = deriveConfirmCode(nonce)
-        val expiresAt = now() + PAIRING_TTL_MS
-        pending = PendingState(nonce = nonce, confirmCode = confirmCode, expiresAt = expiresAt)
-        return PendingPairing(nonce, confirmCode, expiresAt)
-    }
-
+    /**
+     * The phone scans a QR the desktop is showing (`{devicePubkey, deviceName, nonce}`) and the
+     * user confirms in the UI. Self-sufficient — no prior server-side state is required. Admits
+     * the device into [AllowedDeviceDao] and records an approved pairing for `devicePubkey` so a
+     * subsequent [completePairingRequest] from the desktop can complete. Returns the confirm code
+     * for the phone to display so the user can compare it against the desktop's.
+     */
     suspend fun approveScanned(scannedPayload: String): ApprovedDevice {
         val payload = try {
             json.decodeFromString(QrPayload.serializer(), scannedPayload)
@@ -127,16 +134,9 @@ class PairingService(
             throw IllegalArgumentException("malformed QR payload", e)
         }
 
-        return pendingMutex.withLock {
-            val current = pending
-                ?: throw IllegalArgumentException("no pairing in progress")
-            if (now() > current.expiresAt) {
-                throw IllegalArgumentException("pairing nonce expired")
-            }
-            if (!Crypto.constantTimeEquals(current.nonce, payload.nonce)) {
-                throw IllegalArgumentException("nonce mismatch")
-            }
+        val confirmCode = deriveConfirmCode(payload.nonce)
 
+        return approvalMutex.withLock {
             val id = dao.insert(
                 AllowedDeviceEntity(
                     name = payload.deviceName,
@@ -146,40 +146,56 @@ class PairingService(
                     revoked = false,
                 ),
             )
-            current.approvedPubkey = payload.devicePubkey
+            approvedPairings[payload.devicePubkey] = ApprovedPairing(
+                nonce = payload.nonce,
+                confirmCode = confirmCode,
+                expiresAt = now() + PAIRING_TTL_MS,
+            )
 
             ApprovedDevice(
                 id = id,
                 pubkey = payload.devicePubkey,
                 name = payload.deviceName,
-                confirmCode = current.confirmCode,
+                confirmCode = confirmCode,
             )
         }
     }
 
+    /**
+     * The desktop polls this with the same `{devicePubkey, nonce}` it put in its QR. Succeeds
+     * only once [approveScanned] has recorded a matching, unexpired, not-yet-consumed approval
+     * for `devicePubkeyB64` — at which point the record is consumed (single-use: this exact
+     * pubkey+nonce pairing can never complete a second `/pair/request`).
+     */
     suspend fun completePairingRequest(devicePubkeyB64: String, nonceFromDesktop: String): PairingResult {
-        // The consumed-check and consumed-set must be atomic w.r.t. each other: without this
-        // lock, two concurrent callers could both read `consumed == false` and both proceed,
-        // defeating the single-use guarantee (see the note on `pendingMutex` above).
-        return pendingMutex.withLock {
-            val current = pending
+        // The lookup-then-consume sequence must be atomic w.r.t. itself across callers: without
+        // this lock, two concurrent callers could both find the same not-yet-consumed record and
+        // both proceed, defeating the single-use guarantee (see the note on `approvalMutex` above).
+        return approvalMutex.withLock {
+            // Walk every recorded approval and compare the pubkey in constant time, rather than a
+            // direct map lookup by the raw key, so a caller can't use response timing to learn how
+            // many characters of a guessed pubkey matched a real, approved one.
+            var matchedKey: String? = null
+            var record: ApprovedPairing? = null
+            for ((pubkey, pairing) in approvedPairings) {
+                if (Crypto.constantTimeEquals(pubkey, devicePubkeyB64)) {
+                    matchedKey = pubkey
+                    record = pairing
+                }
+            }
+            val current = record
                 ?: throw IllegalStateException("no pairing in progress")
             if (current.consumed) {
                 throw IllegalStateException("pairing nonce already used")
             }
-            val approvedPubkey = current.approvedPubkey
-                ?: throw IllegalStateException("pairing not yet approved by phone")
             if (now() > current.expiresAt) {
                 throw IllegalStateException("pairing nonce expired")
-            }
-            if (!Crypto.constantTimeEquals(approvedPubkey, devicePubkeyB64)) {
-                throw IllegalArgumentException("pubkey mismatch")
             }
             if (!Crypto.constantTimeEquals(current.nonce, nonceFromDesktop)) {
                 throw IllegalArgumentException("nonce mismatch")
             }
 
-            val device = dao.byPubkey(devicePubkeyB64)
+            val device = dao.byPubkey(matchedKey!!)
             if (device == null || device.revoked) {
                 throw IllegalStateException("device is no longer allowed")
             }
@@ -246,15 +262,14 @@ class PairingService(
 
     private fun deriveConfirmCode(nonce: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(nonce.toByteArray(Charsets.UTF_8))
-        val value = ((digest[0].toInt() and 0xFF) shl 16) or
-            ((digest[1].toInt() and 0xFF) shl 8) or
-            (digest[2].toInt() and 0xFF)
-        return (value % 1_000_000).toString().padStart(6, '0')
+        val hex = digest.joinToString(separator = "") { byte -> "%02X".format(byte) }
+        return hex.take(CONFIRM_CODE_LENGTH)
     }
 
     companion object {
-        private const val PAIRING_TTL_MS = 2 * 60 * 1000L
+        private const val PAIRING_TTL_MS = 5 * 60 * 1000L
         private const val CHALLENGE_TTL_MS = 2 * 60 * 1000L
         private const val SESSION_TTL_MS = 24 * 60 * 60 * 1000L
+        private const val CONFIRM_CODE_LENGTH = 8
     }
 }
