@@ -945,10 +945,12 @@ dependencies = [
 name = "desktop"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
  "base64 0.22.1",
  "ed25519-dalek",
  "keyring",
+ "log",
  "mdns-sd",
  "qrcode",
  "rand 0.10.2",
