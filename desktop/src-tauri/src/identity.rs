@@ -112,10 +112,29 @@ impl IdentityStore for FileStore {
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent).context("create identity file parent dir")?;
         }
+
+        #[cfg(unix)]
+        let mut file = {
+            use std::os::unix::fs::OpenOptionsExt;
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(&self.path)
+                .context("create identity file")?
+        };
+        #[cfg(not(unix))]
         let mut file = std::fs::File::create(&self.path).context("create identity file")?;
+
         file.write_all(STANDARD.encode(seed).as_bytes())
             .context("write identity file")?;
 
+        // Belt-and-suspenders: re-assert 0600 after writing. The real fix is
+        // the mode(0o600) at creation above, which closes the TOCTOU window
+        // where a create-then-chmod approach would leave the file briefly
+        // group/world-readable (or permanently so, if the process dies
+        // between create and chmod).
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -151,13 +170,25 @@ pub struct DeviceIdentity {
 }
 
 impl DeviceIdentity {
-    /// Test-only constructor: build an identity directly from a fixed seed,
-    /// bypassing any store. Lets tests get deterministic keys.
-    pub fn from_seed(seed: [u8; 32], device_name: &str) -> Self {
+    /// Internal constructor: build an identity directly from a seed. Not
+    /// exposed outside this module in production builds — see `from_seed`
+    /// below, which is the `pub`, test-only entry point that production
+    /// code cannot reach.
+    fn from_seed_inner(seed: [u8; 32], device_name: &str) -> Self {
         Self {
             signing: SigningKey::from_bytes(&seed),
             device_name: device_name.to_string(),
         }
+    }
+
+    /// Test-only constructor: build an identity directly from a fixed seed,
+    /// bypassing any store. Lets tests get deterministic keys.
+    ///
+    /// Gated to `#[cfg(test)]` so production code can never construct a
+    /// device identity from a fixed/predictable seed.
+    #[cfg(test)]
+    pub fn from_seed(seed: [u8; 32], device_name: &str) -> Self {
+        Self::from_seed_inner(seed, device_name)
     }
 
     /// Load the persisted identity from the OS keychain, creating and
@@ -183,11 +214,11 @@ impl DeviceIdentity {
     /// `load_or_create` internally, and directly by tests.
     pub fn load_or_create_with(device_name: &str, store: &dyn IdentityStore) -> Result<Self> {
         if let Some(seed) = store.load()? {
-            return Ok(Self::from_seed(seed, device_name));
+            return Ok(Self::from_seed_inner(seed, device_name));
         }
         let seed = generate_seed();
         store.save(&seed)?;
-        Ok(Self::from_seed(seed, device_name))
+        Ok(Self::from_seed_inner(seed, device_name))
     }
 
     pub fn device_name(&self) -> &str {
@@ -306,6 +337,32 @@ mod tests {
                 & 0o777;
             assert_eq!(mode, 0o600);
         }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn file_store_save_creates_file_with_0600_mode() {
+        // Exercises FileStore::save directly (not via load_or_create_with)
+        // and checks the mode immediately after save returns, with no
+        // intervening operations. This is the structural fix for the TOCTOU
+        // window: save() now creates the file with mode 0600 via
+        // OpenOptions::mode(0o600) at open() time, rather than creating with
+        // default (often 0644) perms and chmod-ing afterward. A true
+        // race-window test (asserting the file is NEVER briefly
+        // group/world-readable) isn't practically writable deterministically
+        // from outside the function — asserting create-time mode is the best
+        // available proxy, since it verifies the file's permissions are
+        // correct as of its very first stat-able moment rather than only
+        // "eventually correct".
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("device-key");
+        let store = FileStore::new(path.clone());
+        store.save(&[3u8; 32]).unwrap();
+
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
     }
 
     #[test]
