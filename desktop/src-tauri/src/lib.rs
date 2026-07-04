@@ -1,7 +1,11 @@
 #[allow(dead_code)] // wired up by a later pairing task
-mod identity;
+pub mod identity;
 #[allow(dead_code)] // wired up by a later UI-facing task
 pub mod discovery;
+#[allow(dead_code)] // wired up by a later proxy task
+pub mod pinning;
+#[allow(dead_code)] // wired up by a later commands/UI task
+pub mod pairing;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
