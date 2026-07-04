@@ -69,8 +69,31 @@ object AuthGuard {
     fun classify(localScheme: String): Connector =
         if (localScheme.equals("https", ignoreCase = true)) Connector.LAN else Connector.LOOPBACK
 
-    /** Pairing/session-bootstrap routes are unauthenticated by design (see `PairingService`). */
-    fun isPairingPath(path: String): Boolean = path.trimStart('/').startsWith("pair/")
+    /**
+     * Pairing/session-bootstrap routes are unauthenticated by design (see `PairingService`).
+     *
+     * This is a raw-text match performed *before* Ktor's router resolves the request, so it must
+     * not be fooled by a path-traversal-flavored segment (literal `..` or a percent-encoded
+     * variant of it) that could make a protected route look like it lives under `pair/` — e.g.
+     * `/pair/../api/roots`. Ktor's router is expected to treat `..` as an ordinary path segment
+     * (there is no filesystem-style normalization), so such a request would 404 rather than
+     * reach `/api/roots` — but this check is hardened defensively regardless, rather than relying
+     * on that router behavior.
+     */
+    fun isPairingPath(path: String): Boolean {
+        val segments = path.trimStart('/').split('/')
+        if (segments.any(::isTraversalSegment)) return false
+        return segments.firstOrNull() == "pair"
+    }
+
+    /** True if [segment], taken as a raw path segment, is `..` literally or once percent-decoded. */
+    private fun isTraversalSegment(segment: String): Boolean {
+        if (segment == "..") return true
+        val decoded = runCatching {
+            java.net.URLDecoder.decode(segment, Charsets.UTF_8.name())
+        }.getOrDefault(segment)
+        return decoded == ".."
+    }
 
     fun isDocumentPath(path: String): Boolean = path == "/" || path == "/index.html"
 

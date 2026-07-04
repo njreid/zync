@@ -91,6 +91,30 @@ class ServerAuthTest {
     }
 
     @Test
+    fun `path-traversal-flavored pairing paths do not bypass auth`() = zyncTestApplication { _, _, _ ->
+        val bare = createClient { }   // no default token header
+        val attempts = listOf(
+            "/pair/../api/roots",
+            "/pair/%2e%2e/api/roots",
+            "/pair/../../api/roots",
+        )
+        for (attempt in attempts) {
+            val res = bare.get(attempt)
+            assertTrue(
+                "expected traversal-flavored path '$attempt' to be rejected (401/403/404), " +
+                    "got ${res.status}",
+                res.status == HttpStatusCode.Unauthorized ||
+                    res.status == HttpStatusCode.Forbidden ||
+                    res.status == HttpStatusCode.NotFound,
+            )
+            assertFalse(
+                "traversal-flavored path '$attempt' must never be treated as an authorized 200",
+                res.status == HttpStatusCode.OK,
+            )
+        }
+    }
+
+    @Test
     fun `path traversal segment is rejected before reaching assets lambda`() {
         val db = ZyncDatabase.inMemory(ApplicationProvider.getApplicationContext<Context>())
         val repo = NodeRepository(db)
