@@ -11,9 +11,10 @@
 use crate::discovery::{self, DiscoveredPhone};
 use crate::identity::DeviceIdentity;
 use crate::paired_store::{self, PairedStore};
-use crate::pairing::{self, PairedPhone};
+use crate::pairing::{self, PairedPhone, QrPayload};
 use crate::proxy::{start_proxy, ProxyHandle};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -58,6 +59,34 @@ pub async fn pair_logic(
     let paired = pairing::pair(id, phone, on_confirm_code).await?;
     store.save(phone_name, &paired)?;
     Ok(paired)
+}
+
+/// Same as [`pair_logic`], additionally forwarding the QR payload (as soon
+/// as it's generated) to `on_qr_payload`, so a real command wrapper can
+/// `app.emit("qr-payload", ..)`.
+pub async fn pair_logic_with_qr(
+    id: &DeviceIdentity,
+    phone: &DiscoveredPhone,
+    phone_name: &str,
+    store: &dyn PairedStore,
+    on_qr_payload: impl Fn(&QrPayload),
+    on_confirm_code: impl Fn(&str),
+) -> Result<PairedPhone> {
+    let paired = pairing::pair_with_qr(id, phone, on_qr_payload, on_confirm_code).await?;
+    store.save(phone_name, &paired)?;
+    Ok(paired)
+}
+
+/// Render `payload` as a QR code and return it as a `data:image/svg+xml;base64,...`
+/// URI the UI can drop straight into an `<img src>`.
+pub fn render_qr_data_uri(payload: &QrPayload) -> Result<String> {
+    let json = serde_json::to_string(payload).context("encode QR payload as JSON")?;
+    let code = qrcode::QrCode::new(json.as_bytes()).context("build QR code")?;
+    let svg = code
+        .render::<qrcode::render::svg::Color>()
+        .min_dimensions(256, 256)
+        .build();
+    Ok(format!("data:image/svg+xml;base64,{}", STANDARD.encode(svg)))
 }
 
 /// Build the connection-state snapshot the UI polls/renders.
@@ -122,10 +151,23 @@ pub async fn pair(
     let id = DeviceIdentity::load_or_create("zync-desktop").map_err(|e| e.to_string())?;
     let store = paired_store::KeychainPairedStore;
 
+    let app_for_qr = app.clone();
     let app_for_code = app.clone();
-    let result = pair_logic(&id, &phone, &phone_name, &store, move |code| {
-        let _ = app_for_code.emit("confirm-code", code);
-    })
+    let result = pair_logic_with_qr(
+        &id,
+        &phone,
+        &phone_name,
+        &store,
+        move |qr| match render_qr_data_uri(qr) {
+            Ok(data_uri) => {
+                let _ = app_for_qr.emit("qr-payload", &data_uri);
+            }
+            Err(e) => log::error!("failed to render QR code: {e:#}"),
+        },
+        move |code| {
+            let _ = app_for_code.emit("confirm-code", code);
+        },
+    )
     .await;
 
     match result {
@@ -138,6 +180,23 @@ pub async fn pair(
             Err(e.to_string())
         }
     }
+}
+
+/// Start the proxy for an already-paired phone (persisted under
+/// `phone_name`) and store the resulting handle in `AppState`, so
+/// `proxy_url()` immediately reflects a live proxy. Returns the URL the
+/// webview should navigate to.
+#[tauri::command]
+pub async fn connect(
+    state: tauri::State<'_, AppState>,
+    phone_name: String,
+) -> Result<String, String> {
+    let store = paired_store::KeychainPairedStore;
+    let (handle, url) = connect_logic(&store, &phone_name)
+        .await
+        .map_err(|e| e.to_string())?;
+    *state.proxy.lock().unwrap() = Some(handle);
+    Ok(url)
 }
 
 #[tauri::command]
@@ -182,5 +241,25 @@ mod tests {
         let store = InMemoryPairedStore::default();
         // Nothing to forget yet — should be a no-op Ok, not an error.
         assert!(forget_logic(&store, "nope").is_ok());
+    }
+
+    #[test]
+    fn render_qr_data_uri_produces_a_decodable_svg_data_uri() {
+        let payload = QrPayload {
+            device_pubkey: "cGxhY2Vob2xkZXI=".to_string(),
+            device_name: "test-desktop".to_string(),
+            nonce: "abc123".to_string(),
+        };
+        let data_uri = render_qr_data_uri(&payload).expect("render QR");
+        let b64 = data_uri
+            .strip_prefix("data:image/svg+xml;base64,")
+            .expect("expected an svg+xml base64 data URI");
+        let svg = String::from_utf8(
+            base64::engine::general_purpose::STANDARD
+                .decode(b64)
+                .expect("valid base64"),
+        )
+        .expect("valid utf8 svg");
+        assert!(svg.contains("<svg"), "expected SVG markup: {svg}");
     }
 }

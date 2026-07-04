@@ -23,6 +23,7 @@ pub fn run() {
             greet,
             commands::discover,
             commands::pair,
+            commands::connect,
             commands::connection_state,
             commands::forget,
             commands::proxy_url

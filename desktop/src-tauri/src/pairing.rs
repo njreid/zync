@@ -120,18 +120,32 @@ pub async fn pair(
     phone: &DiscoveredPhone,
     on_confirm_code: impl Fn(&str),
 ) -> Result<PairedPhone> {
+    pair_with_qr(id, phone, |_qr| {}, on_confirm_code).await
+}
+
+/// Same handshake as [`pair`], additionally invoking `on_qr_payload` with the
+/// QR payload as soon as it's constructed (before the `/pair/request` poll
+/// loop starts), so a UI layer can render/display it for the phone to scan.
+/// `pair` is a thin wrapper around this with a no-op `on_qr_payload` — the
+/// two share every other step of the handshake byte-for-byte.
+pub async fn pair_with_qr(
+    id: &DeviceIdentity,
+    phone: &DiscoveredPhone,
+    on_qr_payload: impl Fn(&QrPayload),
+    on_confirm_code: impl Fn(&str),
+) -> Result<PairedPhone> {
     let nonce = generate_nonce();
     let device_pubkey = id.public_key_b64();
 
-    // Step 2: emit the QR payload. In this task there's no UI wired up, so
-    // we simply construct it (a real UI layer would forward this to the
-    // Tauri event `qr-payload`); constructing it here also validates the
-    // JSON shape at compile time via `Serialize`.
-    let _qr_payload = QrPayload {
+    // Step 2: emit the QR payload for the UI to render (the same nonce is
+    // used below for /pair/request, so the phone can correlate the scan with
+    // the incoming request).
+    let qr_payload = QrPayload {
         device_pubkey: device_pubkey.clone(),
         device_name: id.device_name().to_string(),
         nonce: nonce.clone(),
     };
+    on_qr_payload(&qr_payload);
 
     let base = base_url(phone.host, phone.port);
 
