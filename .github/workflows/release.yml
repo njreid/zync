@@ -147,7 +147,7 @@ jobs:
           ZYNC_VERSION: ${{ steps.version.outputs.package_version }}
         shell: bash
         run: |
-          npm version --no-git-tag-version "$ZYNC_VERSION"
+          npm version --no-git-tag-version --allow-same-version "$ZYNC_VERSION"
           node -e "const fs=require('fs'); const p='src-tauri/tauri.conf.json'; const c=JSON.parse(fs.readFileSync(p,'utf8')); c.version=process.env.ZYNC_VERSION; fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');"
 
       - name: Build DMG
@@ -234,7 +234,7 @@ jobs:
         env:
           ZYNC_VERSION: ${{ steps.version.outputs.package_version }}
         run: |
-          npm version --no-git-tag-version "$ZYNC_VERSION"
+          npm version --no-git-tag-version --allow-same-version "$ZYNC_VERSION"
           node -e "const fs=require('fs'); const p='src-tauri/tauri.conf.json'; const c=JSON.parse(fs.readFileSync(p,'utf8')); c.version=process.env.ZYNC_VERSION; fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');"
 
       - name: Build Linux bundles
@@ -316,7 +316,7 @@ jobs:
           ZYNC_VERSION: ${{ steps.version.outputs.package_version }}
         shell: bash
         run: |
-          npm version --no-git-tag-version "$ZYNC_VERSION"
+          npm version --no-git-tag-version --allow-same-version "$ZYNC_VERSION"
           node -e "const fs=require('fs'); const p='src-tauri/tauri.conf.json'; const c=JSON.parse(fs.readFileSync(p,'utf8')); c.version=process.env.ZYNC_VERSION; fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');"
 
       - name: Build Windows bundles
