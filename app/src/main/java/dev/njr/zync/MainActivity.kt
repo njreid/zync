@@ -1,5 +1,6 @@
 package dev.njr.zync
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.webkit.WebChromeClient
@@ -20,9 +21,15 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private lateinit var backupAuthBridge: BackupAuthBridge
+    private var recordAudioResult: ((Boolean) -> Unit)? = null
     private val googleDriveSignIn = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (::backupAuthBridge.isInitialized) backupAuthBridge.handleSignInResult(it.data)
     }
+    private val recordAudioPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            recordAudioResult?.invoke(granted)
+            recordAudioResult = null
+        }
 
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,7 +39,13 @@ class MainActivity : ComponentActivity() {
             settings.domStorageEnabled = true
             webChromeClient = WebChromeClient()
             addJavascriptInterface(QrScanBridge(this@MainActivity, this), "ZyncNative")
-            addJavascriptInterface(CaptureSettingsBridge(this@MainActivity), "ZyncCapture")
+            addJavascriptInterface(
+                CaptureSettingsBridge(this@MainActivity, this) { callback ->
+                    recordAudioResult = callback
+                    recordAudioPermission.launch(Manifest.permission.RECORD_AUDIO)
+                },
+                "ZyncCapture",
+            )
             backupAuthBridge = BackupAuthBridge(this) { intent -> googleDriveSignIn.launch(intent) }
             addJavascriptInterface(backupAuthBridge, "ZyncBackup")
         }

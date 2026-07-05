@@ -71,13 +71,17 @@
             android:name=".capture.DocScanActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity
+            android:name=".capture.DocUploadActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <!-- Accessibility service powering the global volume-key capture
              gestures: double Volume-Up = voice note, double Volume-Down = scan.
              The user enables it under Settings → Accessibility → zync. -->
         <service
             android:name=".capture.ZyncCaptureService"
-            android:exported="false"
+            android:exported="true"
             android:label="@string/capture_service_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>

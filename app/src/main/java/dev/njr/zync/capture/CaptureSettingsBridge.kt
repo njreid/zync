@@ -1,9 +1,25 @@
 package dev.njr.zync.capture
 
-import android.content.Context
+import android.Manifest
+import android.content.ComponentName
+import android.content.pm.PackageManager
 import android.content.Intent
+import android.media.MediaRecorder
 import android.provider.Settings
+import android.text.TextUtils
+import android.webkit.WebView
 import android.webkit.JavascriptInterface
+import android.widget.Toast
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import dev.njr.zync.MainActivity
+import dev.njr.zync.ZyncApp
+import dev.njr.zync.attach.AttachmentStore
+import dev.njr.zync.data.AttachmentType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Exposes a JS hook (`window.ZyncCapture.openAccessibilitySettings()`) so the
@@ -15,13 +31,182 @@ import android.webkit.JavascriptInterface
  * Registered on the WebView in `MainActivity` as `ZyncCapture`. Java-only,
  * unreachable from any remote (LAN) page.
  */
-class CaptureSettingsBridge(private val context: Context) {
+class CaptureSettingsBridge(
+    private val activity: MainActivity,
+    private val webView: WebView,
+    private val requestRecordAudio: ((Boolean) -> Unit) -> Unit,
+) {
+    private var recorder: MediaRecorder? = null
+    private var outFile: File? = null
+    private var recording = false
 
     @JavascriptInterface
     fun openAccessibilitySettings() {
-        context.startActivity(
+        activity.startActivity(
             Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
+    }
+
+    @JavascriptInterface
+    fun isQuickCaptureEnabled(): Boolean = isAccessibilityServiceEnabled()
+
+    @JavascriptInterface
+    fun startVoiceNote() {
+        activity.runOnUiThread {
+            if (ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED
+            ) {
+                startRecording()
+            } else {
+                requestRecordAudio { granted ->
+                    if (granted) {
+                        startRecording()
+                    } else {
+                        toast("Microphone permission needed")
+                        dispatch("zync-capture-discarded")
+                    }
+                }
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun saveVoiceNote() {
+        activity.runOnUiThread { stopAndSave() }
+    }
+
+    @JavascriptInterface
+    fun restartVoiceNote() {
+        activity.runOnUiThread {
+            stopAndDelete()
+            startVoiceNote()
+        }
+    }
+
+    @JavascriptInterface
+    fun discardVoiceNote() {
+        activity.runOnUiThread {
+            stopAndDelete()
+            toast("Discarded voice note")
+            dispatch("zync-capture-discarded")
+        }
+    }
+
+    @JavascriptInterface
+    fun startDocumentScan() {
+        activity.startActivity(Intent(activity, DocScanActivity::class.java))
+    }
+
+    @JavascriptInterface
+    fun startDocumentUpload() {
+        activity.startActivity(Intent(activity, DocUploadActivity::class.java))
+    }
+
+    private fun startRecording() {
+        if (recording) return
+        val file = File(activity.cacheDir, "voice-${System.currentTimeMillis()}.m4a")
+        runCatching {
+            recorder = MediaRecorder(activity).apply {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setOutputFile(file.absolutePath)
+                prepare()
+                start()
+            }
+            outFile = file
+            recording = true
+            toast("Recording voice note")
+        }.onFailure { e ->
+            recorder?.release()
+            recorder = null
+            outFile = null
+            toast(e.message ?: "Could not start recording")
+            dispatch("zync-capture-discarded")
+        }
+    }
+
+    private fun stopAndSave() {
+        if (!recording) {
+            dispatch("zync-capture-discarded")
+            return
+        }
+        recording = false
+        val file = outFile
+        runCatching {
+            recorder?.stop()
+            recorder?.release()
+        }
+        recorder = null
+        outFile = null
+        if (file == null || !file.isFile || file.length() == 0L) {
+            file?.delete()
+            toast("Nothing recorded")
+            dispatch("zync-capture-discarded")
+            return
+        }
+
+        val app = activity.application as ZyncApp
+        val store = AttachmentStore.default(activity)
+        activity.lifecycleScope.launch(Dispatchers.IO) {
+            runCatching {
+                val bytes = file.readBytes()
+                app.repository.captureToInbox("Voice note", AttachmentType.AUDIO, bytes, "m4a", store)
+                file.delete()
+            }.onSuccess {
+                withContext(Dispatchers.Main) {
+                    toast("Added voice note to Inbox")
+                    dispatch("zync-capture-saved")
+                }
+            }.onFailure { e ->
+                withContext(Dispatchers.Main) {
+                    toast(e.message ?: "Could not save voice note")
+                    dispatch("zync-capture-discarded")
+                }
+            }
+        }
+    }
+
+    private fun stopAndDelete() {
+        val wasRecording = recording
+        recording = false
+        runCatching { if (wasRecording) recorder?.stop() }
+        recorder?.release()
+        recorder = null
+        outFile?.delete()
+        outFile = null
+    }
+
+    private fun toast(message: String) {
+        Toast.makeText(activity, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun dispatch(name: String) {
+        webView.post {
+            webView.evaluateJavascript("window.dispatchEvent(new Event('$name'))", null)
+        }
+    }
+
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val enabled = Settings.Secure.getInt(
+            activity.contentResolver,
+            Settings.Secure.ACCESSIBILITY_ENABLED,
+            0,
+        )
+        if (enabled != 1) return false
+
+        val expected = ComponentName(activity, ZyncCaptureService::class.java).flattenToString()
+        val services = Settings.Secure.getString(
+            activity.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ) ?: return false
+
+        val splitter = TextUtils.SimpleStringSplitter(':')
+        splitter.setString(services)
+        for (service in splitter) {
+            if (service.equals(expected, ignoreCase = true)) return true
+        }
+        return false
     }
 }

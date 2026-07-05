@@ -22,6 +22,7 @@ export async function renderSettings(el) {
     </article>
     <article>
       <h3>Quick capture gesture</h3>
+      <p id="capture-status" class="muted"></p>
       <p>Capture into your Inbox from anywhere:<br>
         double-press <strong>Volume Up</strong> to record a voice note,
         double-press <strong>Volume Down</strong> to scan a document.</p>
@@ -52,6 +53,7 @@ export async function renderSettings(el) {
   const toggle = el.querySelector('#remote-toggle');
   const remoteInfo = el.querySelector('#remote-info');
   const pairResult = el.querySelector('#pair-result');
+  const captureStatus = el.querySelector('#capture-status');
   const captureInfo = el.querySelector('#capture-info');
   const deviceList = el.querySelector('#device-list');
   const backupToggle = el.querySelector('#backup-toggle');
@@ -181,7 +183,7 @@ export async function renderSettings(el) {
       return;
     }
     window.ZyncCapture.openAccessibilitySettings();
-    captureInfo.textContent = 'Find "zync quick capture" in the list and turn it on.';
+    captureInfo.textContent = 'Android does not allow zync to show a permission prompt here. Find "zync quick capture" in Accessibility and turn it on.';
   };
 
   el.querySelector('#backup-connect').onclick = () => {
@@ -233,6 +235,18 @@ export async function renderSettings(el) {
   };
 
   await refreshState();
+  refreshCaptureState();
   await refreshDevices();
   await refreshBackup();
+
+  function refreshCaptureState() {
+    if (!window.ZyncCapture || typeof window.ZyncCapture.isQuickCaptureEnabled !== 'function') {
+      captureStatus.textContent = 'Only available in the Android app.';
+      return;
+    }
+    const enabled = window.ZyncCapture.isQuickCaptureEnabled();
+    captureStatus.textContent = enabled
+      ? 'Enabled. Double-press Volume Up for voice, Volume Down for scan.'
+      : 'Off. Enable the zync quick capture accessibility service to use volume-button shortcuts.';
+  }
 }

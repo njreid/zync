@@ -19,6 +19,7 @@ async function settle(page) {
 }
 
 async function quickAdd(page, title) {
+  await page.locator('#task-action-bar [data-mode=text]').click();
   await page.locator('#quick-title').fill(title);
   await page.locator('#quick-add button[type=submit]').click();
   await settle(page);
@@ -55,8 +56,11 @@ test.describe('GTD web functional suite', () => {
     await expect(page.locator('nav a[href="#/inbox"]')).toBeVisible();
     await expect(page.locator('nav a[href="#/tree"]')).toBeVisible();
     await expect(page.locator('nav a[href="#/contexts"]')).toBeVisible();
-    await expect(page.locator('#quick-add')).toBeVisible();
-    await expect(page.locator('#quick-title')).toBeVisible();
+    await expect(page.locator('#context-filter')).toBeVisible();
+    await expect(page.locator('#task-action-bar [data-mode=text]')).toBeVisible();
+    await expect(page.locator('#task-action-bar [data-mode=voice]')).toBeVisible();
+    await expect(page.locator('#task-action-bar [data-mode=scan]')).toBeVisible();
+    await expect(page.locator('#task-action-bar [data-mode=upload]')).toBeVisible();
   });
 
   test('b. quick-add appears without reload', async ({ page }) => {

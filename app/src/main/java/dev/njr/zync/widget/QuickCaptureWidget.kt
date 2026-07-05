@@ -24,8 +24,9 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import dev.njr.zync.MainActivity
 import dev.njr.zync.R
-import dev.njr.zync.attach.DocScanActivity
-import dev.njr.zync.attach.VoiceCaptureActivity
+import dev.njr.zync.capture.DocScanActivity
+import dev.njr.zync.capture.DocUploadActivity
+import dev.njr.zync.capture.VoiceCaptureActivity
 
 class QuickCaptureWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -73,6 +74,11 @@ private fun QuickCaptureContent() {
         Button(
             text = "Scan",
             onClick = actionStartActivity<DocScanActivity>(),
+            modifier = GlanceModifier.fillMaxWidth().padding(top = 6),
+        )
+        Button(
+            text = "Upload",
+            onClick = actionStartActivity<DocUploadActivity>(),
             modifier = GlanceModifier.fillMaxWidth().padding(top = 6),
         )
     }
