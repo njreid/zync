@@ -89,3 +89,245 @@ jobs:
         with:
           name: zync-android-apk
           path: zync-${{ steps.version.outputs.version_name }}.apk
+
+  desktop-macos:
+    name: Build macOS desktop app
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-13
+            arch: x64
+          - runner: macos-14
+            arch: aarch64
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_VERSION_NAME: ${{ inputs.version_name }}
+        shell: bash
+        run: |
+          if [ -n "$INPUT_VERSION_NAME" ]; then
+            version_name="$INPUT_VERSION_NAME"
+          else
+            version_name="${RELEASE_TAG#v}"
+          fi
+          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        working-directory: desktop
+        run: npm install
+
+      - name: Stamp desktop package version
+        working-directory: desktop
+        env:
+          ZYNC_VERSION: ${{ steps.version.outputs.version_name }}
+        shell: bash
+        run: |
+          npm version --no-git-tag-version "$ZYNC_VERSION"
+          node -e "const fs=require('fs'); const p='src-tauri/tauri.conf.json'; const c=JSON.parse(fs.readFileSync(p,'utf8')); c.version=process.env.ZYNC_VERSION; fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');"
+
+      - name: Build DMG
+        working-directory: desktop
+        run: npm run tauri build -- --bundles dmg
+
+      - name: Rename DMG
+        id: artifact
+        shell: bash
+        run: |
+          dmg="$(find desktop/src-tauri/target/release/bundle/dmg -name '*.dmg' -print -quit)"
+          test -n "$dmg"
+          artifact="zync-${{ steps.version.outputs.version_name }}-macos-${{ matrix.arch }}.dmg"
+          cp "$dmg" "$artifact"
+          echo "path=$artifact" >> "$GITHUB_OUTPUT"
+
+      - name: Attach DMG to GitHub Release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "${{ steps.artifact.outputs.path }}" --clobber
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zync-macos-${{ matrix.arch }}
+          path: ${{ steps.artifact.outputs.path }}
+
+  desktop-linux:
+    name: Build Linux desktop app
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_VERSION_NAME: ${{ inputs.version_name }}
+        run: |
+          if [ -n "$INPUT_VERSION_NAME" ]; then
+            version_name="$INPUT_VERSION_NAME"
+          else
+            version_name="${RELEASE_TAG#v}"
+          fi
+          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+
+      - name: Install Linux bundle dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            wget
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        working-directory: desktop
+        run: npm install
+
+      - name: Stamp desktop package version
+        working-directory: desktop
+        env:
+          ZYNC_VERSION: ${{ steps.version.outputs.version_name }}
+        run: |
+          npm version --no-git-tag-version "$ZYNC_VERSION"
+          node -e "const fs=require('fs'); const p='src-tauri/tauri.conf.json'; const c=JSON.parse(fs.readFileSync(p,'utf8')); c.version=process.env.ZYNC_VERSION; fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');"
+
+      - name: Build Linux bundles
+        working-directory: desktop
+        run: npm run tauri build -- --bundles deb,appimage
+
+      - name: Rename Linux artifacts
+        id: artifact
+        shell: bash
+        run: |
+          deb="$(find desktop/src-tauri/target/release/bundle/deb -name '*.deb' -print -quit)"
+          appimage="$(find desktop/src-tauri/target/release/bundle/appimage -name '*.AppImage' -print -quit)"
+          test -n "$deb"
+          test -n "$appimage"
+          deb_artifact="zync-${{ steps.version.outputs.version_name }}-linux-x64.deb"
+          appimage_artifact="zync-${{ steps.version.outputs.version_name }}-linux-x64.AppImage"
+          cp "$deb" "$deb_artifact"
+          cp "$appimage" "$appimage_artifact"
+          echo "deb=$deb_artifact" >> "$GITHUB_OUTPUT"
+          echo "appimage=$appimage_artifact" >> "$GITHUB_OUTPUT"
+
+      - name: Attach Linux artifacts to GitHub Release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "${{ steps.artifact.outputs.deb }}" "${{ steps.artifact.outputs.appimage }}" --clobber
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: zync-linux-x64
+          path: |
+            ${{ steps.artifact.outputs.deb }}
+            ${{ steps.artifact.outputs.appimage }}
+
+  desktop-windows:
+    name: Build Windows desktop app
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_VERSION_NAME: ${{ inputs.version_name }}
+        shell: bash
+        run: |
+          if [ -n "$INPUT_VERSION_NAME" ]; then
+            version_name="$INPUT_VERSION_NAME"
+          else
+            version_name="${RELEASE_TAG#v}"
+          fi
+          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        working-directory: desktop
+        run: npm install
+
+      - name: Stamp desktop package version
+        working-directory: desktop
+        env:
+          ZYNC_VERSION: ${{ steps.version.outputs.version_name }}
+        shell: bash
+        run: |
+          npm version --no-git-tag-version "$ZYNC_VERSION"
+          node -e "const fs=require('fs'); const p='src-tauri/tauri.conf.json'; const c=JSON.parse(fs.readFileSync(p,'utf8')); c.version=process.env.ZYNC_VERSION; fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');"
+
+      - name: Build Windows bundles
+        working-directory: desktop
+        run: npm run tauri build -- --bundles nsis,msi
+
+      - name: Rename Windows artifacts
+        id: artifact
+        shell: bash
+        run: |
+          msi="$(find desktop/src-tauri/target/release/bundle/msi -name '*.msi' -print -quit)"
+          nsis="$(find desktop/src-tauri/target/release/bundle/nsis -name '*.exe' -print -quit)"
+          test -n "$msi"
+          test -n "$nsis"
+          msi_artifact="zync-${{ steps.version.outputs.version_name }}-windows-x64.msi"
+          nsis_artifact="zync-${{ steps.version.outputs.version_name }}-windows-x64-setup.exe"
+          cp "$msi" "$msi_artifact"
+          cp "$nsis" "$nsis_artifact"
+          echo "msi=$msi_artifact" >> "$GITHUB_OUTPUT"
+          echo "nsis=$nsis_artifact" >> "$GITHUB_OUTPUT"
+
+      - name: Attach Windows artifacts to GitHub Release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release upload "${{ github.event.release.tag_name }}" "${{ steps.artifact.outputs.msi }}" "${{ steps.artifact.outputs.nsis }}" --clobber
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: zync-windows-x64
+          path: |
+            ${{ steps.artifact.outputs.msi }}
+            ${{ steps.artifact.outputs.nsis }}
