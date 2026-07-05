@@ -1,12 +1,24 @@
 package dev.njr.zync.data
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
 enum class AttachmentType { AUDIO, TRANSCRIPT, PDF, OCR_TEXT }
 
-@Entity(tableName = "attachment", indices = [Index("nodeId")])
+@Entity(
+    tableName = "attachment",
+    indices = [Index("nodeId")],
+    foreignKeys = [
+        ForeignKey(
+            entity = NodeEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["nodeId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
 data class AttachmentEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val nodeId: Long,

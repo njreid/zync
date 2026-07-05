@@ -20,15 +20,19 @@ export async function renderInbox(el) {
   };
   const list = el.querySelector('#inbox-list');
   if (!tasks.length) { list.innerHTML = '<p class="muted">Inbox zero ✨</p>'; return; }
-  for (const t of tasks) list.append(taskCard(t));
+  for (const t of tasks) {
+    const attachments = await get(`/api/nodes/${t.id}/attachments`);
+    list.append(taskCard(t, attachments));
+  }
 }
 
-function taskCard(t) {
+function taskCard(t, attachments) {
   const card = document.createElement('article');
   card.className = 'task';
   card.innerHTML = `
     <h4><a href="#/node/${t.id}">${escapeHtml(t.title)}</a></h4>
     ${t.notes ? `<p class="muted">${escapeHtml(t.notes.slice(0, 160))}</p>` : ''}
+    ${attachments.length ? attachmentSummary(attachments) : ''}
     <details class="clarify"><summary role="button" class="outline secondary">Clarify</summary>
       <div role="group">
         <button data-act="done">Do ✓</button>
@@ -53,6 +57,11 @@ function taskCard(t) {
 }
 
 async function act(promise) { await promise; await rerender(); }
+
+function attachmentSummary(attachments) {
+  const label = attachments.length === 1 ? '1 attachment' : `${attachments.length} attachments`;
+  return `<p class="muted">${escapeHtml(label)}</p>`;
+}
 
 export function escapeHtml(s) {
   return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

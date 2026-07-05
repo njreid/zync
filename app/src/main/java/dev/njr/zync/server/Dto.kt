@@ -1,5 +1,7 @@
 package dev.njr.zync.server
 
+import dev.njr.zync.data.AttachmentEntity
+import dev.njr.zync.data.AttachmentType
 import dev.njr.zync.data.ContextEntity
 import dev.njr.zync.data.NodeEntity
 import dev.njr.zync.data.NodeKind
@@ -32,3 +34,20 @@ fun ContextEntity.toDto() = ContextDto(id, name)
 
 @Serializable
 data class ErrorDto(val error: String)
+
+@Serializable
+data class AttachmentDto(
+    val id: Long,
+    val nodeId: Long,
+    val type: AttachmentType,
+    val relativePath: String,
+    val downloadUrl: String,
+)
+
+fun AttachmentEntity.toDto() = AttachmentDto(
+    id = id,
+    nodeId = nodeId,
+    type = type,
+    relativePath = relativePath,
+    downloadUrl = "/api/nodes/$nodeId/attachments/$id",
+)

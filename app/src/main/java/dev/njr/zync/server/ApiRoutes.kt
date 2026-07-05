@@ -1,11 +1,14 @@
 package dev.njr.zync.server
 
+import dev.njr.zync.attach.AttachmentStore
 import dev.njr.zync.data.NodeKind
 import dev.njr.zync.data.ZyncDatabase
 import dev.njr.zync.domain.NodeRepository
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.patch
@@ -31,7 +34,7 @@ import kotlinx.serialization.json.Json
 @Serializable data class ContextIdsBody(val contextIds: List<Long>)
 @Serializable data class EventDto(val type: String)
 
-fun Route.apiRoutes(db: ZyncDatabase, repo: NodeRepository) {
+fun Route.apiRoutes(db: ZyncDatabase, repo: NodeRepository, attachmentStore: AttachmentStore? = null) {
     route("/api") {
         get("/roots") { call.respond(repo.observeRoots().first().map { it.toDto() }) }
 
@@ -112,9 +115,38 @@ fun Route.apiRoutes(db: ZyncDatabase, repo: NodeRepository) {
                 repo.setContexts(id(), call.receive<ContextIdsBody>().contextIds.toSet())
                 call.respond(repo.observeContextsFor(id()).first().map { it.toDto() })
             }
+            get("/attachments") {
+                val node = repo.get(id()) ?: return@get call.respond(
+                    HttpStatusCode.NotFound, ErrorDto("no such node"))
+                call.respond(db.attachmentDao().forNode(node.id).map { it.toDto() })
+            }
+            get("/attachments/{attachmentId}") {
+                val node = repo.get(id()) ?: return@get call.respond(
+                    HttpStatusCode.NotFound, ErrorDto("no such node"))
+                val attachmentId = call.parameters["attachmentId"]?.toLongOrNull()
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorDto("invalid attachment id"))
+                val attachment = db.attachmentDao().getById(attachmentId)
+                    ?.takeIf { it.nodeId == node.id }
+                    ?: return@get call.respond(HttpStatusCode.NotFound, ErrorDto("no such attachment"))
+                val store = attachmentStore
+                    ?: return@get call.respond(HttpStatusCode.NotFound, ErrorDto("attachment store unavailable"))
+                val bytes = runCatching { store.read(attachment.relativePath) }.getOrElse {
+                    return@get call.respond(HttpStatusCode.NotFound, ErrorDto("attachment file missing"))
+                }
+                call.respondBytes(bytes, contentTypeFor(attachment.relativePath))
+            }
         }
     }
 }
 
 private fun io.ktor.server.routing.RoutingContext.id(): Long =
     requireNotNull(call.parameters["id"]?.toLongOrNull()) { "invalid id" }
+
+private fun contentTypeFor(relativePath: String): ContentType =
+    when (relativePath.substringAfterLast('.', missingDelimiterValue = "").lowercase()) {
+        "m4a" -> ContentType.Audio.MP4
+        "mp3" -> ContentType.Audio.MPEG
+        "pdf" -> ContentType.Application.Pdf
+        "txt" -> ContentType.Text.Plain
+        else -> ContentType.Application.OctetStream
+    }

@@ -26,12 +26,6 @@ interface NodeDao {
     @Query("SELECT * FROM node WHERE parentId IS NULL AND status != 'DROPPED' ORDER BY builtin DESC, sortOrder, title")
     fun observeRoots(): Flow<List<NodeEntity>>
 
-    @Insert
-    suspend fun insertAttachment(attachment: AttachmentEntity): Long
-
-    @Query("SELECT * FROM attachment WHERE nodeId = :nodeId")
-    suspend fun attachmentsFor(nodeId: Long): List<AttachmentEntity>
-
     @Query(
         """
         WITH RECURSIVE tagged(id) AS (

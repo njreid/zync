@@ -24,8 +24,8 @@ export async function renderDetail(el, id) {
   let node;
   try { node = await get(`/api/nodes/${id}`); }
   catch (e) { toast(e.message); location.hash = '#/inbox'; return; }
-  const [mine, all] = await Promise.all([
-    get(`/api/nodes/${id}/contexts`), get('/api/contexts'),
+  const [mine, all, attachments] = await Promise.all([
+    get(`/api/nodes/${id}/contexts`), get('/api/contexts'), get(`/api/nodes/${id}/attachments`),
   ]);
   const mineIds = new Set(mine.map(c => c.id));
 
@@ -40,6 +40,7 @@ export async function renderDetail(el, id) {
           ${node.status === 'DONE' ? 'Reopen' : 'Done ✓'}</button>
       </div>
     </form>
+    <h5>Attachments</h5><div id="f-attachments"></div>
     <h5>Contexts</h5><div class="chips" id="f-chips"></div>
     <h5>Defer</h5>
     <div role="group">
@@ -73,6 +74,8 @@ export async function renderDetail(el, id) {
 
   el.querySelector('#f-defer-state').textContent =
     node.deferUntil ? `Deferred until ${new Date(node.deferUntil).toLocaleDateString()}` : '';
+
+  renderAttachments(el.querySelector('#f-attachments'), attachments);
 
   // Flush any dirty title/notes to the server before performing an action
   // that would otherwise trigger a rerender and discard them.
@@ -125,4 +128,21 @@ export async function renderDetail(el, id) {
     };
     chips.append(b);
   }
+}
+
+function renderAttachments(el, attachments) {
+  if (!attachments.length) {
+    el.innerHTML = '<p class="muted">No attachments</p>';
+    return;
+  }
+  const list = document.createElement('ul');
+  for (const attachment of attachments) {
+    const item = document.createElement('li');
+    const link = document.createElement('a');
+    link.href = attachment.downloadUrl;
+    link.textContent = `${attachment.type.toLowerCase().replace('_', ' ')}: ${attachment.relativePath}`;
+    item.append(link);
+    list.append(item);
+  }
+  el.replaceChildren(list);
 }

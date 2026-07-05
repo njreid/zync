@@ -58,7 +58,7 @@
 - Prefer **on-device** transcription/OCR; if unavailable, store the raw `AUDIO`/`PDF` without the derived `TRANSCRIPT`/`OCR_TEXT` (never block capture on a network/model).
 - Permissions: use GMS scanner (no CAMERA); `RECORD_AUDIO` is required for voice — request at capture time.
 
-- [ ] **Step 1 (TDD):** `AttachmentDao` + `AttachmentStore` unit tests (Robolectric): insert/query/delete, file written under the data root, cascade/orphan cleanup when a node is deleted. Migration test if v3.
+- [x] **Step 1 (TDD):** `AttachmentDao` + `AttachmentStore` unit tests (Robolectric): insert/query/delete, file written under the data root, cascade/orphan cleanup when a node is deleted. Migration test if v3.
 - [ ] **Step 2: Implement** capture bridges + share-target + the read route + web UI rendering. Keep `./gradlew test` and `webtest` green.
 - [ ] **Step 3:** On-device verification (real MediaRecorder + real ML Kit scan + share from Gallery/Files) — deferred emulator/device step.
 - [ ] **Step 4: Commit** `feat(android): voice-note + doc-scan attachment capture into Inbox (+ share target)`.

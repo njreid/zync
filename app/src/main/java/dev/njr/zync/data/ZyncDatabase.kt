@@ -9,12 +9,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [NodeEntity::class, ContextEntity::class, NodeContextCrossRef::class, AttachmentEntity::class, AllowedDeviceEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class ZyncDatabase : RoomDatabase() {
     abstract fun nodeDao(): NodeDao
     abstract fun contextDao(): ContextDao
+    abstract fun attachmentDao(): AttachmentDao
     abstract fun allowedDeviceDao(): AllowedDeviceDao
 
     companion object {
@@ -35,7 +36,7 @@ abstract class ZyncDatabase : RoomDatabase() {
         fun build(context: Context): ZyncDatabase =
             Room.databaseBuilder(context, ZyncDatabase::class.java, "zync.db")
                 .addCallback(seedCallback)
-                .addMigrations(Migration_1_2)
+                .addMigrations(Migration_1_2, Migration_2_3)
                 .build()
 
         fun inMemory(context: Context): ZyncDatabase =
@@ -55,6 +56,26 @@ val Migration_1_2 = object : Migration(1, 2) {
         )
         db.execSQL(
             "CREATE UNIQUE INDEX IF NOT EXISTS `index_allowed_device_pubkey` ON `allowed_device` (`pubkey`)"
+        )
+    }
+}
+
+val Migration_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `attachment_new` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`nodeId` INTEGER NOT NULL, `type` TEXT NOT NULL, `relativePath` TEXT NOT NULL, " +
+                "FOREIGN KEY(`nodeId`) REFERENCES `node`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)"
+        )
+        db.execSQL(
+            "INSERT INTO `attachment_new` (`id`, `nodeId`, `type`, `relativePath`) " +
+                "SELECT a.`id`, a.`nodeId`, a.`type`, a.`relativePath` " +
+                "FROM `attachment` a INNER JOIN `node` n ON n.`id` = a.`nodeId`"
+        )
+        db.execSQL("DROP TABLE `attachment`")
+        db.execSQL("ALTER TABLE `attachment_new` RENAME TO `attachment`")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_attachment_nodeId` ON `attachment` (`nodeId`)"
         )
     }
 }
