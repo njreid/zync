@@ -28,6 +28,31 @@
         </activity>
 
         <!--
+          Share target: "Share → zync" from any app to drop audio (voice notes)
+          or a PDF (scanned docs) into the Inbox. Invisible/translucent — it
+          imports, toasts, and finishes (see attach/ShareReceiverActivity).
+        -->
+        <activity
+            android:name=".attach.ShareReceiverActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+        </activity>
+
+        <!--
           Keeps the pairing/sync server (and its NSD advertisement) alive while remote access is
           enabled, even if the app is backgrounded — Android will otherwise kill the process's
           network/socket state shortly after it loses foreground/visibility. `dataSync` is the

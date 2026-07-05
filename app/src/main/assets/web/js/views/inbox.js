@@ -27,7 +27,7 @@ function taskCard(t) {
   const card = document.createElement('article');
   card.className = 'task';
   card.innerHTML = `
-    <h4><a href="#/node/${t.id}">${escapeHtml(t.title)}</a></h4>
+    <h4><a href="#/node/${t.id}">${escapeHtml(t.title)}</a><span class="attach-badge" hidden></span></h4>
     ${t.notes ? `<p class="muted">${escapeHtml(t.notes.slice(0, 160))}</p>` : ''}
     <details class="clarify"><summary role="button" class="outline secondary">Clarify</summary>
       <div role="group">
@@ -49,7 +49,20 @@ function taskCard(t) {
     const folder = await pickDestination({ foldersOnly: true });
     if (folder != null) await act(post(`/api/nodes/${t.id}/convert`, { folderId: folder }));
   };
+  showAttachmentBadge(t.id, card.querySelector('.attach-badge'));
   return card;
+}
+
+// Lazily annotate a card with a 📎 badge if the node has attachments (voice
+// notes / scanned docs captured via share or the widget). Fire-and-forget so
+// it never blocks the Inbox render; failures are silently ignored.
+function showAttachmentBadge(nodeId, badge) {
+  get(`/api/nodes/${nodeId}/attachments`).then(atts => {
+    if (atts && atts.length) {
+      badge.textContent = ` 📎 ${atts.length}`;
+      badge.hidden = false;
+    }
+  }).catch(() => {});
 }
 
 async function act(promise) { await promise; await rerender(); }
