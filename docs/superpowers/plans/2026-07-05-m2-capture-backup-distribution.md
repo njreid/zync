@@ -99,8 +99,8 @@
 - **Conflict/versioning:** single-writer (one phone) keeps this simple — keep the last N encrypted snapshots for point-in-time restore; last-writer-wins on the folder.
 - **Observability:** surface last-success/last-failure + a WorkManager-backed retry with backoff; never silently fail (M1c lesson — no logging backend once bit us).
 
-- [ ] **Step 1 (design/decision):** Confirm Drive scope (`appDataFolder` vs `drive.file`), the `allowBackup` decision, and the key strategy (Keystore-wrapped vs passphrase). Write `BackupManager` snapshot + encryption with unit tests (Robolectric: snapshot integrity, encrypt→decrypt round-trip, incremental attachment manifest).
-- [ ] **Step 2 (TDD):** `BackupWorker` scheduling (periodic + debounced-on-change) with a fake `DriveClient`; assert automatic enqueue on mutation and constraint gating. `RestoreManager` round-trip test (backup → wipe → restore → DB+attachments identical).
+- [x] **Step 1 (design/decision):** Confirm Drive scope (`appDataFolder` vs `drive.file`), the `allowBackup` decision, and the key strategy (Keystore-wrapped vs passphrase). Write `BackupManager` snapshot + encryption with unit tests (Robolectric: snapshot integrity, encrypt→decrypt round-trip, incremental attachment manifest).
+- [x] **Step 2 (TDD):** `BackupWorker` scheduling (periodic + debounced-on-change) with a fake `DriveClient`; assert automatic enqueue on mutation and constraint gating. `RestoreManager` round-trip test (backup → wipe → restore → DB+attachments identical).
 - [ ] **Step 3:** Wire the settings toggle/status + real Drive client; on-device verification (enable → edit → observe automatic backup appears in Drive → reinstall → restore) — deferred device step.
 - [ ] **Step 4: Commit** `feat(android): automatic encrypted Google Drive backup + restore (WorkManager)`.
 

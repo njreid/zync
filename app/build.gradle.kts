@@ -147,6 +147,7 @@ dependencies {
   implementation(libs.bouncycastle.bcpkix)
   implementation(libs.glance)
   implementation(libs.glance.appwidget)
+  implementation(libs.work.runtime.ktx)
   // Ktor/Netty log via SLF4J; without a binding, exceptions inside route handlers/the Netty
   // engine vanish silently instead of reaching logcat.
   implementation(libs.slf4j.android)

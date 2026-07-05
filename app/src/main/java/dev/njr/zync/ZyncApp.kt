@@ -3,6 +3,7 @@ package dev.njr.zync
 import android.app.Application
 import android.util.Log
 import dev.njr.zync.attach.AttachmentStore
+import dev.njr.zync.backup.BackupScheduler
 import dev.njr.zync.data.ZyncDatabase
 import dev.njr.zync.domain.NodeRepository
 import dev.njr.zync.pairing.AndroidKeystorePasswordProtector
@@ -15,6 +16,7 @@ import dev.njr.zync.pairing.ServerController
 import dev.njr.zync.server.LanConfig
 import dev.njr.zync.server.ZyncServer
 import dev.njr.zync.server.androidAssets
+import androidx.work.WorkManager
 import java.util.UUID
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -23,7 +25,10 @@ private const val TAG = "zync"
 
 class ZyncApp : Application() {
     val database: ZyncDatabase by lazy { ZyncDatabase.build(this) }
-    val repository: NodeRepository by lazy { NodeRepository(database) }
+    val backupScheduler: BackupScheduler by lazy { BackupScheduler(WorkManager.getInstance(this)) }
+    val repository: NodeRepository by lazy {
+        NodeRepository(database, onMutated = { backupScheduler.enqueueDebouncedBackup() })
+    }
     val attachmentStore: AttachmentStore by lazy { AttachmentStore(AttachmentStore.defaultRoot(this)) }
     val serverToken: String = UUID.randomUUID().toString()
 

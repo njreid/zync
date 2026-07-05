@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 
 class NodeRepository(
     private val db: ZyncDatabase,
+    private val onMutated: () -> Unit = {},
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     private val dao get() = db.nodeDao()
@@ -27,6 +28,7 @@ class NodeRepository(
             "$kind cannot nest under ${parentKind ?: "root"}"
         }
         return dao.insert(NodeEntity(kind = kind, parentId = parentId, title = title, createdAt = now()))
+            .also { onMutated() }
     }
 
     suspend fun rename(id: Long, title: String) =
@@ -48,6 +50,7 @@ class NodeRepository(
             "Cannot move a node into its own subtree"
         }
         dao.update(node.copy(parentId = newParentId))
+        onMutated()
     }
 
     suspend fun complete(id: Long) =
@@ -62,6 +65,7 @@ class NodeRepository(
         val target = requireNode(targetFolderId)
         require(target.kind == NodeKind.FOLDER) { "Projects must live in a folder" }
         dao.update(task.copy(kind = NodeKind.PROJECT, parentId = targetFolderId))
+        onMutated()
     }
 
     suspend fun trash(id: Long) =
@@ -73,7 +77,7 @@ class NodeRepository(
     fun observeDestinations(): Flow<List<NodeEntity>> = dao.observeDestinations()
 
     suspend fun createContext(name: String): Long =
-        db.contextDao().insert(ContextEntity(name = name))
+        db.contextDao().insert(ContextEntity(name = name)).also { onMutated() }
 
     fun observeContexts(): Flow<List<ContextEntity>> = db.contextDao().observeAll()
 
@@ -84,6 +88,7 @@ class NodeRepository(
         requireNode(nodeId)
         db.contextDao().clearTags(nodeId)
         contextIds.forEach { db.contextDao().tag(NodeContextCrossRef(nodeId, it)) }
+        onMutated()
     }
 
     private suspend fun requireNode(id: Long): NodeEntity =
@@ -95,8 +100,10 @@ class NodeRepository(
         return node
     }
 
-    private suspend fun updateMutable(id: Long, transform: (NodeEntity) -> NodeEntity) =
+    private suspend fun updateMutable(id: Long, transform: (NodeEntity) -> NodeEntity) {
         dao.update(transform(requireMutable(id)))
+        onMutated()
+    }
 
     /** True if [candidate] is [ancestorId] itself or inside its subtree. */
     private suspend fun isDescendantOrSelf(candidate: Long, ancestorId: Long): Boolean {
