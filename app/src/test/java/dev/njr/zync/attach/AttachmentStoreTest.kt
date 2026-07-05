@@ -63,6 +63,21 @@ class AttachmentStoreTest {
     }
 
     @Test
+    fun `writeContent stores content under the generic attachments dir`() {
+        val rel = store.writeContent("hello".toByteArray(), ".m4a")
+
+        assertTrue(rel.matches(Regex("attachments/[0-9a-f]{2}/[0-9a-f]{64}\\.m4a")))
+        assertArrayEquals("hello".toByteArray(), store.read(rel))
+    }
+
+    @Test
+    fun `rejects paths outside the attachment root`() {
+        assertIllegalArgument { store.write("../escape.txt", "bad".toByteArray()) }
+        assertIllegalArgument { store.write("/tmp/escape.txt", "bad".toByteArray()) }
+        assertIllegalArgument { store.writeContent("bad".toByteArray(), "../txt") }
+    }
+
+    @Test
     fun `read returns null and delete is false for a missing path`() {
         assertNull(store.read("audio/aa/nope.m4a"))
         assertFalse(store.delete("audio/aa/nope.m4a"))
@@ -73,5 +88,14 @@ class AttachmentStoreTest {
         val rel = store.write("bye".toByteArray(), AttachmentType.AUDIO, "m4a")
         assertTrue(store.delete(rel))
         assertNull(store.read(rel))
+    }
+
+    private fun assertIllegalArgument(block: () -> Unit) {
+        try {
+            block()
+        } catch (e: IllegalArgumentException) {
+            return
+        }
+        throw AssertionError("Expected IllegalArgumentException")
     }
 }

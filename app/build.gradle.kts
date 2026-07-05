@@ -1,62 +1,72 @@
-import java.io.FileInputStream
 import java.util.Properties
 
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.serialization)
+  alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.ksp)
 }
 
-// Release signing config, sourced from (in priority order) environment
-// variables (CI) then a local, git-ignored `key.properties` (see
-// key.properties.example). If neither is present, the release build is left
-// UNSIGNED so a plain `assembleRelease` still works without any secrets.
-val keystorePropsFile = rootProject.file("key.properties")
-val keystoreProps = Properties().apply {
-    if (keystorePropsFile.exists()) FileInputStream(keystorePropsFile).use { load(it) }
+val releaseKeyPropertiesFile = rootProject.file("key.properties")
+val releaseKeyProperties = Properties().apply {
+    if (releaseKeyPropertiesFile.isFile) {
+        releaseKeyPropertiesFile.inputStream().use(::load)
+    }
 }
-fun signingValue(env: String, prop: String): String? =
-    System.getenv(env) ?: keystoreProps.getProperty(prop)
+
+fun releaseValue(propertyName: String, envName: String): String? =
+    (releaseKeyProperties.getProperty(propertyName) ?: providers.environmentVariable(envName).orNull)
+        ?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = releaseValue("storeFile", "ZYNC_KEYSTORE_FILE")
+val releaseStorePassword = releaseValue("storePassword", "ZYNC_KEYSTORE_PASSWORD")
+val releaseKeyAlias = releaseValue("keyAlias", "ZYNC_KEY_ALIAS")
+val releaseKeyPassword = releaseValue("keyPassword", "ZYNC_KEY_PASSWORD")
+val hasReleaseSigning =
+    releaseStoreFile != null &&
+        releaseStorePassword != null &&
+        releaseKeyAlias != null &&
+        releaseKeyPassword != null
+
+val zyncVersionCode = (
+    findProperty("zync.versionCode")?.toString()
+        ?: providers.environmentVariable("ZYNC_VERSION_CODE").orNull
+        ?: "1"
+).toInt()
+
+val zyncVersionName = (
+    findProperty("zync.versionName")?.toString()
+        ?: providers.environmentVariable("ZYNC_VERSION_NAME").orNull
+        ?: "1.0"
+)
 
 android {
     namespace = "dev.njr.zync"
-    // Bumped to 37 because androidx.core 1.19.0 / lifecycle 2.11.0 require
-    // compiling against API 37+. targetSdk stays 36 (compileSdk lets us use
-    // newer APIs; bumping targetSdk separately opts into new runtime behavior).
     compileSdk = 37
     defaultConfig {
         applicationId = "dev.njr.zync"
         minSdk = 34
         targetSdk = 36
-        // Overridable from CI: `-PzyncVersionCode=<n> -PzyncVersionName=<s>`
-        // so each published release gets a monotonically increasing code.
-        versionCode = (project.findProperty("zyncVersionCode") as String?)?.toInt() ?: 1
-        versionName = (project.findProperty("zyncVersionName") as String?) ?: "1.0"
+        versionCode = zyncVersionCode
+        versionName = zyncVersionName
     }
 
     signingConfigs {
         create("release") {
-            val storeFilePath = signingValue("ZYNC_KEYSTORE_FILE", "storeFile")
-            if (storeFilePath != null) {
-                // rootProject.file resolves a repo-root-relative path (local
-                // key.properties) and passes an absolute path (CI) through.
-                storeFile = rootProject.file(storeFilePath)
-                storePassword = signingValue("ZYNC_KEYSTORE_PASSWORD", "storePassword")
-                keyAlias = signingValue("ZYNC_KEY_ALIAS", "keyAlias")
-                keyPassword = signingValue("ZYNC_KEY_PASSWORD", "keyPassword")
+            if (hasReleaseSigning) {
+                storeFile = rootProject.file(releaseStoreFile!!)
+                storePassword = releaseStorePassword!!
+                keyAlias = releaseKeyAlias!!
+                keyPassword = releaseKeyPassword!!
             }
         }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Sign only when a keystore was actually configured; otherwise the
-            // APK is unsigned (CI provides the keystore via secrets).
-            if (signingConfigs.getByName("release").storeFile != null) {
-                signingConfig = signingConfigs.getByName("release")
-            }
         }
     }
     compileOptions {
@@ -64,6 +74,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
+      compose = true
       aidl = false
       buildConfig = false
       shaders = false
@@ -90,6 +101,18 @@ android {
         getByName("debug") {
             assets.srcDirs("$projectDir/schemas")
         }
+    }
+}
+
+gradle.taskGraph.whenReady {
+    val validatesReleaseSigning = allTasks.any { task ->
+        task.name == "validateSigningRelease"
+    }
+    if (validatesReleaseSigning && !hasReleaseSigning) {
+        error(
+            "Release builds require signing values in key.properties or env vars: " +
+                "ZYNC_KEYSTORE_FILE, ZYNC_KEYSTORE_PASSWORD, ZYNC_KEY_ALIAS, ZYNC_KEY_PASSWORD"
+        )
     }
 }
 
@@ -122,17 +145,17 @@ dependencies {
   implementation(libs.ktor.network.tls.certificates)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.bouncycastle.bcpkix)
+  implementation(libs.glance)
+  implementation(libs.glance.appwidget)
+  implementation(libs.androidx.work.runtime.ktx)
   // Ktor/Netty log via SLF4J; without a binding, exceptions inside route handlers/the Netty
   // engine vanish silently instead of reaching logcat.
   implementation(libs.slf4j.android)
 
   // On-device QR scanning for pairing (no camera permission required)
   implementation(libs.play.services.code.scanner)
-  // On-device document scanning for capture (no camera permission required)
   implementation(libs.play.services.mlkit.document.scanner)
-
-  // Background scheduling for automatic backups
-  implementation(libs.androidx.work.runtime.ktx)
+  implementation(libs.play.services.auth)
 
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)

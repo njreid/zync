@@ -2,6 +2,7 @@ package dev.njr.zync.server
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import dev.njr.zync.attach.AttachmentStore
 import dev.njr.zync.data.ZyncDatabase
 import dev.njr.zync.domain.NodeRepository
 import io.ktor.client.HttpClient
@@ -13,6 +14,7 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 
 fun zyncTestApplication(
+    attachmentStore: AttachmentStore? = null,
     block: suspend ApplicationTestBuilder.(ZyncDatabase, NodeRepository, HttpClient) -> Unit,
 ) {
     val db = ZyncDatabase.inMemory(ApplicationProvider.getApplicationContext<Context>())
@@ -24,7 +26,7 @@ fun zyncTestApplication(
                     if (path == "index.html")
                         "<html>ok</html>".toByteArray() to ContentType.Text.Html
                     else null
-                })
+                }, attachmentStore = attachmentStore)
             }
             val client = createClient {
                 install(ContentNegotiation) { json() }

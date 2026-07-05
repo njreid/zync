@@ -36,9 +36,9 @@
 - Recommended distribution: **GitHub Releases + Obtainium** (users add the repo URL once; Obtainium auto-pulls new release APKs). Document F-Droid-repo/Accrescent as heavier alternatives; do not build them now.
 - Leave Play Store / AAB out of scope.
 
-- [ ] **Step 1 (RED/setup):** Add `signingConfigs.release` + `key.properties` plumbing; generate a throwaway keystore locally; prove `./gradlew assembleRelease` yields a **signed** APK (`apksigner verify`). Document the real keystore/secret setup in `docs/INSTALL.md` (do NOT commit any real key).
-- [ ] **Step 2:** Write `.github/workflows/release.yml`; validate YAML + `./gradlew assembleRelease` locally (the workflow itself is verified on first real tag). Confirm `versionCode` bump strategy.
-- [ ] **Step 3: Commit** `feat(android): signed release build + GitHub Releases publish workflow + install docs`.
+- [x] **Step 1 (RED/setup):** Add `signingConfigs.release` + `key.properties` plumbing; generate a throwaway keystore locally; prove `./gradlew assembleRelease` yields a **signed** APK (`apksigner verify`). Document the real keystore/secret setup in `docs/INSTALL.md` (do NOT commit any real key).
+- [x] **Step 2:** Write `.github/workflows/release.yml`; validate YAML + `./gradlew assembleRelease` locally (the workflow itself is verified on first real tag). Confirm `versionCode` bump strategy.
+- [x] **Step 3: Commit** `feat(android): signed release build + GitHub Releases publish workflow + install docs`.
 
 ---
 
@@ -58,10 +58,10 @@
 - Prefer **on-device** transcription/OCR; if unavailable, store the raw `AUDIO`/`PDF` without the derived `TRANSCRIPT`/`OCR_TEXT` (never block capture on a network/model).
 - Permissions: use GMS scanner (no CAMERA); `RECORD_AUDIO` is required for voice — request at capture time.
 
-- [ ] **Step 1 (TDD):** `AttachmentDao` + `AttachmentStore` unit tests (Robolectric): insert/query/delete, file written under the data root, cascade/orphan cleanup when a node is deleted. Migration test if v3.
-- [ ] **Step 2: Implement** capture bridges + share-target + the read route + web UI rendering. Keep `./gradlew test` and `webtest` green.
+- [x] **Step 1 (TDD):** `AttachmentDao` + `AttachmentStore` unit tests (Robolectric): insert/query/delete, file written under the data root, cascade/orphan cleanup when a node is deleted. Migration test if v3.
+- [x] **Step 2: Implement** capture bridges + share-target + the read route + web UI rendering. Keep `./gradlew test` and `webtest` green.
 - [ ] **Step 3:** On-device verification (real MediaRecorder + real ML Kit scan + share from Gallery/Files) — deferred emulator/device step.
-- [ ] **Step 4: Commit** `feat(android): voice-note + doc-scan attachment capture into Inbox (+ share target)`.
+- [x] **Step 4: Commit** `feat(android): voice-note + doc-scan attachment capture into Inbox (+ share target)`.
 
 ---
 
@@ -76,9 +76,9 @@
 - Use **Jetpack Glance** (modern `AppWidget`), not legacy `RemoteViews`.
 - Widget must not require the server/remote-access to be running — capture writes to Room + `Documents/Zync` directly on the phone.
 
-- [ ] **Step 1:** Glance widget with the three capture shortcuts; preview + click wiring.
+- [x] **Step 1:** Glance widget with the three capture shortcuts; preview + click wiring.
 - [ ] **Step 2:** On-device verification (place widget, tap each shortcut, confirm Inbox rows/attachments) — deferred device step.
-- [ ] **Step 3: Commit** `feat(android): home-screen quick-capture widget (Glance)`.
+- [x] **Step 3: Commit** `feat(android): home-screen quick-capture widget (Glance)`.
 
 ---
 
@@ -99,8 +99,8 @@
 - **Conflict/versioning:** single-writer (one phone) keeps this simple — keep the last N encrypted snapshots for point-in-time restore; last-writer-wins on the folder.
 - **Observability:** surface last-success/last-failure + a WorkManager-backed retry with backoff; never silently fail (M1c lesson — no logging backend once bit us).
 
-- [ ] **Step 1 (design/decision):** Confirm Drive scope (`appDataFolder` vs `drive.file`), the `allowBackup` decision, and the key strategy (Keystore-wrapped vs passphrase). Write `BackupManager` snapshot + encryption with unit tests (Robolectric: snapshot integrity, encrypt→decrypt round-trip, incremental attachment manifest).
-- [ ] **Step 2 (TDD):** `BackupWorker` scheduling (periodic + debounced-on-change) with a fake `DriveClient`; assert automatic enqueue on mutation and constraint gating. `RestoreManager` round-trip test (backup → wipe → restore → DB+attachments identical).
+- [x] **Step 1 (design/decision):** Confirm Drive scope (`appDataFolder` vs `drive.file`), the `allowBackup` decision, and the key strategy (Keystore-wrapped vs passphrase). Write `BackupManager` snapshot + encryption with unit tests (Robolectric: snapshot integrity, encrypt→decrypt round-trip, incremental attachment manifest).
+- [x] **Step 2 (TDD):** `BackupWorker` scheduling (periodic + debounced-on-change) with a fake `DriveClient`; assert automatic enqueue on mutation and constraint gating. `RestoreManager` round-trip test (backup → wipe → restore → DB+attachments identical).
 - [ ] **Step 3:** Wire the settings toggle/status + real Drive client; on-device verification (enable → edit → observe automatic backup appears in Drive → reinstall → restore) — deferred device step.
 - [ ] **Step 4: Commit** `feat(android): automatic encrypted Google Drive backup + restore (WorkManager)`.
 

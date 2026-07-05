@@ -28,19 +28,26 @@ fun NodeEntity.toDto() = NodeDto(
 )
 
 @Serializable
-data class AttachmentDto(
-    val id: Long,
-    val nodeId: Long,
-    val type: AttachmentType,
-    val relativePath: String,
-)
-
-fun AttachmentEntity.toDto() = AttachmentDto(id, nodeId, type, relativePath)
-
-@Serializable
 data class ContextDto(val id: Long, val name: String)
 
 fun ContextEntity.toDto() = ContextDto(id, name)
 
 @Serializable
 data class ErrorDto(val error: String)
+
+@Serializable
+data class AttachmentDto(
+    val id: Long,
+    val nodeId: Long,
+    val type: AttachmentType,
+    val relativePath: String,
+    val downloadUrl: String,
+)
+
+fun AttachmentEntity.toDto() = AttachmentDto(
+    id = id,
+    nodeId = nodeId,
+    type = type,
+    relativePath = relativePath,
+    downloadUrl = "/api/nodes/$nodeId/attachments/$id",
+)

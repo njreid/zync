@@ -1,86 +1,158 @@
-# Installing zync (Android)
+# Install zync
 
-zync is distributed as a **signed APK attached to each GitHub Release** — there
-is no Play Store listing. Two ways to install:
+Zync has one Android app, which owns the local database and captures, and
+optional desktop clients that pair with the phone over the local network. Install
+Android first, then install any desktop clients you want to pair.
 
-## Option A — Obtainium (recommended: auto-updates)
+Release assets are attached to GitHub Releases:
 
-[Obtainium](https://github.com/ImranR98/Obtainium) installs apps straight from
-GitHub Releases and keeps them updated.
+- Android: `zync-<version>.apk`
+- macOS: `zync-<version>-macos-aarch64.dmg` or `zync-<version>-macos-x64.dmg`
+- Windows: `zync-<version>-windows-x64-setup.exe` or `zync-<version>-windows-x64.msi`
+- Linux: `zync-<version>-linux-x64.AppImage` or `zync-<version>-linux-x64.deb`
 
-1. Install Obtainium (from its own GitHub Releases, or F-Droid/IzzyOnDroid).
-2. In Obtainium: **Add App** → paste this repo's URL
-   (`https://github.com/njreid/zync`).
-3. Obtainium finds the latest release APK; tap **Install**. New releases are
-   offered automatically thereafter.
+Release tags should use `v<version>` format, for example `v1.0`. The published
+asset names omit the leading `v`.
 
-## Option B — Manual sideload
+## Android
 
-1. Download the `.apk` from the latest release:
-   <https://github.com/njreid/zync/releases/latest>
-2. Open it on the phone; approve **Install unknown apps** for your browser/file
-   manager if prompted.
+### One-Time Install
 
-> Because zync is self-signed (not Play-signed), updates only install over an
-> existing install if they're signed with the **same** key. The CI release
-> workflow guarantees this by reusing one keystore.
+1. Open the latest GitHub Release on the Android phone.
+2. Download the `zync-<version>.apk` asset.
+3. Open the APK and allow installation from the browser or file manager when
+   Android asks.
 
----
+The APK must be signed by the same release keystore for every version. If the
+signing key changes, Android will not install the new APK over the old one.
 
-## For maintainers: cutting a release
+### Auto-Update With Obtainium
 
-Releases are built and signed by `.github/workflows/release.yml`, triggered by
-pushing a `v*` tag.
+1. Install Obtainium from its official release channel.
+2. Add `https://github.com/njreid/zync` as a new app source.
+3. Select GitHub Releases as the update source.
+4. Choose the `zync-<version>.apk` release asset.
 
-### One-time setup
+After that, Obtainium can watch Releases and offer updates when a new signed APK
+is published.
 
-Run the helper script — it generates the keystore (with a strong random
-password), writes the git-ignored `key.properties` for local signed builds, and
-prints (or, with an authenticated `gh` CLI, sets) the GitHub Actions secrets:
+## macOS
 
-```sh
-scripts/make-release-keystore.sh
-```
+### Homebrew
 
-Keep `zync-release.jks` and its password backed up somewhere safe — losing them
-means you can never publish an update that installs over existing installs.
-
-<details><summary>Or do it by hand</summary>
-
-1. Generate a release keystore:
-
-   ```sh
-   keytool -genkeypair -v -keystore zync-release.jks \
-     -alias zync -keyalg RSA -keysize 4096 -validity 10000 \
-     -dname "CN=zync, O=njr"
-   ```
-
-2. Add these **repository secrets** (Settings → Secrets and variables →
-   Actions):
-   - `ZYNC_KEYSTORE_BASE64` — `base64 -w0 zync-release.jks`
-   - `ZYNC_KEYSTORE_PASSWORD`, `ZYNC_KEY_ALIAS` (`zync`), `ZYNC_KEY_PASSWORD`
-
-</details>
-
-### Each release
+This repository includes a Homebrew cask. Because the repo is not named
+`homebrew-zync`, tap it with the explicit URL:
 
 ```sh
-git tag v1.2.0
-git push origin v1.2.0
+brew tap njreid/zync https://github.com/njreid/zync
+brew install --cask njreid/zync/zync
 ```
 
-The workflow builds `assembleRelease` (versionName from the tag, versionCode
-from the run number), verifies the signature with `apksigner`, and attaches the
-APK to the GitHub Release.
-
-### Local signed build (optional)
-
-Copy `key.properties.example` to `key.properties` (git-ignored), point it at
-your keystore, then:
+To update later:
 
 ```sh
-./gradlew assembleRelease
+brew update
+brew upgrade --cask njreid/zync/zync
 ```
 
-Without `key.properties` or the CI env vars, `assembleRelease` still builds but
-produces an **unsigned** APK.
+To uninstall:
+
+```sh
+brew uninstall --cask njreid/zync/zync
+```
+
+### Direct DMG Install
+
+1. Open the latest GitHub Release on the Mac.
+2. Download the matching DMG:
+   - Apple Silicon: `zync-<version>-macos-aarch64.dmg`
+   - Intel: `zync-<version>-macos-x64.dmg`
+3. Open the DMG and drag `zync.app` into Applications.
+
+## Windows
+
+1. Open the latest GitHub Release on the Windows PC.
+2. Download `zync-<version>-windows-x64-setup.exe`.
+3. Run the installer.
+
+The `zync-<version>-windows-x64.msi` asset is also published for managed or
+scripted installs.
+
+## Linux
+
+### AppImage
+
+1. Download `zync-<version>-linux-x64.AppImage` from the latest GitHub Release.
+2. Mark it executable and run it:
+
+```sh
+chmod +x zync-<version>-linux-x64.AppImage
+./zync-<version>-linux-x64.AppImage
+```
+
+### Debian/Ubuntu
+
+Download `zync-<version>-linux-x64.deb`, then install it:
+
+```sh
+sudo apt install ./zync-<version>-linux-x64.deb
+```
+
+## Pair a Desktop Client
+
+1. Open zync on Android and keep the phone on the same local network as the
+   desktop.
+2. Open the desktop client.
+3. Use the desktop pairing flow and confirm the pairing prompt on the phone.
+
+The desktop app does not store the source-of-truth database. It discovers the
+paired phone on the LAN and loads the phone's web app through a pinned local
+proxy.
+
+## Release Keystore Setup
+
+Create the real Android release keystore outside the repository:
+
+```sh
+keytool -genkeypair \
+  -v \
+  -keystore zync-release.jks \
+  -alias zync-release \
+  -keyalg RSA \
+  -keysize 4096 \
+  -validity 10000
+```
+
+For local Android release builds, copy `key.properties.example` to
+`key.properties` and point `storeFile` at the keystore. Both `key.properties`
+and keystore files are ignored by git.
+
+For GitHub Actions, configure these repository secrets:
+
+- `ZYNC_RELEASE_KEYSTORE_BASE64`: base64-encoded `zync-release.jks`
+- `ZYNC_KEYSTORE_PASSWORD`
+- `ZYNC_KEY_ALIAS`
+- `ZYNC_KEY_PASSWORD`
+
+The release workflow builds the Android APK and desktop installers, then
+attaches them to the GitHub Release.
+
+## Versioning
+
+The release workflow uses the release tag without its leading `v` as the public
+version name for Android and desktop artifact names.
+
+`versionCode` defaults to the GitHub Actions run number for Android, which is
+monotonic for this repository. Manual workflow runs can override both values.
+
+Every public Android release must use a higher `versionCode` than the previous
+release or Android will refuse the update.
+
+When publishing a new release, update `Casks/zync.rb` to the same version as the
+GitHub Release tag so Homebrew installs the new DMG.
+
+## Alternatives
+
+F-Droid repositories, Accrescent, the Microsoft Store, and Linux package
+repositories are possible future distribution channels. They require more setup
+than GitHub Releases plus Homebrew/Obtainium and are not implemented yet.

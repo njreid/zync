@@ -2,6 +2,10 @@ package dev.njr.zync
 
 import android.app.Application
 import android.util.Log
+import dev.njr.zync.attach.AttachmentStore
+import dev.njr.zync.backup.BackupController
+import dev.njr.zync.backup.BackupScheduler
+import dev.njr.zync.backup.BackupSettings
 import dev.njr.zync.data.ZyncDatabase
 import dev.njr.zync.domain.NodeRepository
 import dev.njr.zync.pairing.AndroidKeystorePasswordProtector
@@ -22,7 +26,12 @@ private const val TAG = "zync"
 
 class ZyncApp : Application() {
     val database: ZyncDatabase by lazy { ZyncDatabase.build(this) }
-    val repository: NodeRepository by lazy { NodeRepository(database) }
+    val backupSettings: BackupSettings by lazy { BackupSettings(this) }
+    val backupController: BackupController by lazy { BackupController(this, backupSettings) }
+    val repository: NodeRepository by lazy {
+        NodeRepository(database, onMutated = { BackupScheduler.requestBackupSoon(this) })
+    }
+    val attachmentStore: AttachmentStore by lazy { AttachmentStore(AttachmentStore.defaultRoot(this)) }
     val serverToken: String = UUID.randomUUID().toString()
 
     val pairingService: PairingService by lazy {
@@ -85,6 +94,8 @@ class ZyncApp : Application() {
                             androidAssets(assets),
                             lan = lan,
                             pairing = pairingService,
+                            attachmentStore = attachmentStore,
+                            backupController = backupController,
                         )
                         newLan.start()
                         lanServer = newLan
@@ -129,6 +140,8 @@ class ZyncApp : Application() {
                             androidAssets(assets),
                             lan = null,
                             pairing = pairingService,
+                            attachmentStore = attachmentStore,
+                            backupController = backupController,
                         )
                         loopbackPort = s.start()
                         loopbackServer = s

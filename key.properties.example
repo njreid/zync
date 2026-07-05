@@ -1,17 +1,7 @@
-# Copy to `key.properties` (git-ignored) for LOCAL signed release builds.
-# In CI these are provided as environment variables instead — see
-# .github/workflows/release.yml (ZYNC_KEYSTORE_FILE, ZYNC_KEYSTORE_PASSWORD,
-# ZYNC_KEY_ALIAS, ZYNC_KEY_PASSWORD).
-#
-# Generate a keystore once (keep it safe + back it up — losing it means you can
-# never ship an update that installs over existing installs):
-#
-#   keytool -genkeypair -v -keystore zync-release.jks \
-#     -alias zync -keyalg RSA -keysize 4096 -validity 10000 \
-#     -storepass <password> -keypass <password> \
-#     -dname "CN=zync, O=njr"
+# Copy this file to key.properties for local release builds.
+# Never commit key.properties or the keystore.
 
-storeFile=zync-release.jks
-storePassword=CHANGE_ME
-keyAlias=zync
-keyPassword=CHANGE_ME
+storeFile=/absolute/path/to/zync-release.jks
+storePassword=change-me
+keyAlias=zync-release
+keyPassword=change-me

@@ -44,13 +44,13 @@ class ZyncDatabaseTest {
         )
         val ctxId = db.contextDao().insert(ContextEntity(name = "Errands"))
         db.contextDao().tag(NodeContextCrossRef(nodeId = taskId, contextId = ctxId))
-        db.nodeDao().insertAttachment(
+        db.attachmentDao().insert(
             AttachmentEntity(nodeId = taskId, type = AttachmentType.AUDIO,
                 relativePath = "Inbox/rec1/audio.m4a")
         )
         val task = db.nodeDao().getById(taskId)!!
         assertEquals("buy milk", task.title)
         assertEquals(listOf("Errands"), db.contextDao().contextNamesFor(taskId))
-        assertEquals(1, db.nodeDao().attachmentsFor(taskId).size)
+        assertEquals(1, db.attachmentDao().forNode(taskId).size)
     }
 }

@@ -1,5 +1,8 @@
 package dev.njr.zync.server
 
+import dev.njr.zync.attach.AttachmentStore
+import dev.njr.zync.data.AttachmentEntity
+import dev.njr.zync.data.AttachmentType
 import dev.njr.zync.data.NodeKind
 import dev.njr.zync.data.NodeStatus
 import dev.njr.zync.data.ZyncDatabase
@@ -11,15 +14,20 @@ import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class NodesApiTest {
+    @get:Rule
+    val temp = TemporaryFolder()
 
     @Test
     fun `roots lists seeded builtin folders`() = zyncTestApplication { _, _, client ->
@@ -140,5 +148,64 @@ class NodesApiTest {
     fun `children of unknown node is 404 not empty list`() = zyncTestApplication { _, _, client ->
         assertEquals(HttpStatusCode.NotFound, client.get("/api/nodes/9999/children").status)
         assertEquals(HttpStatusCode.NotFound, client.get("/api/nodes/9999/contexts").status)
+    }
+
+    @Test
+    fun `attachments list and download for node`() {
+        val store = AttachmentStore(temp.newFolder("Zync"))
+        zyncTestApplication(attachmentStore = store) { db, _, client ->
+            val task: NodeDto = client.post("/api/inbox") {
+                contentType(ContentType.Application.Json)
+                setBody(TitleBody("scan receipt"))
+            }.body()
+            val relativePath = store.writeContent("pdf bytes".toByteArray(), "pdf")
+            val attachmentId = db.attachmentDao().insert(
+                AttachmentEntity(
+                    nodeId = task.id,
+                    type = AttachmentType.PDF,
+                    relativePath = relativePath,
+                )
+            )
+
+            val attachments: List<AttachmentDto> =
+                client.get("/api/nodes/${task.id}/attachments").body()
+            assertEquals(listOf(attachmentId), attachments.map { it.id })
+            assertEquals("/api/nodes/${task.id}/attachments/$attachmentId", attachments.single().downloadUrl)
+
+            val download = client.get(attachments.single().downloadUrl)
+            assertEquals(HttpStatusCode.OK, download.status)
+            assertEquals(ContentType.Application.Pdf.withoutParameters(), download.contentType()?.withoutParameters())
+            assertArrayEquals("pdf bytes".toByteArray(), download.body())
+        }
+    }
+
+    @Test
+    fun `attachment download rejects wrong node and missing file`() {
+        val store = AttachmentStore(temp.newFolder("Zync"))
+        zyncTestApplication(attachmentStore = store) { db, _, client ->
+            val first: NodeDto = client.post("/api/inbox") {
+                contentType(ContentType.Application.Json); setBody(TitleBody("first"))
+            }.body()
+            val second: NodeDto = client.post("/api/inbox") {
+                contentType(ContentType.Application.Json); setBody(TitleBody("second"))
+            }.body()
+            val attachmentId = db.attachmentDao().insert(
+                AttachmentEntity(
+                    nodeId = first.id,
+                    type = AttachmentType.AUDIO,
+                    relativePath = store.writeContent("audio".toByteArray(), "m4a"),
+                )
+            )
+
+            assertEquals(
+                HttpStatusCode.NotFound,
+                client.get("/api/nodes/${second.id}/attachments/$attachmentId").status,
+            )
+            store.delete(db.attachmentDao().getById(attachmentId)!!.relativePath)
+            assertEquals(
+                HttpStatusCode.NotFound,
+                client.get("/api/nodes/${first.id}/attachments/$attachmentId").status,
+            )
+        }
     }
 }

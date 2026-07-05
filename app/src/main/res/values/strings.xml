@@ -2,4 +2,5 @@
     <string name="app_name">zync</string>
     <string name="capture_service_label">zync quick capture</string>
     <string name="capture_service_description">Lets you capture into your Inbox from anywhere: double-press Volume Up to record a voice note, double-press Volume Down to scan a document. zync only watches for these volume double-presses; it does not read screen content.</string>
+    <string name="quick_capture_widget_description">Quickly capture tasks, voice notes, and scans into zync.</string>
 </resources>

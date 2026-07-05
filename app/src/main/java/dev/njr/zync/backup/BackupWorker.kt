@@ -1,36 +1,82 @@
 package dev.njr.zync.backup
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.util.Log
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequest
+import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkerParameters
+import dev.njr.zync.attach.AttachmentStore
+import java.util.concurrent.TimeUnit
 
-/**
- * WorkManager entry point for an automatic backup: resolves a [BackupJob] via
- * [jobProvider] and runs it. Retries (with WorkManager's backoff) on failure.
- *
- * [jobProvider] is set once by the app when backup is configured (Drive store +
- * encryption key wired — the device layer). Until then it returns null and the
- * worker is a no-op success, so scheduling can be exercised (and tested) before
- * the Drive plumbing exists.
- */
 class BackupWorker(
     appContext: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
-
     override suspend fun doWork(): Result {
-        val job = jobProvider(applicationContext) ?: return Result.success()
+        val settings = BackupSettings(applicationContext)
+        if (!settings.state().enabled) return Result.success()
+
         return try {
-            job.run()
+            BackupService(
+                manager = backupManager(applicationContext),
+                drive = GoogleDriveClient(applicationContext),
+                settings = settings,
+            ).runBackup()
             Result.success()
-        } catch (e: Throwable) {
-            Result.retry()
+        } catch (t: Throwable) {
+            Log.e("zync", "automatic backup failed", t)
+            if (t.isUserActionRequiredBackupFailure()) Result.failure() else Result.retry()
         }
     }
 
     companion object {
-        /** Supplies the configured backup job, or null if backup isn't set up yet. */
-        @Volatile
-        var jobProvider: (Context) -> BackupJob? = { null }
+        const val PERIODIC_WORK = "zync-backup-periodic"
+        const val DEBOUNCED_WORK = "zync-backup-debounced"
+
+        fun periodicRequest(): PeriodicWorkRequest =
+            PeriodicWorkRequest.Builder(BackupWorker::class.java, 1, TimeUnit.DAYS)
+                .setConstraints(backupConstraints())
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                .build()
+
+        fun debouncedRequest(): OneTimeWorkRequest =
+            OneTimeWorkRequest.Builder(BackupWorker::class.java)
+                .setInitialDelay(5, TimeUnit.MINUTES)
+                .setConstraints(backupConstraints())
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                .build()
+
+        fun backupManager(context: Context): BackupManager =
+            BackupManager(
+                dbFile = context.getDatabasePath("zync.db"),
+                attachmentRoot = AttachmentStore.defaultRoot(context),
+                beforeSnapshot = { checkpointDatabase(context) },
+            )
+
+        private fun checkpointDatabase(context: Context) {
+            val dbFile = context.getDatabasePath("zync.db")
+            if (!dbFile.isFile) return
+            SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
+                db.rawQuery("PRAGMA wal_checkpoint(FULL)", null).use { cursor ->
+                    cursor.moveToFirst()
+                }
+            }
+        }
+
+        private fun backupConstraints(): Constraints =
+            Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiresBatteryNotLow(true)
+                .build()
     }
 }
+
+internal fun Throwable.isUserActionRequiredBackupFailure(): Boolean =
+    message == "Google Drive is not connected" ||
+        message == "Google Drive authorization needs user approval" ||
+        message == "backup passphrase required"
