@@ -3,6 +3,7 @@ package dev.njr.zync.attach
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.room.withTransaction
 import dev.njr.zync.ZyncApp
 import dev.njr.zync.data.AttachmentEntity
 import dev.njr.zync.data.AttachmentType
@@ -21,12 +22,19 @@ class CaptureRepository(private val app: ZyncApp) {
         bytes: ByteArray,
         extension: String,
     ): Long = withContext(Dispatchers.IO) {
-        val nodeId = app.repository.quickAddTask(title)
         val relativePath = app.attachmentStore.writeContent(bytes, extension)
-        app.database.attachmentDao().insert(
-            AttachmentEntity(nodeId = nodeId, type = type, relativePath = relativePath)
-        )
-        nodeId
+        try {
+            app.database.withTransaction {
+                val nodeId = app.repository.quickAddTask(title)
+                app.database.attachmentDao().insert(
+                    AttachmentEntity(nodeId = nodeId, type = type, relativePath = relativePath)
+                )
+                nodeId
+            }
+        } catch (t: Throwable) {
+            app.attachmentStore.delete(relativePath)
+            throw t
+        }
     }
 
     suspend fun importUri(uri: Uri, fallbackTitle: String? = null): Long = withContext(Dispatchers.IO) {
@@ -66,7 +74,12 @@ class CaptureRepository(private val app: ZyncApp) {
                 mimeType?.startsWith("image/") == true -> "jpg"
                 mimeType?.startsWith("text/") == true -> "txt"
                 uri.lastPathSegment?.contains('.') == true ->
-                    uri.lastPathSegment!!.substringAfterLast('.').takeIf { it.length <= 8 } ?: "bin"
+                    uri.lastPathSegment!!
+                        .substringAfterLast('.')
+                        .filter { it.isLetterOrDigit() }
+                        .lowercase()
+                        .takeIf { it.isNotBlank() && it.length <= 8 }
+                        ?: "bin"
                 else -> "bin"
             }
 

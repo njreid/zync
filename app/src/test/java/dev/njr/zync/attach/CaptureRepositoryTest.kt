@@ -24,6 +24,7 @@ class CaptureRepositoryTest {
         assertEquals("jpg", CaptureRepository.extensionFor("image/png", Uri.parse("content://x/a")))
         assertEquals("txt", CaptureRepository.extensionFor("text/plain", Uri.parse("content://x/a")))
         assertEquals("bin", CaptureRepository.extensionFor(null, Uri.parse("content://x/a")))
+        assertEquals("pdf", CaptureRepository.extensionFor(null, Uri.parse("content://x/receipt.PDF?bad=true")))
     }
 
     @Test

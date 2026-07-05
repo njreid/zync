@@ -78,11 +78,15 @@ class VoiceCaptureActivity : ComponentActivity() {
 
     private fun stopAndSave() {
         stopButton.isEnabled = false
-        runCatching {
-            recorder?.stop()
-        }
+        val stopped = runCatching { recorder?.stop() }.isSuccess
         recorder?.release()
         recorder = null
+        if (!stopped) {
+            outputFile.delete()
+            Toast.makeText(this, "Recording was too short to save", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         lifecycleScope.launch {
             try {
                 CaptureRepository(application as ZyncApp).importBytes(
