@@ -80,6 +80,11 @@ fun Route.apiRoutes(db: ZyncDatabase, repo: NodeRepository) {
                     HttpStatusCode.NotFound, ErrorDto("no such node"))
                 call.respond(repo.observeChildren(id()).first().map { it.toDto() })
             }
+            get("/attachments") {
+                val node = repo.get(id()) ?: return@get call.respond(
+                    HttpStatusCode.NotFound, ErrorDto("no such node"))
+                call.respond(repo.attachmentsFor(id()).map { it.toDto() })
+            }
             patch {
                 val node = repo.get(id()) ?: return@patch call.respond(
                     HttpStatusCode.NotFound, ErrorDto("no such node"))

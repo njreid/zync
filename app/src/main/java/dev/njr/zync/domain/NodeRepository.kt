@@ -1,5 +1,8 @@
 package dev.njr.zync.domain
 
+import dev.njr.zync.attach.AttachmentStore
+import dev.njr.zync.data.AttachmentEntity
+import dev.njr.zync.data.AttachmentType
 import dev.njr.zync.data.ContextEntity
 import dev.njr.zync.data.NodeContextCrossRef
 import dev.njr.zync.data.NodeEntity
@@ -20,6 +23,42 @@ class NodeRepository(
 
     suspend fun quickAddTask(title: String): Long =
         createNode(NodeKind.TASK, ZyncDatabase.INBOX_ID, title)
+
+    /** Attachments linked to [nodeId] (voice, transcript, PDF, OCR text). */
+    suspend fun attachmentsFor(nodeId: Long): List<AttachmentEntity> = dao.attachmentsFor(nodeId)
+
+    /**
+     * Capture a blob (a voice recording or scanned PDF) as a new Inbox task:
+     * stores the bytes via [store], creates the task, and links the
+     * attachment. Returns the new node id (so a caller can attach a derived
+     * TRANSCRIPT/OCR_TEXT to it with [addAttachment]).
+     */
+    suspend fun captureToInbox(
+        title: String,
+        type: AttachmentType,
+        bytes: ByteArray,
+        extension: String,
+        store: AttachmentStore,
+    ): Long {
+        val nodeId = quickAddTask(title)
+        addAttachment(nodeId, type, bytes, extension, store)
+        return nodeId
+    }
+
+    /** Store [bytes] via [store] and link an attachment to an existing node. */
+    suspend fun addAttachment(
+        nodeId: Long,
+        type: AttachmentType,
+        bytes: ByteArray,
+        extension: String,
+        store: AttachmentStore,
+    ): Long {
+        requireNode(nodeId)
+        val relativePath = store.write(bytes, type, extension)
+        return dao.insertAttachment(
+            AttachmentEntity(nodeId = nodeId, type = type, relativePath = relativePath)
+        )
+    }
 
     suspend fun createNode(kind: NodeKind, parentId: Long?, title: String): Long {
         val parentKind = parentId?.let { requireNode(it).kind }
