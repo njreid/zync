@@ -34,8 +34,20 @@ pushing a `v*` tag.
 
 ### One-time setup
 
-1. Generate a release keystore (keep it safe and backed up — losing it means you
-   can never publish an update that installs over existing installs):
+Run the helper script — it generates the keystore (with a strong random
+password), writes the git-ignored `key.properties` for local signed builds, and
+prints (or, with an authenticated `gh` CLI, sets) the GitHub Actions secrets:
+
+```sh
+scripts/make-release-keystore.sh
+```
+
+Keep `zync-release.jks` and its password backed up somewhere safe — losing them
+means you can never publish an update that installs over existing installs.
+
+<details><summary>Or do it by hand</summary>
+
+1. Generate a release keystore:
 
    ```sh
    keytool -genkeypair -v -keystore zync-release.jks \
@@ -47,6 +59,8 @@ pushing a `v*` tag.
    Actions):
    - `ZYNC_KEYSTORE_BASE64` — `base64 -w0 zync-release.jks`
    - `ZYNC_KEYSTORE_PASSWORD`, `ZYNC_KEY_ALIAS` (`zync`), `ZYNC_KEY_PASSWORD`
+
+</details>
 
 ### Each release
 
