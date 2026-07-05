@@ -21,6 +21,14 @@ export async function renderSettings(el) {
       <p id="pair-result"></p>
     </article>
     <article>
+      <h3>Quick capture gesture</h3>
+      <p>Capture into your Inbox from anywhere:<br>
+        double-press <strong>Volume Up</strong> to record a voice note,
+        double-press <strong>Volume Down</strong> to scan a document.</p>
+      <button id="enable-capture" class="secondary">Enable in Accessibility settings</button>
+      <p id="capture-info"></p>
+    </article>
+    <article>
       <h3>Paired devices</h3>
       <div id="device-list"><p>Loading…</p></div>
     </article>
@@ -125,6 +133,16 @@ export async function renderSettings(el) {
       }
     };
     window.ZyncNative.scanPairingQr();
+  };
+
+  const captureInfo = el.querySelector('#capture-info');
+  el.querySelector('#enable-capture').onclick = () => {
+    if (!window.ZyncCapture || typeof window.ZyncCapture.openAccessibilitySettings !== 'function') {
+      captureInfo.textContent = 'The capture gesture is only available in the zync app.';
+      return;
+    }
+    window.ZyncCapture.openAccessibilitySettings();
+    captureInfo.textContent = 'Find "zync quick capture" in the list and turn it on.';
   };
 
   await refreshState();

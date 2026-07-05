@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Recording voice notes (double-Volume-Up capture gesture). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:name=".ZyncApp"
@@ -59,6 +61,33 @@
           closest fit for "syncing data with a paired desktop over the LAN"; no notification UI is
           implemented as part of this task, only the manifest declaration Task 7/8 wire up to.
         -->
+        <!-- Voice-note + document-scan capture screens, launched by the
+             volume-key gestures (and reusable elsewhere). Not exported. -->
+        <activity
+            android:name=".capture.VoiceCaptureActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.Light.Dialog" />
+        <activity
+            android:name=".capture.DocScanActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Accessibility service powering the global volume-key capture
+             gestures: double Volume-Up = voice note, double Volume-Down = scan.
+             The user enables it under Settings → Accessibility → zync. -->
+        <service
+            android:name=".capture.ZyncCaptureService"
+            android:exported="false"
+            android:label="@string/capture_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/capture_accessibility_service" />
+        </service>
+
         <service
             android:name=".RemoteAccessForegroundService"
             android:enabled="true"

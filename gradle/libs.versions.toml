@@ -21,6 +21,7 @@ robolectric = "4.16.1"
 coroutinesTest = "1.11.0"
 bouncycastle = "1.84"
 playServicesCodeScanner = "16.1.0"
+playServicesDocScanner = "16.0.0"
 slf4jAndroid = "1.7.36"
 
 [libraries]
@@ -51,6 +52,7 @@ ktor-network-tls-certificates = { group = "io.ktor", name = "ktor-network-tls-ce
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 bouncycastle-bcpkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
 play-services-code-scanner = { group = "com.google.android.gms", name = "play-services-code-scanner", version.ref = "playServicesCodeScanner" }
+play-services-mlkit-document-scanner = { group = "com.google.android.gms", name = "play-services-mlkit-document-scanner", version.ref = "playServicesDocScanner" }
 slf4j-android = { group = "org.slf4j", name = "slf4j-android", version.ref = "slf4jAndroid" }
 
 [plugins]

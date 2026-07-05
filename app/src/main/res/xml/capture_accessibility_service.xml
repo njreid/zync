@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Config for ZyncCaptureService. We only need to observe hardware key events
+  (volume up/down double-press), so we request key-event filtering and keep the
+  event footprint minimal. No window content is inspected.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canRequestFilterKeyEvents="true"
+    android:accessibilityFlags="flagRequestFilterKeyEvents"
+    android:notificationTimeout="100"
+    android:description="@string/capture_service_description" />
