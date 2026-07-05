@@ -7,6 +7,7 @@ import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.lifecycle.lifecycleScope
+import dev.njr.zync.attach.CaptureBridge
 import dev.njr.zync.pairing.QrScanBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,6 +24,7 @@ class MainActivity : ComponentActivity() {
             settings.domStorageEnabled = true
             webChromeClient = WebChromeClient()
             addJavascriptInterface(QrScanBridge(this@MainActivity, this), "ZyncNative")
+            addJavascriptInterface(CaptureBridge(this@MainActivity), "ZyncCapture")
         }
         setContentView(webView)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {

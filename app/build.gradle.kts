@@ -149,6 +149,7 @@ dependencies {
 
   // On-device QR scanning for pairing (no camera permission required)
   implementation(libs.play.services.code.scanner)
+  implementation(libs.play.services.mlkit.document.scanner)
 
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
