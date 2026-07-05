@@ -21,10 +21,27 @@ class BackupManagerTest {
         val entries = unzip(archive)
 
         assertArrayEquals("db".toByteArray(), entries["zync.db"])
+        assertArrayEquals("wal".toByteArray(), entries["zync.db-wal"])
+        assertArrayEquals("shm".toByteArray(), entries["zync.db-shm"])
         assertArrayEquals("voice".toByteArray(), entries["attachments/attachments/aa/voice.m4a"])
         val manifest = entries["manifest.json"]!!.toString(Charsets.UTF_8)
         assertTrue(manifest.contains("\"databasePath\":\"zync.db\""))
         assertTrue(manifest.contains("\"relativePath\":\"attachments/aa/voice.m4a\""))
+    }
+
+    @Test
+    fun `archive invokes checkpoint hook before reading database`() {
+        val root = temp.newFolder()
+        val db = root.resolve("zync.db").apply { writeBytes("before".toByteArray()) }
+        val manager = BackupManager(
+            dbFile = db,
+            attachmentRoot = root.resolve("Documents/Zync"),
+            beforeSnapshot = { db.writeBytes("after".toByteArray()) },
+        )
+
+        val entries = unzip(manager.createArchive())
+
+        assertArrayEquals("after".toByteArray(), entries["zync.db"])
     }
 
     @Test
@@ -40,6 +57,8 @@ class BackupManagerTest {
         targetManager.restoreEncryptedBackup(encrypted, "correct horse".toCharArray())
 
         assertArrayEquals("db".toByteArray(), target.resolve("zync.db").readBytes())
+        assertArrayEquals("wal".toByteArray(), target.resolve("zync.db-wal").readBytes())
+        assertArrayEquals("shm".toByteArray(), target.resolve("zync.db-shm").readBytes())
         assertArrayEquals(
             "voice".toByteArray(),
             target.resolve("Documents/Zync/attachments/aa/voice.m4a").readBytes(),
@@ -75,6 +94,8 @@ class BackupManagerTest {
     private fun fixture(): Fixture {
         val root = temp.newFolder()
         val db = root.resolve("zync.db").apply { writeBytes("db".toByteArray()) }
+        root.resolve("zync.db-wal").writeBytes("wal".toByteArray())
+        root.resolve("zync.db-shm").writeBytes("shm".toByteArray())
         val attachments = root.resolve("Documents/Zync")
         attachments.resolve("attachments/aa").mkdirs()
         attachments.resolve("attachments/aa/voice.m4a").writeBytes("voice".toByteArray())

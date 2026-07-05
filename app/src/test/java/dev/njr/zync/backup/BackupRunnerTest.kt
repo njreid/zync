@@ -19,8 +19,10 @@ class BackupRunnerTest {
         val drive = FakeDriveClient()
         val runner = BackupRunner(fixture.manager, drive, { "pw".toCharArray() }, now = { 42L })
 
-        assertTrue(runner.backupNow())
+        val result = runner.backupNow()
 
+        assertTrue(result is BackupRunResult.Uploaded)
+        assertEquals("zync-42.zyncbackup", (result as BackupRunResult.Uploaded).name)
         assertEquals("zync-42.zyncbackup", drive.uploads.single().first)
         assertTrue(drive.uploads.single().second.isNotEmpty())
     }
@@ -43,7 +45,7 @@ class BackupRunnerTest {
         val drive = FakeDriveClient()
         val runner = BackupRunner(fixture().manager, drive, { null })
 
-        assertFalse(runner.backupNow())
+        assertEquals(BackupRunResult.Skipped, runner.backupNow())
         assertFalse(runner.restoreLatest())
         assertEquals(emptyList<Pair<String, ByteArray>>(), drive.uploads)
     }

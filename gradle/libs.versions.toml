@@ -21,6 +21,7 @@ glance = "1.1.1"
 work = "2.10.5"
 playServicesCodeScanner = "16.1.0"
 playServicesDocumentScanner = "16.0.0"
+playServicesAuth = "21.4.0"
 slf4jAndroid = "1.7.36"
 
 [libraries]
@@ -55,6 +56,7 @@ glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", versi
 work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 play-services-code-scanner = { group = "com.google.android.gms", name = "play-services-code-scanner", version.ref = "playServicesCodeScanner" }
 play-services-mlkit-document-scanner = { group = "com.google.android.gms", name = "play-services-mlkit-document-scanner", version.ref = "playServicesDocumentScanner" }
+play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
 slf4j-android = { group = "org.slf4j", name = "slf4j-android", version.ref = "slf4jAndroid" }
 
 [plugins]

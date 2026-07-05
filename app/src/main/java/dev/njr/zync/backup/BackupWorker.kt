@@ -1,6 +1,8 @@
 package dev.njr.zync.backup
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -18,8 +20,22 @@ class BackupWorker(
     appContext: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
-    override suspend fun doWork(): Result =
-        Result.failure()
+    override suspend fun doWork(): Result {
+        val settings = BackupSettings(applicationContext)
+        if (!settings.state().enabled) return Result.success()
+
+        return try {
+            BackupService(
+                manager = backupManager(applicationContext),
+                drive = GoogleDriveClient(applicationContext),
+                settings = settings,
+            ).runBackup()
+            Result.success()
+        } catch (t: Throwable) {
+            Log.e("zync", "automatic backup failed", t)
+            if (t.isUserActionRequiredBackupFailure()) Result.failure() else Result.retry()
+        }
+    }
 
     companion object {
         const val PERIODIC_WORK = "zync-backup-periodic"
@@ -42,7 +58,18 @@ class BackupWorker(
             BackupManager(
                 dbFile = context.getDatabasePath("zync.db"),
                 attachmentRoot = AttachmentStore.defaultRoot(context),
+                beforeSnapshot = { checkpointDatabase(context) },
             )
+
+        private fun checkpointDatabase(context: Context) {
+            val dbFile = context.getDatabasePath("zync.db")
+            if (!dbFile.isFile) return
+            SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
+                db.rawQuery("PRAGMA wal_checkpoint(FULL)", null).use { cursor ->
+                    cursor.moveToFirst()
+                }
+            }
+        }
 
         private fun backupConstraints(): Constraints =
             Constraints.Builder()
@@ -51,6 +78,11 @@ class BackupWorker(
                 .build()
     }
 }
+
+internal fun Throwable.isUserActionRequiredBackupFailure(): Boolean =
+    message == "Google Drive is not connected" ||
+        message == "Google Drive authorization needs user approval" ||
+        message == "backup passphrase required"
 
 class BackupScheduler(private val workManager: WorkManager) {
     fun ensurePeriodicBackup() {

@@ -3,6 +3,7 @@ package dev.njr.zync.backup
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.file.Files
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -15,6 +16,7 @@ class BackupManager(
     private val attachmentRoot: File,
     private val crypto: BackupCrypto = BackupCrypto(),
     private val now: () -> Long = System::currentTimeMillis,
+    private val beforeSnapshot: () -> Unit = {},
 ) {
     fun createEncryptedBackup(passphrase: CharArray): ByteArray {
         val archive = createArchive()
@@ -28,6 +30,8 @@ class BackupManager(
 
     fun createArchive(): ByteArray {
         require(dbFile.isFile) { "database file missing: ${dbFile.path}" }
+        beforeSnapshot()
+        val dbSnapshot = snapshotDbFiles()
         val attachments = listAttachmentFiles()
         val manifest = BackupManifest(
             version = 1,
@@ -44,7 +48,9 @@ class BackupManager(
         return ByteArrayOutputStream().use { bytes ->
             ZipOutputStream(bytes).use { zip ->
                 zip.putBytes("manifest.json", Json.encodeToString(manifest).toByteArray(Charsets.UTF_8))
-                zip.putFile(DB_ENTRY, dbFile)
+                zip.putBytes(DB_ENTRY, dbSnapshot.db)
+                dbSnapshot.wal?.let { zip.putBytes("$DB_ENTRY-wal", it) }
+                dbSnapshot.shm?.let { zip.putBytes("$DB_ENTRY-shm", it) }
                 for (file in attachments) {
                     val relativePath = file.relativeTo(attachmentRoot).invariantSeparatorsPath
                     zip.putFile("attachments/$relativePath", file)
@@ -68,6 +74,8 @@ class BackupManager(
                         entry.name == "manifest.json" ->
                             manifest = Json.decodeFromString(BackupManifest.serializer(), bytes.toString(Charsets.UTF_8))
                         entry.name == DB_ENTRY -> dbBytes[entry.name] = bytes
+                        entry.name == "$DB_ENTRY-wal" -> dbBytes[entry.name] = bytes
+                        entry.name == "$DB_ENTRY-shm" -> dbBytes[entry.name] = bytes
                         entry.name.startsWith("attachments/") ->
                             attachmentBytes[entry.name.removePrefix("attachments/")] = bytes
                     }
@@ -83,6 +91,8 @@ class BackupManager(
 
         dbFile.parentFile?.mkdirs()
         dbFile.writeBytes(restoredDb)
+        restoreDbSidecar("-wal", dbBytes["$DB_ENTRY-wal"])
+        restoreDbSidecar("-shm", dbBytes["$DB_ENTRY-shm"])
         attachmentRoot.deleteRecursively()
         attachmentRoot.mkdirs()
         for (attachment in m.attachments) {
@@ -112,10 +122,45 @@ class BackupManager(
         return target
     }
 
+    private fun snapshotDbFiles(): DbSnapshot {
+        val snapshotDir = Files.createTempDirectory("zync-backup-db-").toFile()
+        return try {
+            val snapshotDb = File(snapshotDir, dbFile.name)
+            dbFile.copyTo(snapshotDb, overwrite = true)
+            val snapshotWal = dbSidecar("-wal")?.copyTo(File(snapshotDir, dbFile.name + "-wal"), overwrite = true)
+            val snapshotShm = dbSidecar("-shm")?.copyTo(File(snapshotDir, dbFile.name + "-shm"), overwrite = true)
+            DbSnapshot(
+                db = snapshotDb.readBytes(),
+                wal = snapshotWal?.readBytes(),
+                shm = snapshotShm?.readBytes(),
+            )
+        } finally {
+            snapshotDir.deleteRecursively()
+        }
+    }
+
+    private fun dbSidecar(suffix: String): File? =
+        File(dbFile.path + suffix).takeIf { it.isFile }
+
+    private fun restoreDbSidecar(suffix: String, bytes: ByteArray?) {
+        val file = File(dbFile.path + suffix)
+        if (bytes == null) {
+            file.delete()
+        } else {
+            file.writeBytes(bytes)
+        }
+    }
+
     companion object {
         private const val DB_ENTRY = "zync.db"
     }
 }
+
+private data class DbSnapshot(
+    val db: ByteArray,
+    val wal: ByteArray?,
+    val shm: ByteArray?,
+)
 
 @Serializable
 data class BackupManifest(

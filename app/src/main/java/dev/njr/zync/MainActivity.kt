@@ -4,10 +4,13 @@ import android.annotation.SuppressLint
 import android.os.Bundle
 import android.webkit.WebChromeClient
 import android.webkit.WebView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.lifecycle.lifecycleScope
 import dev.njr.zync.attach.CaptureBridge
+import dev.njr.zync.backup.BackupAuthBridge
+import dev.njr.zync.backup.RestoreManager
 import dev.njr.zync.pairing.QrScanBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -15,6 +18,10 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
+    private lateinit var backupAuthBridge: BackupAuthBridge
+    private val googleDriveSignIn = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (::backupAuthBridge.isInitialized) backupAuthBridge.handleSignInResult(it.data)
+    }
 
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,6 +32,8 @@ class MainActivity : ComponentActivity() {
             webChromeClient = WebChromeClient()
             addJavascriptInterface(QrScanBridge(this@MainActivity, this), "ZyncNative")
             addJavascriptInterface(CaptureBridge(this@MainActivity), "ZyncCapture")
+            backupAuthBridge = BackupAuthBridge(this) { intent -> googleDriveSignIn.launch(intent) }
+            addJavascriptInterface(backupAuthBridge, "ZyncBackup")
         }
         setContentView(webView)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -33,16 +42,19 @@ class MainActivity : ComponentActivity() {
             }
         })
         val app = application as ZyncApp
+        app.backupScheduler.ensurePeriodicBackup()
         // Force the lazy `remoteAccess` manager into existence (and wired into
         // `pairingService.remoteAccess`, see ZyncApp) up front, so the settings view's
         // `/remote/*` routes are functional as soon as the WebView loads, not only after
         // whatever first touches `app.remoteAccess` on some other path.
         app.remoteAccess
         lifecycleScope.launch(Dispatchers.IO) {
+            RestoreManager(this@MainActivity, app.backupSettings).restoreIfRequested()
             val port = app.ensureServerStarted()
             withContext(Dispatchers.Main) {
                 webView.loadUrl("http://127.0.0.1:$port/?token=${app.serverToken}")
             }
         }
     }
+
 }

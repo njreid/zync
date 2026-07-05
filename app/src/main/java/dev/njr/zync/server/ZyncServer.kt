@@ -1,6 +1,7 @@
 package dev.njr.zync.server
 
 import dev.njr.zync.attach.AttachmentStore
+import dev.njr.zync.backup.BackupController
 import dev.njr.zync.data.ZyncDatabase
 import dev.njr.zync.domain.NodeRepository
 import dev.njr.zync.pairing.Crypto
@@ -201,6 +202,7 @@ fun Application.zyncModule(
     assets: (String) -> Pair<ByteArray, ContentType>?,
     pairing: PairingService? = null,
     attachmentStore: AttachmentStore? = null,
+    backupController: BackupController? = null,
 ) {
     install(ContentNegotiation) { json(Json { encodeDefaults = true; explicitNulls = true }) }
     install(WebSockets)
@@ -227,6 +229,7 @@ fun Application.zyncModule(
     tokenGuard(token, pairing)
     routing {
         if (pairing != null) pairingRoutes(pairing)
+        if (backupController != null) backupRoutes(backupController)
         apiRoutes(db, repo, attachmentStore)
         get("/{path...}") {
             val segments = call.parameters.getAll("path").orEmpty()
@@ -264,6 +267,7 @@ class ZyncServer(
     private val lan: LanConfig? = null,
     private val pairing: PairingService? = null,
     private val attachmentStore: AttachmentStore? = null,
+    private val backupController: BackupController? = null,
 ) {
     private var engine: EmbeddedServer<*, *>? = null
     private var httpPort: Int? = null
@@ -306,7 +310,7 @@ class ZyncServer(
                 }
             }
         }) {
-            zyncModule(db, repo, token, assets, pairing, attachmentStore)
+            zyncModule(db, repo, token, assets, pairing, attachmentStore, backupController)
         }.also { engine = it }
         e.start(wait = false)
         val resolved = kotlinx.coroutines.runBlocking { e.engine.resolvedConnectors() }

@@ -6,11 +6,12 @@ class BackupRunner(
     private val passphraseProvider: suspend () -> CharArray?,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
-    suspend fun backupNow(): Boolean {
-        val passphrase = passphraseProvider() ?: return false
+    suspend fun backupNow(): BackupRunResult {
+        val passphrase = passphraseProvider() ?: return BackupRunResult.Skipped
+        val name = "zync-${now()}.zyncbackup"
         val encrypted = manager.createEncryptedBackup(passphrase)
-        drive.uploadBackup("zync-${now()}.zyncbackup", encrypted)
-        return true
+        drive.uploadBackup(name, encrypted)
+        return BackupRunResult.Uploaded(name)
     }
 
     suspend fun restoreLatest(): Boolean {
@@ -19,4 +20,9 @@ class BackupRunner(
         manager.restoreEncryptedBackup(encrypted, passphrase)
         return true
     }
+}
+
+sealed class BackupRunResult {
+    data object Skipped : BackupRunResult()
+    data class Uploaded(val name: String) : BackupRunResult()
 }
