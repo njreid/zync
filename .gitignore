@@ -9,6 +9,11 @@
 .cxx
 local.properties
 
+# Release signing secrets — NEVER commit these
+key.properties
+*.jks
+*.keystore
+
 # Task/session tooling, not part of the app
 /.superpowers/
 

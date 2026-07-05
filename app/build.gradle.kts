@@ -1,8 +1,22 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.ksp)
 }
+
+// Release signing config, sourced from (in priority order) environment
+// variables (CI) then a local, git-ignored `key.properties` (see
+// key.properties.example). If neither is present, the release build is left
+// UNSIGNED so a plain `assembleRelease` still works without any secrets.
+val keystorePropsFile = rootProject.file("key.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) FileInputStream(keystorePropsFile).use { load(it) }
+}
+fun signingValue(env: String, prop: String): String? =
+    System.getenv(env) ?: keystoreProps.getProperty(prop)
 
 android {
     namespace = "dev.njr.zync"
@@ -14,14 +28,35 @@ android {
         applicationId = "dev.njr.zync"
         minSdk = 34
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        // Overridable from CI: `-PzyncVersionCode=<n> -PzyncVersionName=<s>`
+        // so each published release gets a monotonically increasing code.
+        versionCode = (project.findProperty("zyncVersionCode") as String?)?.toInt() ?: 1
+        versionName = (project.findProperty("zyncVersionName") as String?) ?: "1.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            val storeFilePath = signingValue("ZYNC_KEYSTORE_FILE", "storeFile")
+            if (storeFilePath != null) {
+                // rootProject.file resolves a repo-root-relative path (local
+                // key.properties) and passes an absolute path (CI) through.
+                storeFile = rootProject.file(storeFilePath)
+                storePassword = signingValue("ZYNC_KEYSTORE_PASSWORD", "storePassword")
+                keyAlias = signingValue("ZYNC_KEY_ALIAS", "keyAlias")
+                keyPassword = signingValue("ZYNC_KEY_PASSWORD", "keyPassword")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Sign only when a keystore was actually configured; otherwise the
+            // APK is unsigned (CI provides the keystore via secrets).
+            if (signingConfigs.getByName("release").storeFile != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
