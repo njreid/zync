@@ -121,7 +121,13 @@ jobs:
           else
             version_name="${RELEASE_TAG#v}"
           fi
+          if [[ "$version_name" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            package_version="$version_name.0"
+          else
+            package_version="$version_name"
+          fi
           echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+          echo "package_version=$package_version" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -138,7 +144,7 @@ jobs:
       - name: Stamp desktop package version
         working-directory: desktop
         env:
-          ZYNC_VERSION: ${{ steps.version.outputs.version_name }}
+          ZYNC_VERSION: ${{ steps.version.outputs.package_version }}
         shell: bash
         run: |
           npm version --no-git-tag-version "$ZYNC_VERSION"
@@ -189,7 +195,13 @@ jobs:
           else
             version_name="${RELEASE_TAG#v}"
           fi
+          if [[ "$version_name" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            package_version="$version_name.0"
+          else
+            package_version="$version_name"
+          fi
           echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+          echo "package_version=$package_version" >> "$GITHUB_OUTPUT"
 
       - name: Install Linux bundle dependencies
         run: |
@@ -220,7 +232,7 @@ jobs:
       - name: Stamp desktop package version
         working-directory: desktop
         env:
-          ZYNC_VERSION: ${{ steps.version.outputs.version_name }}
+          ZYNC_VERSION: ${{ steps.version.outputs.package_version }}
         run: |
           npm version --no-git-tag-version "$ZYNC_VERSION"
           node -e "const fs=require('fs'); const p='src-tauri/tauri.conf.json'; const c=JSON.parse(fs.readFileSync(p,'utf8')); c.version=process.env.ZYNC_VERSION; fs.writeFileSync(p, JSON.stringify(c, null, 2) + '\n');"
@@ -278,7 +290,13 @@ jobs:
           else
             version_name="${RELEASE_TAG#v}"
           fi
+          if [[ "$version_name" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            package_version="$version_name.0"
+          else
+            package_version="$version_name"
+          fi
           echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+          echo "package_version=$package_version" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -295,7 +313,7 @@ jobs:
       - name: Stamp desktop package version
         working-directory: desktop
         env:
-          ZYNC_VERSION: ${{ steps.version.outputs.version_name }}
+          ZYNC_VERSION: ${{ steps.version.outputs.package_version }}
         shell: bash
         run: |
           npm version --no-git-tag-version "$ZYNC_VERSION"
