@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">zync</string>
+    <string name="quick_capture_widget_description">Quickly capture tasks, voice notes, and scans into zync.</string>
 </resources>

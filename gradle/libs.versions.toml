@@ -17,6 +17,7 @@ ksp = "2.3.9"
 robolectric = "4.16.1"
 coroutinesTest = "1.10.2"
 bouncycastle = "1.84"
+glance = "1.1.1"
 playServicesCodeScanner = "16.1.0"
 playServicesDocumentScanner = "16.0.0"
 slf4jAndroid = "1.7.36"
@@ -48,6 +49,8 @@ ktor-client-cio = { group = "io.ktor", name = "ktor-client-cio", version.ref = "
 ktor-network-tls-certificates = { group = "io.ktor", name = "ktor-network-tls-certificates", version.ref = "ktor" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 bouncycastle-bcpkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
+glance = { group = "androidx.glance", name = "glance", version.ref = "glance" }
+glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
 play-services-code-scanner = { group = "com.google.android.gms", name = "play-services-code-scanner", version.ref = "playServicesCodeScanner" }
 play-services-mlkit-document-scanner = { group = "com.google.android.gms", name = "play-services-mlkit-document-scanner", version.ref = "playServicesDocumentScanner" }
 slf4j-android = { group = "org.slf4j", name = "slf4j-android", version.ref = "slf4jAndroid" }
@@ -55,4 +58,5 @@ slf4j-android = { group = "org.slf4j", name = "slf4j-android", version.ref = "sl
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

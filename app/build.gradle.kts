@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.serialization)
+  alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.ksp)
 }
 
@@ -73,6 +74,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
+      compose = true
       aidl = false
       buildConfig = false
       shaders = false
@@ -143,6 +145,8 @@ dependencies {
   implementation(libs.ktor.network.tls.certificates)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.bouncycastle.bcpkix)
+  implementation(libs.glance)
+  implementation(libs.glance.appwidget)
   // Ktor/Netty log via SLF4J; without a binding, exceptions inside route handlers/the Netty
   // engine vanish silently instead of reaching logcat.
   implementation(libs.slf4j.android)

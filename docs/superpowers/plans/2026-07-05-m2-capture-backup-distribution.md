@@ -61,7 +61,7 @@
 - [x] **Step 1 (TDD):** `AttachmentDao` + `AttachmentStore` unit tests (Robolectric): insert/query/delete, file written under the data root, cascade/orphan cleanup when a node is deleted. Migration test if v3.
 - [x] **Step 2: Implement** capture bridges + share-target + the read route + web UI rendering. Keep `./gradlew test` and `webtest` green.
 - [ ] **Step 3:** On-device verification (real MediaRecorder + real ML Kit scan + share from Gallery/Files) — deferred emulator/device step.
-- [ ] **Step 4: Commit** `feat(android): voice-note + doc-scan attachment capture into Inbox (+ share target)`.
+- [x] **Step 4: Commit** `feat(android): voice-note + doc-scan attachment capture into Inbox (+ share target)`.
 
 ---
 
@@ -76,9 +76,9 @@
 - Use **Jetpack Glance** (modern `AppWidget`), not legacy `RemoteViews`.
 - Widget must not require the server/remote-access to be running — capture writes to Room + `Documents/Zync` directly on the phone.
 
-- [ ] **Step 1:** Glance widget with the three capture shortcuts; preview + click wiring.
+- [x] **Step 1:** Glance widget with the three capture shortcuts; preview + click wiring.
 - [ ] **Step 2:** On-device verification (place widget, tap each shortcut, confirm Inbox rows/attachments) — deferred device step.
-- [ ] **Step 3: Commit** `feat(android): home-screen quick-capture widget (Glance)`.
+- [x] **Step 3: Commit** `feat(android): home-screen quick-capture widget (Glance)`.
 
 ---
 
