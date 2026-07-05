@@ -8,6 +8,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+key.properties
+*.jks
+*.keystore
 
 # Task/session tooling, not part of the app
 /.superpowers/

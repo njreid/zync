@@ -1,8 +1,43 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.ksp)
 }
+
+val releaseKeyPropertiesFile = rootProject.file("key.properties")
+val releaseKeyProperties = Properties().apply {
+    if (releaseKeyPropertiesFile.isFile) {
+        releaseKeyPropertiesFile.inputStream().use(::load)
+    }
+}
+
+fun releaseValue(propertyName: String, envName: String): String? =
+    (releaseKeyProperties.getProperty(propertyName) ?: providers.environmentVariable(envName).orNull)
+        ?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = releaseValue("storeFile", "ZYNC_KEYSTORE_FILE")
+val releaseStorePassword = releaseValue("storePassword", "ZYNC_KEYSTORE_PASSWORD")
+val releaseKeyAlias = releaseValue("keyAlias", "ZYNC_KEY_ALIAS")
+val releaseKeyPassword = releaseValue("keyPassword", "ZYNC_KEY_PASSWORD")
+val hasReleaseSigning =
+    releaseStoreFile != null &&
+        releaseStorePassword != null &&
+        releaseKeyAlias != null &&
+        releaseKeyPassword != null
+
+val zyncVersionCode = (
+    findProperty("zync.versionCode")?.toString()
+        ?: providers.environmentVariable("ZYNC_VERSION_CODE").orNull
+        ?: "1"
+).toInt()
+
+val zyncVersionName = (
+    findProperty("zync.versionName")?.toString()
+        ?: providers.environmentVariable("ZYNC_VERSION_NAME").orNull
+        ?: "1.0"
+)
 
 android {
     namespace = "dev.njr.zync"
@@ -11,12 +46,24 @@ android {
         applicationId = "dev.njr.zync"
         minSdk = 34
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = zyncVersionCode
+        versionName = zyncVersionName
+    }
+
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigning) {
+                storeFile = rootProject.file(releaseStoreFile!!)
+                storePassword = releaseStorePassword!!
+                keyAlias = releaseKeyAlias!!
+                keyPassword = releaseKeyPassword!!
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -52,6 +99,18 @@ android {
         getByName("debug") {
             assets.srcDirs("$projectDir/schemas")
         }
+    }
+}
+
+gradle.taskGraph.whenReady {
+    val validatesReleaseSigning = allTasks.any { task ->
+        task.name == "validateSigningRelease"
+    }
+    if (validatesReleaseSigning && !hasReleaseSigning) {
+        error(
+            "Release builds require signing values in key.properties or env vars: " +
+                "ZYNC_KEYSTORE_FILE, ZYNC_KEYSTORE_PASSWORD, ZYNC_KEY_ALIAS, ZYNC_KEY_PASSWORD"
+        )
     }
 }
 

@@ -1,0 +1,7 @@
+# Copy this file to key.properties for local release builds.
+# Never commit key.properties or the keystore.
+
+storeFile=/absolute/path/to/zync-release.jks
+storePassword=change-me
+keyAlias=zync-release
+keyPassword=change-me

@@ -36,9 +36,9 @@
 - Recommended distribution: **GitHub Releases + Obtainium** (users add the repo URL once; Obtainium auto-pulls new release APKs). Document F-Droid-repo/Accrescent as heavier alternatives; do not build them now.
 - Leave Play Store / AAB out of scope.
 
-- [ ] **Step 1 (RED/setup):** Add `signingConfigs.release` + `key.properties` plumbing; generate a throwaway keystore locally; prove `./gradlew assembleRelease` yields a **signed** APK (`apksigner verify`). Document the real keystore/secret setup in `docs/INSTALL.md` (do NOT commit any real key).
-- [ ] **Step 2:** Write `.github/workflows/release.yml`; validate YAML + `./gradlew assembleRelease` locally (the workflow itself is verified on first real tag). Confirm `versionCode` bump strategy.
-- [ ] **Step 3: Commit** `feat(android): signed release build + GitHub Releases publish workflow + install docs`.
+- [x] **Step 1 (RED/setup):** Add `signingConfigs.release` + `key.properties` plumbing; generate a throwaway keystore locally; prove `./gradlew assembleRelease` yields a **signed** APK (`apksigner verify`). Document the real keystore/secret setup in `docs/INSTALL.md` (do NOT commit any real key).
+- [x] **Step 2:** Write `.github/workflows/release.yml`; validate YAML + `./gradlew assembleRelease` locally (the workflow itself is verified on first real tag). Confirm `versionCode` bump strategy.
+- [x] **Step 3: Commit** `feat(android): signed release build + GitHub Releases publish workflow + install docs`.
 
 ---
 
