@@ -5,8 +5,11 @@ import io.ktor.network.tls.extensions.HashAlgorithm
 import java.io.ByteArrayOutputStream
 import java.security.KeyStore
 import java.security.MessageDigest
+import java.security.PublicKey
 import java.security.SecureRandom
 import java.security.Security
+import java.security.interfaces.ECPublicKey
+import java.security.interfaces.RSAPublicKey
 import javax.security.auth.x500.X500Principal
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
@@ -152,6 +155,23 @@ object Crypto {
         val bytes = ByteArray(lengthBytes)
         SecureRandom().nextBytes(bytes)
         return Base64.getEncoder().encodeToString(bytes).toCharArray()
+    }
+
+    /**
+     * Whether [publicKey] meets the current server-cert strength policy that a modern TLS client
+     * (rustls/aws-lc-rs, `ring`) will actually accept during handshake-signature verification:
+     * RSA with a modulus of at least [KEY_SIZE_BITS] (2048) bits, or EC on a >= P-256 curve.
+     *
+     * This exists to catch a keystore PERSISTED by an older build (see `ServerCertStore.load`):
+     * pre-2048 code emitted RSA-1024, and merely reloading those bytes after an in-place update
+     * would keep serving a cert the desktop can never handshake with. A provably-weak key returns
+     * `false` so the caller can discard and regenerate; unrecognized key types are accepted (we
+     * only reject what we can prove is too weak, never a valid key of a type we don't model).
+     */
+    fun meetsKeyStrengthPolicy(publicKey: PublicKey): Boolean = when (publicKey) {
+        is RSAPublicKey -> publicKey.modulus.bitLength() >= KEY_SIZE_BITS
+        is ECPublicKey -> publicKey.params.curve.field.fieldSize >= 256
+        else -> true
     }
 
     /** SHA-256 over [certDer], rendered as uppercase colon-separated hex (e.g. "AB:CD:..."). */

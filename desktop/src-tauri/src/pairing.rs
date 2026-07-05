@@ -8,11 +8,25 @@
 //!    pinned client until the phone user approves the scan.
 //! 3. Cross-check the captured leaf fingerprint against the server's own
 //!    claim (`certFingerprint`) AND a locally-computable `confirmCode`
-//!    derived from the nonce. Either mismatch aborts — a MITM would control
-//!    what the server *claims* but not the TLS cert it actually terminates
-//!    with, nor the SHA-256 of a nonce it never learns before this point.
+//!    derived from the nonce. Either mismatch aborts.
 //! 4. Switch to an `Enforce`d pinned client and complete the challenge/
 //!    signature exchange to get a session token.
+//!
+//! Threat model — what the confirm code does and does NOT protect against:
+//! These two checks catch a passive relay, a stale/cached endpoint, or a
+//! misdirected connection, and they correlate this pairing attempt with the
+//! specific QR the human scanned. They do NOT stop an *active* LAN relay
+//! within the pairing window. Such a relay terminates the desktop's TLS
+//! itself, so it reads the plaintext nonce out of the `/pair/request` body,
+//! recomputes the identical nonce-derived `confirmCode`, and reports its OWN
+//! leaf fingerprint as `certFingerprint` — which is exactly the fingerprint
+//! we captured from it. So both automated checks pass and the human-visible
+//! confirm code is byte-identical on both screens. The only thing defending
+//! against an active relay TODAY is the out-of-band physical QR scan. The
+//! intended M2 hardening is to bind the nonce into the challenge signature
+//! (so a relay that can't forge the phone's Ed25519 signature over *this*
+//! nonce is caught) and/or to have the human compare the captured leaf
+//! fingerprint out-of-band.
 
 use crate::discovery::DiscoveredPhone;
 use crate::identity::DeviceIdentity;

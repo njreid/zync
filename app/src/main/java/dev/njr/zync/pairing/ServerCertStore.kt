@@ -2,6 +2,7 @@ package dev.njr.zync.pairing
 
 import java.io.File
 import java.security.KeyStore
+import java.util.logging.Logger
 
 /**
  * Persists the server's TLS identity (PKCS12 keystore bytes + its random per-install password,
@@ -33,7 +34,25 @@ class ServerCertStore(
             load(keyStoreBytes.inputStream(), password)
         }
         val alias = keyStore.aliases().toList().first { keyStore.isKeyEntry(it) }
-        val fingerprint = Crypto.sha256Fingerprint(keyStore.getCertificate(alias).encoded)
+        val certificate = keyStore.getCertificate(alias)
+
+        // A keystore persisted by an older build can carry a cert that no longer meets the current
+        // strength policy (pre-2048 code emitted RSA-1024, which rustls/aws-lc-rs on the desktop
+        // rejects outright — so an in-place update would silently keep serving a cert that can
+        // never complete a TLS handshake). Discard such a persisted identity and its password so
+        // the caller (loadOrCreate) regenerates a fresh, strong one. This invalidates any existing
+        // pairing, which is acceptable pre-production.
+        if (!Crypto.meetsKeyStrengthPolicy(certificate.publicKey)) {
+            LOG.warning(
+                "Discarding persisted server cert: key no longer meets strength policy " +
+                    "(${certificate.publicKey.algorithm}); regenerating. Existing pairings are invalidated.",
+            )
+            keystoreFile.delete()
+            passwordFile.delete()
+            return null
+        }
+
+        val fingerprint = Crypto.sha256Fingerprint(certificate.encoded)
 
         return ServerIdentity(
             keyStoreBytes = keyStoreBytes,
@@ -65,6 +84,7 @@ class ServerCertStore(
     }
 
     companion object {
+        private val LOG: Logger = Logger.getLogger(ServerCertStore::class.java.name)
         const val KEYSTORE_FILENAME = "zync-server.p12"
         const val PASSWORD_FILENAME = "zync-server.p12.pw"
     }

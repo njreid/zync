@@ -1,13 +1,21 @@
 package dev.njr.zync.pairing
 
+import io.ktor.network.tls.certificates.buildKeyStore
+import io.ktor.network.tls.extensions.HashAlgorithm
+import java.io.ByteArrayOutputStream
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.security.interfaces.RSAPublicKey
+import javax.security.auth.x500.X500Principal
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Base64
@@ -134,6 +142,84 @@ class CryptoTest {
         } finally {
             tmpDir.deleteRecursively()
         }
+    }
+
+    @Test
+    fun serverCertStore_discardsAndRegeneratesPersistedRsa1024Cert() {
+        // Regression for the in-place-update pairing bug: a phone that ran the OLD (RSA-1024) code
+        // has a persisted keystore that, if merely reloaded, keeps serving a cert the desktop's
+        // aws-lc-rs rejects (min 2048-bit modulus) — so the T7 fresh-install pass masked it. The
+        // load path must detect the weak persisted cert, discard it, and regenerate a strong one.
+        val tmpDir = kotlin.io.path.createTempDirectory(prefix = "zync-weakcert-test").toFile()
+        try {
+            // Pre-seed a persisted RSA-1024 keystore, exactly as the old code would have left it.
+            val weak = generateRsaIdentity(keySizeInBits = 1024)
+            assertEquals(1024, rsaModulusBits(weak))
+            val weakFingerprint = weak.certFingerprintSha256
+
+            val store = ServerCertStore(tmpDir, NoopPasswordProtector())
+            store.save(weak)
+
+            // load() must treat the weak persisted cert as if none were persisted (discard it).
+            assertNull(store.load())
+
+            // loadOrCreate() therefore regenerates a fresh, strong (>= 2048-bit) identity.
+            val fresh = store.loadOrCreate()
+            assertTrue(
+                "regenerated cert must be >= 2048-bit RSA; was ${rsaModulusBits(fresh)}",
+                rsaModulusBits(fresh) >= 2048,
+            )
+            assertNotEquals(weakFingerprint, fresh.certFingerprintSha256)
+
+            // And it's now stable: a subsequent load returns the strong cert, not null.
+            val reloaded = ServerCertStore(tmpDir, NoopPasswordProtector()).load()
+            assertNotNull(reloaded)
+            assertEquals(fresh.certFingerprintSha256, reloaded!!.certFingerprintSha256)
+        } finally {
+            tmpDir.deleteRecursively()
+        }
+    }
+
+    private fun rsaModulusBits(identity: ServerIdentity): Int {
+        val keyStore = KeyStore.getInstance(Crypto.KEYSTORE_TYPE, "BC")
+        keyStore.load(identity.keyStoreBytes.inputStream(), identity.keyStorePassword)
+        val pub = keyStore.getCertificate(identity.keyAlias).publicKey as RSAPublicKey
+        return pub.modulus.bitLength()
+    }
+
+    /**
+     * Builds a self-signed RSA server identity of the given key size, serialized to PKCS12 bytes
+     * the same way [Crypto.generateSelfSignedCert] does — used here to fabricate the RSA-1024
+     * keystore an OLD build would have persisted.
+     */
+    private fun generateRsaIdentity(keySizeInBits: Int): ServerIdentity {
+        val password = Crypto.randomPassword()
+        val generated = buildKeyStore {
+            certificate("zync-server") {
+                this.password = String(password)
+                domains = listOf("127.0.0.1", "0.0.0.0")
+                subject = X500Principal("CN=zync, OU=zync, O=zync")
+                daysValid = 3650L
+                this.keySizeInBits = keySizeInBits
+                hash = HashAlgorithm.SHA256
+            }
+        }
+        val privateKey = generated.getKey("zync-server", password) as java.security.PrivateKey
+        val chain = generated.getCertificateChain("zync-server")
+
+        val keyStore = KeyStore.getInstance(Crypto.KEYSTORE_TYPE, BouncyCastleProvider.PROVIDER_NAME).apply {
+            load(null, null)
+            setKeyEntry("zync-server", privateKey, password, chain)
+        }
+        val cert = keyStore.getCertificate("zync-server")
+        val output = ByteArrayOutputStream()
+        keyStore.store(output, password)
+        return ServerIdentity(
+            keyStoreBytes = output.toByteArray(),
+            keyStorePassword = password.copyOf(),
+            keyAlias = "zync-server",
+            certFingerprintSha256 = Crypto.sha256Fingerprint(cert.encoded),
+        )
     }
 
     /** No-op protector so this JVM test doesn't depend on AndroidKeyStore being available. */
