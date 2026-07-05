@@ -131,6 +131,9 @@ dependencies {
   // On-device document scanning for capture (no camera permission required)
   implementation(libs.play.services.mlkit.document.scanner)
 
+  // Background scheduling for automatic backups
+  implementation(libs.androidx.work.runtime.ktx)
+
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
@@ -140,6 +143,7 @@ dependencies {
   testImplementation(libs.ktor.server.test.host)
   testImplementation(libs.ktor.client.content.negotiation)
   testImplementation(libs.ktor.client.cio)
+  testImplementation(libs.androidx.work.testing)
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)

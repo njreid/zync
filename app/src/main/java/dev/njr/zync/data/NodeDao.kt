@@ -32,6 +32,10 @@ interface NodeDao {
     @Query("SELECT * FROM attachment WHERE nodeId = :nodeId")
     suspend fun attachmentsFor(nodeId: Long): List<AttachmentEntity>
 
+    /** Every attachment across all nodes — used by the backup snapshotter. */
+    @Query("SELECT * FROM attachment")
+    suspend fun allAttachments(): List<AttachmentEntity>
+
     @Query(
         """
         WITH RECURSIVE tagged(id) AS (
