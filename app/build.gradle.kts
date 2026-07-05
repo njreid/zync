@@ -6,7 +6,10 @@ plugins {
 
 android {
     namespace = "dev.njr.zync"
-    compileSdk = 36
+    // Bumped to 37 because androidx.core 1.19.0 / lifecycle 2.11.0 require
+    // compiling against API 37+. targetSdk stays 36 (compileSdk lets us use
+    // newer APIs; bumping targetSdk separately opts into new runtime behavior).
+    compileSdk = 37
     defaultConfig {
         applicationId = "dev.njr.zync"
         minSdk = 34
