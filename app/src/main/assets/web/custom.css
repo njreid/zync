@@ -1,3 +1,81 @@
+/*
+ * Typography — Geist for headings, Inter for body (see docs/style.md).
+ * Fonts are self-hosted under web/fonts/ because the app's CSP is
+ * `default-src 'self'`; no external/Google-Fonts fetch is possible. Latin
+ * woff2 subsets only. OFL-1.1 (Inter-OFL.txt, Geist-OFL.txt).
+ */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/inter-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/inter-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/inter-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/inter-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/geist-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/geist-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/geist-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/geist-700.woff2") format("woff2");
+}
+
+/*
+ * Body text = Inter. Override Pico's sans-serif token so every default surface
+ * inherits it. Headings are re-pointed at Geist below.
+ */
+:root {
+  --pico-font-family-sans-serif: "Inter", system-ui, -apple-system, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+}
+h1, h2, h3, h4, h5, h6,
+hgroup > *:first-child {
+  --pico-font-family-sans-serif: "Geist", "Inter", system-ui, sans-serif;
+  font-family: "Geist", "Inter", system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
 html { color-scheme: dark; }
 body {
   padding-top: max(.75rem, env(safe-area-inset-top));
