@@ -92,19 +92,29 @@ First-time web or desktop work may need `npm install` in `webtest/` or
 
 ## Current Planning Context
 
-As of the latest tracker entry, M1d is complete and pushed. The next written
-plan is `docs/superpowers/plans/2026-07-05-m2-capture-backup-distribution.md`,
-covering signed releases, attachment capture, a Glance quick-capture widget, and
-encrypted Drive backup. Confirm before executing that plan.
+M1 (a–d) and the bulk of M2 are implemented and shipped (v0.2). M2 is tracked in
+`docs/superpowers/plans/2026-07-05-m2-capture-backup-distribution.md`; see its
+"Implementation Status" section for what's done vs deferred. A 2026-07-07 code
+review hardened the M2 work (backup snapshot consistency, `allowBackup=false`,
+download-route hardening, verify-before-destroy restore, dead-code removal). The
+next milestone (M3) is not yet written — confirm scope before starting.
 
-Known deferred risks from the tracker include:
+Known deferred / follow-up work:
 
+- Backup: incremental content-addressed attachment upload is not implemented (the
+  live path re-encrypts/re-uploads the full archive each run); auto-detect-restore
+  on a fresh install is not wired; real-device Drive verification is pending.
+- Attachments: on-device transcription/OCR is not implemented (raw `AUDIO`/`PDF`
+  only); capture writes app-private external storage, not a portable
+  `Documents/Zync` root; real-device capture verification pending.
+- The quick-capture Accessibility-service (volume-key) path was added beyond the
+  M2 plan; revisit its privacy / Play-policy cost.
 - Desktop localhost proxy has no additional local auth.
-- Active-relay MITM hardening is still planned; current protection relies on QR
-  scan trust and fingerprint/confirm-code checks.
+- Active-relay MITM hardening still relies on QR-scan trust and
+  fingerprint/confirm-code checks.
 - Real-device mDNS still needs verification beyond unit tests.
-- Android release signing/CI/distribution is not yet complete.
-- Android Auto Backup does not cover attachments.
+- The Android/Robolectric suite could not run in the code-review environment
+  (no SDK; Gradle download egress-blocked) — run `./gradlew test` before releases.
 
 ## Style
 

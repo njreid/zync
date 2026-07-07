@@ -1,5 +1,12 @@
 # zync M1d — Tauri Desktop Client Implementation Plan
 
+> **Status: ✅ COMPLETE** (shipped, incl. the v0.2 desktop cask under `Casks/`).
+> The Tauri client discovers the phone over mDNS, pairs via QR + Ed25519, pins the
+> phone's TLS cert, and proxies the phone's web UI through a local pinned-TLS
+> reverse proxy; `desktop/src-tauri/tests/fake_phone.rs` is the no-device harness.
+> ⏳ Still deferred: the localhost proxy has no additional local auth. The inline
+> `- [ ]` checkboxes are the original plan, not maintained inline.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A cross-platform Tauri desktop app that discovers a paired zync phone over mDNS, pairs to it via QR + Ed25519 (the phone scans the desktop's QR), pins the phone's self-signed TLS cert, and hosts the phone's existing web UI over a local pinned-TLS reverse proxy — so the same GTD UI runs on the desktop against the phone's data.

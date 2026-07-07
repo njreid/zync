@@ -87,17 +87,26 @@ class BackupManager(
         require(m.databasePath == DB_ENTRY) { "unsupported database path ${m.databasePath}" }
         val restoredDb = requireNotNull(dbBytes[DB_ENTRY]) { "database snapshot missing" }
 
+        // Validate the entire archive BEFORE touching disk: resolve every
+        // attachment path (rejecting traversal) and confirm its bytes are
+        // present. Doing this up front means a missing/invalid entry fails the
+        // whole restore cleanly, instead of throwing partway through after the
+        // database and attachments were already deleted — which would leave an
+        // unrecoverable, partially-applied restore.
+        val resolvedAttachments = m.attachments.map { attachment ->
+            val bytes = requireNotNull(attachmentBytes[attachment.relativePath]) {
+                "attachment missing: ${attachment.relativePath}"
+            }
+            resolveAttachment(attachment.relativePath) to bytes
+        }
+
         dbFile.parentFile?.mkdirs()
         dbFile.writeBytes(restoredDb)
         restoreDbSidecar("-wal", dbBytes["$DB_ENTRY-wal"])
         restoreDbSidecar("-shm", dbBytes["$DB_ENTRY-shm"])
         attachmentRoot.deleteRecursively()
         attachmentRoot.mkdirs()
-        for (attachment in m.attachments) {
-            val bytes = requireNotNull(attachmentBytes[attachment.relativePath]) {
-                "attachment missing: ${attachment.relativePath}"
-            }
-            val target = resolveAttachment(attachment.relativePath)
+        for ((target, bytes) in resolvedAttachments) {
             target.parentFile?.mkdirs()
             target.writeBytes(bytes)
         }

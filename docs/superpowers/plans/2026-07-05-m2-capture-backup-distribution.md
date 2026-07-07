@@ -4,6 +4,50 @@
 
 **Goal:** Make zync easy to install and keep, and let the phone capture more than typed text. Four tasks, in this order: (1) signed release + GitHub-Releases publishing so the Android app is easy to install and auto-update; (2) attachment capture (voice notes + document scan) into the Inbox, plus a share-target; (3) a home-screen quick-capture widget; (4) **automatic** encrypted backup of all state to Google Drive.
 
+## Implementation Status — updated 2026-07-07
+
+Tasks 1–3 and the core of Task 4 are implemented and shipped (v0.1 / v0.2). A full
+code review on 2026-07-07 hardened the M2 work; the per-task checkboxes below are
+the original plan (per-step tracking lived in the gitignored progress tracker).
+
+- **Task 1 — Signed release + CI:** ✅ **Complete.** Signed universal APK,
+  `.github/workflows/release.yml` (tag/release-triggered, monotonic `versionCode`
+  from the CI run number), Obtainium install docs. The open `allowBackup` decision
+  is **resolved → `false`**: app-managed encrypted Drive backup supersedes Android
+  Auto Backup, which would otherwise have uploaded `zync.db` + the server TLS
+  keystore private key/password to Google.
+- **Task 2 — Attachment capture:** ✅ **Implemented** (voice note, doc scan,
+  share-target, `/api/nodes/{id}/attachments` list + byte-download route, web
+  rendering; Room bumped to v3 with a migration + tests). Code review added
+  download-route hardening (`nosniff`, `Content-Disposition`, image content-types)
+  and tests, fixed the Inbox double-fetch, and removed dead duplicate activities.
+  ⏳ **Deferred:** on-device transcription/OCR (raw `AUDIO`/`PDF` stored, no derived
+  `TRANSCRIPT`/`OCR_TEXT` — graceful degradation as the plan allows); real-device
+  capture verification (Step 3); portable `Documents/Zync` root — capture currently
+  writes app-private external storage, which is wiped on uninstall.
+- **Task 3 — Quick-capture widget:** ✅ **Complete.** Glance widget with
+  Type/Voice/Scan/Upload. Beyond the plan, an **Accessibility-service volume-key
+  gesture** capture path was added (double Vol-Up = voice, double Vol-Down = scan);
+  code review fixed an auto-repeat false-trigger and narrowed the service's event
+  scope. ⏳ **Deferred:** on-device widget verification (Step 2); a product decision
+  on whether the accessibility service is worth its privacy / Play-policy cost.
+- **Task 4 — Automatic encrypted Drive backup:** ⏳ **Partially complete.**
+  Implemented: AES-256-GCM with a Keystore-wrapped passphrase, `appDataFolder`
+  scope, WorkManager periodic + debounced-on-mutation triggers, settings
+  toggle/status, and restore. Code review fixed a **torn-snapshot bug** (now
+  `wal_checkpoint(TRUNCATE)` on Room's own connection, main-`.db`-only archive),
+  made restore **verify-before-destroy**, and removed a dead second backup
+  implementation. **Deferred to the next milestone:** (a) incremental
+  content-addressed attachment upload — the live path re-encrypts/re-uploads the
+  full archive every run; (b) auto-detect-and-restore on a fresh install / new
+  device (needs first-run UI + passphrase re-entry, since the wrapped key is wiped
+  on uninstall); (c) real-device Drive verification (Step 3).
+
+**Testing caveat:** the 2026-07-07 review fixes were static-verified only — the
+Android/Robolectric suite cannot run in the review environment (no Android SDK;
+Gradle distribution download is egress-blocked). Run `./gradlew test` before the
+next release.
+
 **Context / current state (verified 2026-07-05):**
 - Android app `app/`, `applicationId = dev.njr.zync`, `minSdk 34`, `targetSdk 36`, `versionCode 1 / versionName "1.0"`. Phone is the single source of truth (Room `zync.db` + Ktor server; desktop/browsers are remote clients over pinned TLS — see M1c/M1d).
 - **Release build is unsigned:** `app/build.gradle.kts` `buildTypes.release` has no `signingConfig`; `isMinifyEnabled = false`. No CI exists (`.github/workflows/` absent).

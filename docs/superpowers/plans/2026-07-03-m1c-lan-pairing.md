@@ -1,5 +1,10 @@
 # zync M1c — LAN Exposure, TLS & QR Pairing (phone side) Implementation Plan
 
+> **Status: ✅ COMPLETE** (shipped). Superseded in practice by the more detailed
+> `2026-07-03-m1c-phone-remote.md`, which is the plan that was executed for the
+> phone-side remote-access work (TLS, pairing, mDNS, device management). The
+> inline `- [ ]` checkboxes here are the original plan, not maintained inline.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let a paired desktop reach the phone's web UI securely over the LAN: self-signed TLS with fingerprint pinning, Ed25519 device pairing via QR scan, mDNS discovery, session tokens, and a device-management UI — plus the security hardening the M1b final review gated to this milestone. Ends with the phone side pairing-ready; the Tauri desktop client is a separate plan written afterward.

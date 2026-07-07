@@ -96,6 +96,34 @@ class BackupManagerTest {
         throw AssertionError("Expected IllegalArgumentException")
     }
 
+    @Test
+    fun `restore with a missing attachment leaves existing data intact`() {
+        // Archive references an attachment whose bytes are absent → the restore
+        // must fail without having deleted the current database or attachments.
+        val archive = zip(
+            "manifest.json" to """
+                {"version":1,"createdAt":1,"databasePath":"zync.db","attachments":[{"relativePath":"aa/gone.m4a","size":1}]}
+            """.trimIndent().toByteArray(),
+            "zync.db" to "new-db".toByteArray(),
+        )
+        val target = temp.newFolder()
+        val existingDb = target.resolve("zync.db").apply { writeBytes("old-db".toByteArray()) }
+        val attachments = target.resolve("Documents/Zync")
+        attachments.resolve("aa").mkdirs()
+        val keep = attachments.resolve("aa/keep.m4a").apply { writeBytes("keep".toByteArray()) }
+        val manager = BackupManager(existingDb, attachments)
+
+        try {
+            manager.restoreArchive(archive)
+            throw AssertionError("Expected IllegalArgumentException")
+        } catch (e: IllegalArgumentException) {
+            // expected
+        }
+
+        assertArrayEquals("old-db".toByteArray(), existingDb.readBytes())
+        assertArrayEquals("keep".toByteArray(), keep.readBytes())
+    }
+
     private fun fixture(): Fixture {
         val root = temp.newFolder()
         val db = root.resolve("zync.db").apply { writeBytes("db".toByteArray()) }
