@@ -133,7 +133,12 @@ device, and a real-device Drive verification pass.
 
 - [ ] **Step 1 (TDD):** Streaming round-trip tests (large synthetic input; assert
   content hash + bytes match without materializing the whole array).
-- [ ] **Step 2:** Migrate the read/write/download/backup paths to streaming.
+- [~] **Step 2:** Migrate the read/write/download/backup paths to streaming.
+  - [x] Download route now streams from disk (`respondOutputStream`) instead of
+    `respondBytes(store.read(...))` — works with the current File-based storage
+    regardless of the Task 1 decision. (Landed 2026-07-07; needs `./gradlew test`.)
+  - [ ] Capture writes (`CaptureRepository`, `ShareReceiverActivity`, `capture/*`)
+    and the backup ZIP/upload paths still buffer in memory.
 - [ ] **Step 3: Commit** `perf(attach,backup): stream large blobs to avoid OOM`.
 
 ---
