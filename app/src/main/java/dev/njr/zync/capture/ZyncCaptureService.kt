@@ -26,7 +26,11 @@ class ZyncCaptureService : AccessibilityService() {
     private val detector = DoublePressDetector()
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN) {
+        // Only the initial press counts. Holding a volume key emits auto-repeat
+        // ACTION_DOWN events (repeatCount > 0); feeding those to the detector
+        // would let a single held key satisfy the double-press window and
+        // spuriously launch capture.
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_VOLUME_UP ->
                     if (detector.onKeyDown(event.keyCode, event.eventTime)) {

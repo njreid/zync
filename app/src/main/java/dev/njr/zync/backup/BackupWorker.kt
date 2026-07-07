@@ -1,17 +1,11 @@
 package dev.njr.zync.backup
 
 import android.content.Context
-import android.database.sqlite.SQLiteDatabase
 import android.util.Log
-import androidx.work.BackoffPolicy
-import androidx.work.Constraints
 import androidx.work.CoroutineWorker
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequest
-import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkerParameters
+import dev.njr.zync.ZyncApp
 import dev.njr.zync.attach.AttachmentStore
-import java.util.concurrent.TimeUnit
 
 class BackupWorker(
     appContext: Context,
@@ -35,44 +29,18 @@ class BackupWorker(
     }
 
     companion object {
-        const val PERIODIC_WORK = "zync-backup-periodic"
-        const val DEBOUNCED_WORK = "zync-backup-debounced"
-
-        fun periodicRequest(): PeriodicWorkRequest =
-            PeriodicWorkRequest.Builder(BackupWorker::class.java, 1, TimeUnit.DAYS)
-                .setConstraints(backupConstraints())
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-                .build()
-
-        fun debouncedRequest(): OneTimeWorkRequest =
-            OneTimeWorkRequest.Builder(BackupWorker::class.java)
-                .setInitialDelay(5, TimeUnit.MINUTES)
-                .setConstraints(backupConstraints())
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-                .build()
-
-        fun backupManager(context: Context): BackupManager =
-            BackupManager(
+        fun backupManager(context: Context): BackupManager {
+            val database = (context.applicationContext as? ZyncApp)?.database
+            return BackupManager(
                 dbFile = context.getDatabasePath("zync.db"),
                 attachmentRoot = AttachmentStore.defaultRoot(context),
-                beforeSnapshot = { checkpointDatabase(context) },
+                // Checkpoint on Room's own connection so the snapshot copy is a
+                // complete, self-consistent database (see DbSnapshot). Null only
+                // in contexts without a ZyncApp (e.g. isolated tests), where the
+                // copy falls back to the raw file.
+                beforeSnapshot = { database?.let(DbSnapshot::checkpointForBackup) },
             )
-
-        private fun checkpointDatabase(context: Context) {
-            val dbFile = context.getDatabasePath("zync.db")
-            if (!dbFile.isFile) return
-            SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
-                db.rawQuery("PRAGMA wal_checkpoint(FULL)", null).use { cursor ->
-                    cursor.moveToFirst()
-                }
-            }
         }
-
-        private fun backupConstraints(): Constraints =
-            Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .setRequiresBatteryNotLow(true)
-                .build()
     }
 }
 

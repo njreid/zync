@@ -5,8 +5,10 @@ import dev.njr.zync.data.NodeKind
 import dev.njr.zync.data.ZyncDatabase
 import dev.njr.zync.domain.NodeRepository
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
+import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
 import io.ktor.server.routing.Route
@@ -133,6 +135,17 @@ fun Route.apiRoutes(db: ZyncDatabase, repo: NodeRepository, attachmentStore: Att
                 val bytes = runCatching { store.read(attachment.relativePath) }.getOrElse {
                     return@get call.respond(HttpStatusCode.NotFound, ErrorDto("attachment file missing"))
                 } ?: return@get call.respond(HttpStatusCode.NotFound, ErrorDto("attachment file missing"))
+                // Serve owner-captured bytes defensively: nosniff stops the
+                // browser from re-interpreting an octet-stream as HTML/JS, and an
+                // explicit filename keeps the content-addressed storage path out
+                // of the response.
+                val ext = attachment.relativePath.substringAfterLast('.', "")
+                    .filter { it.isLetterOrDigit() }
+                call.response.header("X-Content-Type-Options", "nosniff")
+                call.response.header(
+                    HttpHeaders.ContentDisposition,
+                    "inline; filename=\"zync-attachment-${attachment.id}${if (ext.isEmpty()) "" else ".$ext"}\"",
+                )
                 call.respondBytes(bytes, contentTypeFor(attachment.relativePath))
             }
         }
@@ -148,5 +161,8 @@ private fun contentTypeFor(relativePath: String): ContentType =
         "mp3" -> ContentType.Audio.MPEG
         "pdf" -> ContentType.Application.Pdf
         "txt" -> ContentType.Text.Plain
+        "jpg", "jpeg" -> ContentType.Image.JPEG
+        "png" -> ContentType.Image.PNG
+        "webp" -> ContentType.parse("image/webp")
         else -> ContentType.Application.OctetStream
     }

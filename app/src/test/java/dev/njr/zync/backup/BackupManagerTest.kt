@@ -4,6 +4,7 @@ import java.util.zip.ZipInputStream
 import javax.crypto.AEADBadTagException
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -21,8 +22,10 @@ class BackupManagerTest {
         val entries = unzip(archive)
 
         assertArrayEquals("db".toByteArray(), entries["zync.db"])
-        assertArrayEquals("wal".toByteArray(), entries["zync.db-wal"])
-        assertArrayEquals("shm".toByteArray(), entries["zync.db-shm"])
+        // The live -wal/-shm sidecars must NOT be archived: beforeSnapshot folds
+        // the WAL into the main file, and copying live sidecars would tear.
+        assertFalse(entries.containsKey("zync.db-wal"))
+        assertFalse(entries.containsKey("zync.db-shm"))
         assertArrayEquals("voice".toByteArray(), entries["attachments/attachments/aa/voice.m4a"])
         val manifest = entries["manifest.json"]!!.toString(Charsets.UTF_8)
         assertTrue(manifest.contains("\"databasePath\":\"zync.db\""))
@@ -57,8 +60,10 @@ class BackupManagerTest {
         targetManager.restoreEncryptedBackup(encrypted, "correct horse".toCharArray())
 
         assertArrayEquals("db".toByteArray(), target.resolve("zync.db").readBytes())
-        assertArrayEquals("wal".toByteArray(), target.resolve("zync.db-wal").readBytes())
-        assertArrayEquals("shm".toByteArray(), target.resolve("zync.db-shm").readBytes())
+        // No sidecars in the archive, and restore clears any stale ones so Room
+        // never reads an old -wal over the restored database.
+        assertFalse(target.resolve("zync.db-wal").exists())
+        assertFalse(target.resolve("zync.db-shm").exists())
         assertArrayEquals(
             "voice".toByteArray(),
             target.resolve("Documents/Zync/attachments/aa/voice.m4a").readBytes(),

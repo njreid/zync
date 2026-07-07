@@ -29,12 +29,10 @@ interface NodeDao {
     @Insert
     suspend fun insertAttachment(attachment: AttachmentEntity): Long
 
-    @Query("SELECT * FROM attachment WHERE nodeId = :nodeId")
+    // ORDER BY id to match AttachmentDao.forNode so the repository/native path
+    // and the server/web path list a node's attachments in the same order.
+    @Query("SELECT * FROM attachment WHERE nodeId = :nodeId ORDER BY id")
     suspend fun attachmentsFor(nodeId: Long): List<AttachmentEntity>
-
-    /** Every attachment across all nodes — used by the backup snapshotter. */
-    @Query("SELECT * FROM attachment")
-    suspend fun allAttachments(): List<AttachmentEntity>
 
     @Query(
         """

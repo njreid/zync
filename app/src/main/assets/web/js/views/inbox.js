@@ -22,10 +22,12 @@ export async function renderInbox(el) {
     list.innerHTML = `<p class="muted">${selectedContext ? 'No active tasks in this context' : 'Inbox zero'}</p>`;
     return;
   }
-  for (const t of tasks) {
-    const attachments = await get(`/api/nodes/${t.id}/attachments`);
-    list.append(taskCard(t, attachments));
-  }
+  // Fetch each task's attachments concurrently (one round-trip per task),
+  // then append the cards in order.
+  const cards = await Promise.all(
+    tasks.map(async (t) => taskCard(t, await get(`/api/nodes/${t.id}/attachments`))),
+  );
+  for (const card of cards) list.append(card);
 }
 
 function quickCaptureSetupNotice() {
@@ -72,20 +74,18 @@ function taskCard(t, attachments) {
     const folder = await pickDestination({ foldersOnly: true });
     if (folder != null) await act(post(`/api/nodes/${t.id}/convert`, { folderId: folder }));
   };
-  showAttachmentBadge(t.id, card.querySelector('.attach-badge'));
+  setAttachmentBadge(attachments, card.querySelector('.attach-badge'));
   return card;
 }
 
-// Lazily annotate a card with a 📎 badge if the node has attachments (voice
-// notes / scanned docs captured via share or the widget). Fire-and-forget so
-// it never blocks the Inbox render; failures are silently ignored.
-function showAttachmentBadge(nodeId, badge) {
-  get(`/api/nodes/${nodeId}/attachments`).then(atts => {
-    if (atts && atts.length) {
-      badge.textContent = ` 📎 ${atts.length}`;
-      badge.hidden = false;
-    }
-  }).catch(() => {});
+// Annotate a card with a 📎 badge if the node has attachments (voice notes /
+// scanned docs captured via share or the widget). Driven by the attachments
+// already fetched in renderInbox — no extra round-trip per card.
+function setAttachmentBadge(attachments, badge) {
+  if (attachments && attachments.length) {
+    badge.textContent = ` 📎 ${attachments.length}`;
+    badge.hidden = false;
+  }
 }
 
 async function act(promise) { await promise; await rerender(); }
