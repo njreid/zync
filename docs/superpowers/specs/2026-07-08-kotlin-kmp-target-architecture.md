@@ -32,10 +32,17 @@ true at once.
 - **`server`** (JVM application) — **operator runtime + agent orchestration + LLM
   client**, S3 client, litestream, the sync endpoints, auth (device tokens for
   native, sessions for browser), Let's Encrypt TLS. Server-only.
-- **`androidApp`** (Android) — launcher/lifecycle, the **WebView host**, wiring the
-  local loopback Ktor, and the **capture hardware layer**: MediaRecorder (voice),
-  ML Kit doc scanner, Glance quick-capture widget, the accessibility volume-key
-  gestures, the share-target, AndroidKeyStore, runtime permissions/notifications.
+- **`androidApp`** (Android) — a **hybrid UI**:
+  - **Native Compose** for the *thin* fast path: launch/home, quick-capture flows
+    (voice/scan/text) + confirmation, navigation shell, settings/onboarding, a
+    lightweight inbox-triage glance.
+  - **WebView hosting the shared `web` module**, rendered by the phone's **loopback
+    Ktor against the local SQLite replica** (offline-capable), for the rich content
+    screens: task/project detail, reading, commenting, planning, decomposing, tree
+    editing, context/tag management.
+  - Plus the **capture hardware layer**: MediaRecorder (voice), ML Kit doc scanner,
+    Glance quick-capture widget, accessibility volume-key gestures, share-target,
+    AndroidKeyStore, runtime permissions/notifications.
   Android-only.
 
 Shared = `core` + `data` + `web`. Platform-specific = `androidApp`'s native chunk
@@ -81,7 +88,16 @@ Datastar-driven live updates from the op stream — is one codebase.
   Room on phone — chosen: SQLDelight (no-backcompat lets us).
 - **kotlinx.html vs a nicer HTML DSL / templating** — kotlinx.html is the default;
   revisit only if ergonomics disappoint.
-- **Does the phone keep a loopback Ktor** (to render the shared `web` UI offline) or
-  get a **native Compose** offline UI instead? The loopback path maximizes UI
-  sharing and matches today's design; Compose would be a second UI. **Recommend the
-  loopback path.**
+- **Phone UI — RESOLVED (2026-07-08): hybrid.** Native **Compose** owns the *thin*
+  fast path (launch, quick-capture, shell, settings, inbox glance); the shared
+  **`web`** module (loopback Ktor + kotlinx.html + Datastar, against local SQLite)
+  owns the rich content screens (detail, reading, commenting, planning,
+  decomposing, tree/context/tag editing). Seam requirements:
+  1. Reused web views render from the phone's **loopback Ktor / local SQLite**, not
+     the remote server — so they work offline; mutations post to the local op log
+     and sync later.
+  2. **One design language across the seam** — shared tokens (colors, type incl.
+     Geist/Inter, spacing) applied to *both* the Compose theme and the web CSS; the
+     native→WebView handoff (node id, back-stack, theme) must feel invisible.
+  3. Keep the Compose surface **deliberately thin** — if a screen lives in `web`,
+     don't also build it in Compose, or the sharing win erodes.
