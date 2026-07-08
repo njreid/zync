@@ -283,7 +283,38 @@ Consequences of this scoping:
 - **Browser needs a server session/login** (can't QR-pair like a native app) — a
   mild "account to your own server" notion, a small departure from "no account".
 
+### 12a. Storage layer — RESOLVED (2026-07-08): SQLite + S3
+
+- **SQLite (server) is the authoritative store**: the op log + derived
+  node/task/tree/context/tag state + sync cursors + operator bookkeeping. WAL
+  mode; single writer (the one server process) + concurrent readers (operators).
+  Continuously replicated to S3 via **litestream** for durability + point-in-time
+  recovery.
+- **S3 holds only large immutable objects**: content-addressed **encrypted
+  attachment blobs** + the litestream SQLite backup stream. **This supersedes §7's
+  idea of op-log *segments* in S3** — with SQLite holding the live log, S3 no
+  longer stores op-log segments.
+- **Symmetry:** phone (Room/SQLite) and server (SQLite) run the same engine, so the
+  op-log schema/queries align on both sides — strengthening a shared merge/storage
+  core (rusqlite if Rust) without forcing the language choice.
+- **No Postgres** for a single-user personal server.
+
+| Layer | Holds |
+|---|---|
+| SQLite (server) | authoritative op log + tree/task/context/tag state + sync cursors + operator bookkeeping |
+| S3 | content-addressed encrypted attachment blobs + litestream SQLite backups |
+| Phone | local SQLite (Room) replica + local attachment files; syncs on reconnect |
+
+**Open decision remaining: server language (Go vs Rust).** SQLite is well-served by
+both (sqlc / sqlx / rusqlite), so this storage choice is neutral to it. The live
+tension (see §11/discussion): Rust enables a single shared merge+crypto core with
+the Kotlin phone via UniFFI (Automerge-style divergence-avoidance) at the cost of
+async-orchestration friction; Go offers velocity + easier operator/agent
+concurrency at the cost of a second merge implementation kept honest by conformance
+vectors.
+
 **Next:** a companion spec — op schema (with provenance + HLC), the
 LWW/tombstone/tree-move merge rules, the operator manifest + lifecycle
 (scope/trigger/typed-output/retry/idempotency), and the agent handoff — then
-reshape M3 Tasks 4–5 around "sync to the zync daemon."
+reshape M3 Tasks 4–5 around "sync to the zync daemon." The op/merge model should be
+specified **language-agnostically**, which keeps the Go-vs-Rust pick reversible.
