@@ -1,5 +1,12 @@
 # zync M1b(1) — Embedded Server & JSON API Implementation Plan
 
+> **Status: ✅ COMPLETE** (shipped). The Ktor server and token-guarded JSON +
+> WebSocket API are in `app/` and covered by tests. The inline `- [ ]` checkboxes
+> are the original plan and were tracked in the separate (gitignored) progress
+> tracker, not maintained here. **Architecture note (2026-07-08):** the phone's
+> JSON/WebSocket API is superseded by the op-log sync protocol + Datastar/SSE in the
+> central-server target — see the 2026-07-08 specs.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Strip the superseded Compose UI, embed a Ktor server in the Android app, and expose the full GTD domain (`NodeRepository`) as a token-guarded JSON API with WebSocket change-push — the foundation the vanilla-JS web UI (next plan) consumes.

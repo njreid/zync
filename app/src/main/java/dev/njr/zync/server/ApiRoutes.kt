@@ -5,10 +5,12 @@ import dev.njr.zync.data.NodeKind
 import dev.njr.zync.data.ZyncDatabase
 import dev.njr.zync.domain.NodeRepository
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
+import io.ktor.server.response.header
 import io.ktor.server.response.respond
-import io.ktor.server.response.respondBytes
+import io.ktor.server.response.respondOutputStream
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.patch
@@ -130,10 +132,26 @@ fun Route.apiRoutes(db: ZyncDatabase, repo: NodeRepository, attachmentStore: Att
                     ?: return@get call.respond(HttpStatusCode.NotFound, ErrorDto("no such attachment"))
                 val store = attachmentStore
                     ?: return@get call.respond(HttpStatusCode.NotFound, ErrorDto("attachment store unavailable"))
-                val bytes = runCatching { store.read(attachment.relativePath) }.getOrElse {
-                    return@get call.respond(HttpStatusCode.NotFound, ErrorDto("attachment file missing"))
-                } ?: return@get call.respond(HttpStatusCode.NotFound, ErrorDto("attachment file missing"))
-                call.respondBytes(bytes, contentTypeFor(attachment.relativePath))
+                // Resolve to the on-disk file (resolve() also rejects traversal)
+                // and stream it — never read the whole blob into memory, so large
+                // PDFs / long recordings can't OOM the server.
+                val file = runCatching { store.resolve(attachment.relativePath) }.getOrNull()
+                    ?.takeIf { it.isFile }
+                    ?: return@get call.respond(HttpStatusCode.NotFound, ErrorDto("attachment file missing"))
+                // Serve owner-captured bytes defensively: nosniff stops the
+                // browser from re-interpreting an octet-stream as HTML/JS, and an
+                // explicit filename keeps the content-addressed storage path out
+                // of the response.
+                val ext = attachment.relativePath.substringAfterLast('.', "")
+                    .filter { it.isLetterOrDigit() }
+                call.response.header("X-Content-Type-Options", "nosniff")
+                call.response.header(
+                    HttpHeaders.ContentDisposition,
+                    "inline; filename=\"zync-attachment-${attachment.id}${if (ext.isEmpty()) "" else ".$ext"}\"",
+                )
+                call.respondOutputStream(contentType = contentTypeFor(attachment.relativePath)) {
+                    file.inputStream().use { it.copyTo(this) }
+                }
             }
         }
     }
@@ -148,5 +166,8 @@ private fun contentTypeFor(relativePath: String): ContentType =
         "mp3" -> ContentType.Audio.MPEG
         "pdf" -> ContentType.Application.Pdf
         "txt" -> ContentType.Text.Plain
+        "jpg", "jpeg" -> ContentType.Image.JPEG
+        "png" -> ContentType.Image.PNG
+        "webp" -> ContentType.parse("image/webp")
         else -> ContentType.Application.OctetStream
     }

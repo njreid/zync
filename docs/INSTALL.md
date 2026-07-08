@@ -4,6 +4,11 @@ Zync has one Android app, which owns the local database and captures, and
 optional desktop clients that pair with the phone over the local network. Install
 Android first, then install any desktop clients you want to pair.
 
+> **Note (2026-07-08):** this covers the **shipped v0.2** app (phone-hosted,
+> LAN-paired desktop). Distribution and the desktop client will change as zync moves
+> to a central server — see the 2026-07-08 architecture specs under
+> `docs/superpowers/specs/`.
+
 Release assets are attached to GitHub Releases:
 
 - Android: `zync-<version>.apk`

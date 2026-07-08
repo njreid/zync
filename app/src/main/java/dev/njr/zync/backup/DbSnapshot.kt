@@ -14,12 +14,26 @@ import java.io.File
 object DbSnapshot {
 
     /**
-     * Checkpoint [db] and copy its file [dbFile] to [target], returning [target].
+     * Fold the WAL back into the main database file on [db]'s own connection.
+     *
+     * `wal_checkpoint(TRUNCATE)` writes all committed WAL frames into the main
+     * `.db` file and empties the `-wal` sidecar. Because it runs on Room's live
+     * connection (not a second, uncoordinated one), the main file is left
+     * complete and self-consistent; in WAL mode later writes go to a fresh
+     * `-wal`, never the main file — so a copy of the main file taken right after
+     * is a valid snapshot without the live sidecars.
      */
-    fun snapshot(db: ZyncDatabase, dbFile: File, target: File): File {
+    fun checkpointForBackup(db: ZyncDatabase) {
         db.openHelper.writableDatabase
             .query("PRAGMA wal_checkpoint(TRUNCATE)")
             .use { it.moveToFirst() }
+    }
+
+    /**
+     * Checkpoint [db] and copy its file [dbFile] to [target], returning [target].
+     */
+    fun snapshot(db: ZyncDatabase, dbFile: File, target: File): File {
+        checkpointForBackup(db)
         target.parentFile?.mkdirs()
         dbFile.copyTo(target, overwrite = true)
         return target

@@ -1,5 +1,17 @@
 # zync M1c(1) — Phone-Side Remote Access: Hardening, TLS, Pairing, mDNS Implementation Plan
 
+> **Status: ✅ COMPLETE** (shipped). Pre-LAN hardening, self-signed TLS with a
+> stable fingerprint, Ed25519 QR pairing, challenge–response sessions, mDNS
+> advertising, the foreground service, and the device-management UI all landed.
+> ⏳ Still deferred: active-relay MITM hardening (protection relies on QR-scan
+> trust + fingerprint/confirm-code checks) and real-device mDNS verification. The
+> inline `- [ ]` checkboxes are the original plan, not maintained inline.
+>
+> **🧭 Largely superseded (2026-07-08):** under the target architecture,
+> desktop/browser reach a **central server**, not the phone — so this
+> phone-as-LAN-server / QR pairing / pinning / mDNS surface mostly retires (keep only
+> an optional LAN fallback). See `docs/superpowers/specs/2026-07-08-kotlin-kmp-target-architecture.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the phone's embedded server safely reachable from the LAN: pre-LAN security hardening, self-signed TLS with a stable fingerprint, QR-nonce pairing with Ed25519 device identities, challenge–response sessions, mDNS advertising, a foreground service, and a Settings surface for remote toggle + device revocation. Spec §8b. The Tauri desktop shell is the NEXT plan — this plan's "desktop" is test code.

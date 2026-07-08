@@ -4,6 +4,7 @@ import java.util.zip.ZipInputStream
 import javax.crypto.AEADBadTagException
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -21,8 +22,10 @@ class BackupManagerTest {
         val entries = unzip(archive)
 
         assertArrayEquals("db".toByteArray(), entries["zync.db"])
-        assertArrayEquals("wal".toByteArray(), entries["zync.db-wal"])
-        assertArrayEquals("shm".toByteArray(), entries["zync.db-shm"])
+        // The live -wal/-shm sidecars must NOT be archived: beforeSnapshot folds
+        // the WAL into the main file, and copying live sidecars would tear.
+        assertFalse(entries.containsKey("zync.db-wal"))
+        assertFalse(entries.containsKey("zync.db-shm"))
         assertArrayEquals("voice".toByteArray(), entries["attachments/attachments/aa/voice.m4a"])
         val manifest = entries["manifest.json"]!!.toString(Charsets.UTF_8)
         assertTrue(manifest.contains("\"databasePath\":\"zync.db\""))
@@ -57,8 +60,10 @@ class BackupManagerTest {
         targetManager.restoreEncryptedBackup(encrypted, "correct horse".toCharArray())
 
         assertArrayEquals("db".toByteArray(), target.resolve("zync.db").readBytes())
-        assertArrayEquals("wal".toByteArray(), target.resolve("zync.db-wal").readBytes())
-        assertArrayEquals("shm".toByteArray(), target.resolve("zync.db-shm").readBytes())
+        // No sidecars in the archive, and restore clears any stale ones so Room
+        // never reads an old -wal over the restored database.
+        assertFalse(target.resolve("zync.db-wal").exists())
+        assertFalse(target.resolve("zync.db-shm").exists())
         assertArrayEquals(
             "voice".toByteArray(),
             target.resolve("Documents/Zync/attachments/aa/voice.m4a").readBytes(),
@@ -89,6 +94,34 @@ class BackupManagerTest {
             return
         }
         throw AssertionError("Expected IllegalArgumentException")
+    }
+
+    @Test
+    fun `restore with a missing attachment leaves existing data intact`() {
+        // Archive references an attachment whose bytes are absent → the restore
+        // must fail without having deleted the current database or attachments.
+        val archive = zip(
+            "manifest.json" to """
+                {"version":1,"createdAt":1,"databasePath":"zync.db","attachments":[{"relativePath":"aa/gone.m4a","size":1}]}
+            """.trimIndent().toByteArray(),
+            "zync.db" to "new-db".toByteArray(),
+        )
+        val target = temp.newFolder()
+        val existingDb = target.resolve("zync.db").apply { writeBytes("old-db".toByteArray()) }
+        val attachments = target.resolve("Documents/Zync")
+        attachments.resolve("aa").mkdirs()
+        val keep = attachments.resolve("aa/keep.m4a").apply { writeBytes("keep".toByteArray()) }
+        val manager = BackupManager(existingDb, attachments)
+
+        try {
+            manager.restoreArchive(archive)
+            throw AssertionError("Expected IllegalArgumentException")
+        } catch (e: IllegalArgumentException) {
+            // expected
+        }
+
+        assertArrayEquals("old-db".toByteArray(), existingDb.readBytes())
+        assertArrayEquals("keep".toByteArray(), keep.readBytes())
     }
 
     private fun fixture(): Fixture {

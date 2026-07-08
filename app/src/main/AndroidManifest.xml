@@ -10,9 +10,16 @@
     <!-- Recording voice notes (double-Volume-Up capture gesture). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!--
+      allowBackup is off: the app manages its own encrypted Google Drive backup
+      (see backup/). Android Auto Backup would otherwise upload zync.db AND the
+      server's TLS keystore private key + password (pairing/ServerCertStore) to
+      Google's cloud in cleartext-at-rest, contradicting the on-device-secrets
+      posture from M1c.
+    -->
     <application
         android:name=".ZyncApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

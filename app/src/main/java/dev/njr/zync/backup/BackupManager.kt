@@ -48,9 +48,7 @@ class BackupManager(
         return ByteArrayOutputStream().use { bytes ->
             ZipOutputStream(bytes).use { zip ->
                 zip.putBytes("manifest.json", Json.encodeToString(manifest).toByteArray(Charsets.UTF_8))
-                zip.putBytes(DB_ENTRY, dbSnapshot.db)
-                dbSnapshot.wal?.let { zip.putBytes("$DB_ENTRY-wal", it) }
-                dbSnapshot.shm?.let { zip.putBytes("$DB_ENTRY-shm", it) }
+                zip.putBytes(DB_ENTRY, dbSnapshot)
                 for (file in attachments) {
                     val relativePath = file.relativeTo(attachmentRoot).invariantSeparatorsPath
                     zip.putFile("attachments/$relativePath", file)
@@ -89,17 +87,26 @@ class BackupManager(
         require(m.databasePath == DB_ENTRY) { "unsupported database path ${m.databasePath}" }
         val restoredDb = requireNotNull(dbBytes[DB_ENTRY]) { "database snapshot missing" }
 
+        // Validate the entire archive BEFORE touching disk: resolve every
+        // attachment path (rejecting traversal) and confirm its bytes are
+        // present. Doing this up front means a missing/invalid entry fails the
+        // whole restore cleanly, instead of throwing partway through after the
+        // database and attachments were already deleted — which would leave an
+        // unrecoverable, partially-applied restore.
+        val resolvedAttachments = m.attachments.map { attachment ->
+            val bytes = requireNotNull(attachmentBytes[attachment.relativePath]) {
+                "attachment missing: ${attachment.relativePath}"
+            }
+            resolveAttachment(attachment.relativePath) to bytes
+        }
+
         dbFile.parentFile?.mkdirs()
         dbFile.writeBytes(restoredDb)
         restoreDbSidecar("-wal", dbBytes["$DB_ENTRY-wal"])
         restoreDbSidecar("-shm", dbBytes["$DB_ENTRY-shm"])
         attachmentRoot.deleteRecursively()
         attachmentRoot.mkdirs()
-        for (attachment in m.attachments) {
-            val bytes = requireNotNull(attachmentBytes[attachment.relativePath]) {
-                "attachment missing: ${attachment.relativePath}"
-            }
-            val target = resolveAttachment(attachment.relativePath)
+        for ((target, bytes) in resolvedAttachments) {
             target.parentFile?.mkdirs()
             target.writeBytes(bytes)
         }
@@ -122,25 +129,22 @@ class BackupManager(
         return target
     }
 
-    private fun snapshotDbFiles(): ArchiveDbSnapshot {
+    // [beforeSnapshot] is expected to have run a wal_checkpoint(TRUNCATE) on the
+    // live database connection (see DbSnapshot.checkpointForBackup / the
+    // BackupWorker factory), folding the WAL into the main .db file. We copy ONLY
+    // the main file: it is now self-consistent, and in WAL mode later writes land
+    // in a fresh -wal, never the main file. We deliberately do NOT archive the
+    // live -wal/-shm — copying those live would reintroduce a torn read.
+    private fun snapshotDbFiles(): ByteArray {
         val snapshotDir = Files.createTempDirectory("zync-backup-db-").toFile()
         return try {
             val snapshotDb = File(snapshotDir, dbFile.name)
             dbFile.copyTo(snapshotDb, overwrite = true)
-            val snapshotWal = dbSidecar("-wal")?.copyTo(File(snapshotDir, dbFile.name + "-wal"), overwrite = true)
-            val snapshotShm = dbSidecar("-shm")?.copyTo(File(snapshotDir, dbFile.name + "-shm"), overwrite = true)
-            ArchiveDbSnapshot(
-                db = snapshotDb.readBytes(),
-                wal = snapshotWal?.readBytes(),
-                shm = snapshotShm?.readBytes(),
-            )
+            snapshotDb.readBytes()
         } finally {
             snapshotDir.deleteRecursively()
         }
     }
-
-    private fun dbSidecar(suffix: String): File? =
-        File(dbFile.path + suffix).takeIf { it.isFile }
 
     private fun restoreDbSidecar(suffix: String, bytes: ByteArray?) {
         val file = File(dbFile.path + suffix)
@@ -155,12 +159,6 @@ class BackupManager(
         private const val DB_ENTRY = "zync.db"
     }
 }
-
-private data class ArchiveDbSnapshot(
-    val db: ByteArray,
-    val wal: ByteArray?,
-    val shm: ByteArray?,
-)
 
 @Serializable
 data class BackupManifest(

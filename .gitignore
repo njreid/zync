@@ -8,14 +8,14 @@
 .externalNativeBuild
 .cxx
 local.properties
-key.properties
-*.jks
-*.keystore
 
 # Release signing secrets — NEVER commit these
 key.properties
 *.jks
 *.keystore
+
+# Node V8 compile cache — build artifact, not source
+/node-compile-cache/
 
 # Task/session tooling, not part of the app
 /.superpowers/
