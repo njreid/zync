@@ -2,17 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: 🟡 DRAFT — awaiting confirmation.** Scope chosen 2026-07-07:
-> *attachment robustness* + *finish backup/restore*. Do not execute until the
-> owner confirms Task 1's storage decision (see Open Questions).
->
-> **⚠️ Tasks 4–5 are under architectural review.** See
-> `docs/superpowers/specs/2026-07-08-backup-sync-architecture.md` (ADR): the
-> Google-Drive backup direction may be replaced by a self-hosted, E2E-encrypted
-> op-log + blob store (Go daemon + S3). If that ADR is accepted, Tasks 4–5 become
-> "sync to the zync daemon" rather than "backup to Drive" — though the
-> content-addressed encrypted-blob design carries over almost unchanged. Hold on
-> executing Tasks 4–5 until the ADR forks are settled.
+> **Status: ⛔ WITHDRAWN / SUPERSEDED (2026-07-08).** This draft was never executed.
+> The architecture pivot replaced its whole basis: backup→sync (central server +
+> SQLite + S3), Drive is gone, and the rebuild is sequenced in
+> **`2026-07-08-rebuild-roadmap.md`**, which reuses the M3+ numbers. See also the
+> three `2026-07-08-*` specs. Retained only for history — **do not execute.**
 
 **Goal:** Make captured attachments durable and make the encrypted Google Drive
 backup actually complete and restorable. Two coupled themes carried over from the
