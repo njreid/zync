@@ -123,6 +123,8 @@ stream); best after M6 so results are visible.**
   M8; agents human-gated in M9.
 
 ## Not doing (explicit)
+- **No v0.2 data import — start fresh** (confirmed 2026-07-08: no existing tasks to
+  migrate). M5 seeds an empty op-log; no Room→op-log importer is built.
 - No CRDT framework beyond the LWW/tombstone/tree-move subset (append-dominant
   workload; see the op/merge spec).
 - No multi-user/multi-tenant — single user, single trusted server.

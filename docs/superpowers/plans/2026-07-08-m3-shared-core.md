@@ -87,7 +87,8 @@ undo/redo on late move).
 
 ### Task 6: Conformance + property tests (the proof)
 **Files:** `core/commonTest/…/ConformanceTest.kt`, `ConvergencePropertyTest.kt`.
-- Encode the **six worked conflicts** (op/merge spec §9) as fixed conformance vectors.
+- Encode the canonical vectors **V1–V8** from
+  `../specs/2026-07-08-merge-conformance-vectors.md` as fixed conformance tests.
 - **Property test:** generate random op sets (incl. moves), deliver to two replicas in
   shuffled orders → assert **identical** projected state (convergence). Seeded RNG for
   reproducibility.
