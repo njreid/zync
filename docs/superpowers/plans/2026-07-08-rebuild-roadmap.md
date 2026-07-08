@@ -43,6 +43,7 @@ Kotlin — no UI, server, or networking.**
   spec become conformance vectors; property tests for convergence
   (shuffle op delivery order → identical state).
 - **Deliverable:** a tested `core` module. **Retires:** nothing yet.
+- **Detailed task-plan:** `2026-07-08-m3-shared-core.md`.
 
 ### M4 — Server foundation: Ktor + SQLite + sync
 **Goal:** a deployable, correct, durable server. **Depends on M3.**
