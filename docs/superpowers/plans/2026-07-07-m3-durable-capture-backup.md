@@ -5,6 +5,14 @@
 > **Status: 🟡 DRAFT — awaiting confirmation.** Scope chosen 2026-07-07:
 > *attachment robustness* + *finish backup/restore*. Do not execute until the
 > owner confirms Task 1's storage decision (see Open Questions).
+>
+> **⚠️ Tasks 4–5 are under architectural review.** See
+> `docs/superpowers/specs/2026-07-08-backup-sync-architecture.md` (ADR): the
+> Google-Drive backup direction may be replaced by a self-hosted, E2E-encrypted
+> op-log + blob store (Go daemon + S3). If that ADR is accepted, Tasks 4–5 become
+> "sync to the zync daemon" rather than "backup to Drive" — though the
+> content-addressed encrypted-blob design carries over almost unchanged. Hold on
+> executing Tasks 4–5 until the ADR forks are settled.
 
 **Goal:** Make captured attachments durable and make the encrypted Google Drive
 backup actually complete and restorable. Two coupled themes carried over from the
