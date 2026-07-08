@@ -261,11 +261,27 @@ discipline (field ownership + provenance); operator re-entrancy on late-arriving
 history; operators are eventual, never on the offline capture hot path; the
 security model is trusted-not-zero-knowledge.
 
-**Remaining open decision (scope-defining): which edges must capture offline?**
-The phone is already a full local replica. Desktop/browser are currently *thin
-terminals* proxying the phone; making them offline-capture-capable turns them into
-**replicas** (local store + op log + merge) — a significant lift. Decide before
-scoping the sync work.
+**Edge scope — RESOLVED (2026-07-08): phone is the only offline replica;
+desktop/browser are online-only thin clients of the server.** Desktop/browser
+issue ops directly to the server (append file, create task/project, add tag, …),
+which serializes them immediately; they hold no durable state and no merge logic.
+This collapses the sync problem to a **single phone↔server pair** — the simplest
+non-trivial offline model (reconciliation ≈ "phone is the server's offline
+replica": on reconnect push pending ops, server merges via LWW/tombstone/move,
+phone fast-forwards).
+
+Consequences of this scoping:
+- **Desktop sheds the M1c/M1d pinning/mDNS/proxy stack.** Pointed at the server
+  (real Let's Encrypt cert, known URL) the desktop is an ordinary authenticated
+  HTTPS client — no self-signed pinning, no mDNS discovery, no local reverse proxy.
+  A significant *reduction* of the trickiest shipped code.
+- **The phone-as-LAN-server role (M1c/M1d) is largely superseded** — kept only if a
+  "server-unreachable, phone+laptop on same Wi-Fi" LAN fallback is wanted; otherwise
+  retire it.
+- **Server is the availability SPOF for desktop/browser** (offline → they don't
+  work; only the phone keeps working offline). Accepted.
+- **Browser needs a server session/login** (can't QR-pair like a native app) — a
+  mild "account to your own server" notion, a small departure from "no account".
 
 **Next:** a companion spec — op schema (with provenance + HLC), the
 LWW/tombstone/tree-move merge rules, the operator manifest + lifecycle
