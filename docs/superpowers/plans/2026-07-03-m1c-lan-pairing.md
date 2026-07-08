@@ -4,6 +4,9 @@
 > `2026-07-03-m1c-phone-remote.md`, which is the plan that was executed for the
 > phone-side remote-access work (TLS, pairing, mDNS, device management). The
 > inline `- [ ]` checkboxes here are the original plan, not maintained inline.
+> **Architecture note (2026-07-08):** largely superseded — desktop/browser reach a
+> central server, not the phone, so the LAN-exposure / pairing / TLS-pinning surface
+> mostly retires. See the 2026-07-08 specs.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

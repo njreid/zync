@@ -10,6 +10,11 @@ Tasks 1–3 and the core of Task 4 are implemented and shipped (v0.1 / v0.2). A 
 code review on 2026-07-07 hardened the M2 work; the per-task checkboxes below are
 the original plan (per-step tracking lived in the gitignored progress tracker).
 
+> **🧭 Superseded direction (2026-07-08):** Task 4's **Google-Drive** backup is
+> replaced by sync to a central server (SQLite + S3, litestream) — see
+> `docs/superpowers/specs/2026-07-08-backup-sync-architecture.md`. Tasks 1–3 stand as
+> shipped; the Task 4 content below is retained as the historical M2 plan.
+
 - **Task 1 — Signed release + CI:** ✅ **Complete.** Signed universal APK,
   `.github/workflows/release.yml` (tag/release-triggered, monotonic `versionCode`
   from the CI run number), Obtainium install docs. The open `allowBackup` decision

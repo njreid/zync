@@ -6,6 +6,11 @@
 > reverse proxy; `desktop/src-tauri/tests/fake_phone.rs` is the no-device harness.
 > ⏳ Still deferred: the localhost proxy has no additional local auth. The inline
 > `- [ ]` checkboxes are the original plan, not maintained inline.
+>
+> **🧭 Largely superseded (2026-07-08):** under the target architecture the desktop
+> becomes a **thin, online-only client of the central server** over ordinary HTTPS —
+> so this Tauri discovery / pinning / reverse-proxy stack mostly retires. See
+> `docs/superpowers/specs/2026-07-08-kotlin-kmp-target-architecture.md`.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

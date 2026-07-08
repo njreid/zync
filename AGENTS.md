@@ -4,6 +4,16 @@ Guidance for coding agents working in this repository.
 
 ## Project Shape
 
+> **🧭 Architecture is pivoting (2026-07-08).** This section describes the **shipped
+> v0.2** design. The agreed target is a central always-on server (SQLite + S3) with
+> the **phone as an offline replica**, an **op-log sync core**, and an
+> **all-Kotlin/KMP** rebuild (thin native Compose capture + a shared web UI served by
+> both the server and the phone's loopback Ktor). New *architectural* work should
+> align to the target — see `docs/superpowers/specs/2026-07-08-backup-sync-architecture.md`
+> and `docs/superpowers/specs/2026-07-08-kotlin-kmp-target-architecture.md`. Until the
+> rebuild lands, the **current code still follows the v0.2 design below** — keep edits
+> to shipped code consistent with what's actually in the tree, not the target.
+
 Zync is a local-first GTD system where the Android app is both the datastore and
 the server. Other clients connect to the phone over LAN using QR-based pairing,
 pinned TLS, and bearer sessions.

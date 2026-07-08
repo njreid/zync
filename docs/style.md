@@ -3,6 +3,13 @@
 Design conventions for zync's user-facing surfaces. Keep this in sync with the
 CSS it describes; the CSS is the source of truth for exact values.
 
+> **🧭 Direction (2026-07-08):** under the target architecture these tokens must be
+> **one design language across the seam** — applied to *both* the native **Compose**
+> theme (phone launcher/capture screens) and the shared **web** module (kotlinx.html
+> + Datastar, served by the server and the phone's loopback Ktor). The Geist/Inter
+> choice below is the source of truth for both. See
+> `docs/superpowers/specs/2026-07-08-kotlin-kmp-target-architecture.md`.
+
 ## Typography
 
 | Role | Typeface | Weights bundled | Fallback stack |
@@ -59,10 +66,12 @@ ships alongside the fonts:
 
 ## Scope / not yet applied
 
-This typography is implemented in the **phone-hosted web UI**
-(`app/src/main/assets/web/`), which is what users see in the phone WebView and,
-remotely, in the desktop client (the desktop proxies the phone's web app). The
-small **desktop pre-pairing shell** (`desktop/ui/`) still uses Pico defaults; if
-we want Geist/Inter there too, vendor the same woff2 files under `desktop/ui/`
-and confirm the Tauri CSP in `desktop/src-tauri/tauri.conf.json` allows
-`font-src 'self'`.
+**Shipped (v0.2):** this typography is implemented in the phone-hosted vanilla-JS
+web UI (`app/src/main/assets/web/`). The desktop pre-pairing shell (`desktop/ui/`)
+still uses Pico defaults.
+
+**Target:** the same Geist/Inter tokens apply to (1) the shared **web** module and
+(2) the native **Compose** theme, so the native launcher and the WebView content
+read as one app. When the rebuild lands, re-point this guide at the shared `web`
+module's CSS and the Compose theme; the shipped-v0.2 specifics above will retire
+along with the vanilla-JS UI and the Tauri desktop shell.

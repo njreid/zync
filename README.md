@@ -5,6 +5,16 @@ is reachable from your other devices over your LAN — no cloud, no account. The
 Android app is both the datastore and the server; browsers and the desktop
 client connect to it directly over pinned TLS after a QR-based pairing.
 
+> **🧭 Direction (2026-07-08):** the architecture is pivoting. zync is moving to a
+> central, always-on server (SQLite + S3, litestream backups) with the **phone as an
+> offline replica**, an **operation-log sync core**, and an **all-Kotlin / Kotlin
+> Multiplatform** rebuild (thin native Compose for capture + a shared web UI). The
+> description below is the **shipped v0.2** system (phone-as-server, LAN pairing,
+> vanilla-JS, Google-Drive backup), now being superseded. See
+> [`docs/superpowers/specs/2026-07-08-backup-sync-architecture.md`](docs/superpowers/specs/2026-07-08-backup-sync-architecture.md)
+> and
+> [`docs/superpowers/specs/2026-07-08-kotlin-kmp-target-architecture.md`](docs/superpowers/specs/2026-07-08-kotlin-kmp-target-architecture.md).
+
 ## Architecture
 
 ```

@@ -2,6 +2,15 @@
 
 **Date:** 2026-07-01 · **Status:** Draft for review · **Target device:** Pixel 9 (minSdk 34)
 
+> **🧭 Superseded in part (2026-07-08).** The GTD **data model** (recursive nodes,
+> contexts, attachments) and the AI **operators** concept below carry forward. The
+> **deployment / stack** described here — phone-as-sole-authority, no cloud, Room,
+> vanilla-JS UI, Tauri-over-LAN desktop, `jj` VCS — is **superseded** by a central
+> always-on server (SQLite + S3), an op-log sync core with the phone as an offline
+> replica, and an all-Kotlin / Kotlin-Multiplatform rebuild (thin native Compose +
+> a shared web UI). See `2026-07-08-backup-sync-architecture.md` and
+> `2026-07-08-kotlin-kmp-target-architecture.md` in this folder.
+
 ## 1. Purpose
 
 zync is a personal Android app supporting ADHD executive function through GTD (Getting Things Done). It removes friction from the two hardest steps — *capture* and *clarify* — by automating them:

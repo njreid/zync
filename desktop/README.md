@@ -5,6 +5,12 @@ WebView) that discovers a paired zync phone on the LAN, completes the Ed25519
 pairing handshake over pinned TLS, and then loads the phone's web app through a
 local reverse proxy.
 
+> **🧭 Superseded direction (2026-07-08).** Under the agreed target architecture the
+> desktop becomes a **thin, online-only client of the central server** over ordinary
+> HTTPS (real cert) — no phone discovery, no self-signed pinning, no reverse proxy.
+> The LAN / pinning / proxy design below describes the **shipped v0.2** desktop and
+> will largely retire. See `../docs/superpowers/specs/2026-07-08-kotlin-kmp-target-architecture.md`.
+
 ## Why a reverse proxy
 
 The phone terminates TLS with a self-signed certificate that only the desktop

@@ -3,7 +3,9 @@
 > **Status: ✅ COMPLETE** (shipped). The Ktor server and token-guarded JSON +
 > WebSocket API are in `app/` and covered by tests. The inline `- [ ]` checkboxes
 > are the original plan and were tracked in the separate (gitignored) progress
-> tracker, not maintained here.
+> tracker, not maintained here. **Architecture note (2026-07-08):** the phone's
+> JSON/WebSocket API is superseded by the op-log sync protocol + Datastar/SSE in the
+> central-server target — see the 2026-07-08 specs.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
