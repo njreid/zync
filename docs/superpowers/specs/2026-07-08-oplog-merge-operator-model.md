@@ -172,10 +172,14 @@ V)`.
   when the input version changes (**re-entrancy** for late-arriving offline history).
 - **No self-trigger:** an operator's own output ops never re-trigger it (checked via
   `actor`).
-- **Field ownership:** `writeScope` excludes human-owned fields; an operator op also
-  **loses any LWW race to a human write** (operators stamp HLC from the input
-  version's region, so a later human edit wins). Operators prefer **adding child /
-  annotation nodes** over overwriting.
+- **Field ownership (by construction — the ONLY guarantee):** an operator's
+  `writeScope` is limited to **operator-owned fields and new child/annotation
+  objects**; it may **never** emit an op targeting a human-owned field. Do **not**
+  rely on LWW/HLC to protect human writes — an operator runs *after* the human write
+  that triggered it, so its HLC is *later* and under LWW it would **win**, not lose.
+  If an operator wants to change a human-owned field it emits a **proposed** object
+  (like an agent, §8) for the human to accept. *(Pressure-test 2026-07-08 corrected
+  an earlier, wrong "operator loses the LWW race" claim.)*
 - **Termination:** cycles between operators are detected from declared scopes; each
   cascade has a **fuel budget**; exceeding it halts the cascade and flags it.
 - Operators are **eventual** and **never run on the phone / offline**.
@@ -210,6 +214,24 @@ V)`.
    fires once per task (idempotent by version), producing clarifications.
 6. **Trash vs edit.** Phone edits `notes` (offline); server `status=DROPPED`. Both
    LWW registers → T keeps the new notes and is trashed (reversible). No data lost.
+
+### 9a. Pressure-test findings (2026-07-08)
+
+Walked "phone completes T offline while an operator re-clarifies and the desktop
+re-tags" (full trace converged; human completion preserved). Findings folded in:
+- **Structural:** desktop + operators both write to the server → serialized there;
+  only the **phone diverges**. Every conflict reduces to *phone vs. accumulated
+  server state* — genuinely two-party.
+- **Bug fixed (§7):** "operator loses the LWW race to humans" was wrong (an
+  operator's HLC is *later* than its trigger). Human protection is **field ownership
+  by construction**, not clock order.
+- **Trigger order:** an operator checks **readScope match _before_ idempotency**, so
+  a late op that pushes an entity out of scope (e.g. completing/tagging it) cancels
+  the fire even though the version changed.
+- **Cost (not correctness):** re-entrancy re-runs the LLM on every late in-scope
+  edit — needs **debounce + "material-change" gating** (fuel already bounds it).
+- **Accepted limitation:** LWW drops the earlier of two edits to the **same field**
+  when one was offline. Fine for a single user; revisit only if it bites.
 
 ## 10. SQLite schema (sketch)
 
