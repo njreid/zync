@@ -57,6 +57,8 @@ Kotlin — no UI, server, or networking.**
   compose/Caddyfile/deploy-workflow here — see `../specs/2026-07-08-deployment.md`.
 - **Deliverable:** an EC2-deployable server that ingests ops, merges via `core`,
   persists to SQLite, backs up to S3. Minimal debug UI only.
+- **Detailed task-plan:** `2026-07-08-m4-server-foundation.md`. **Security baseline:**
+  `../specs/2026-07-08-threat-model.md` (auth/TLS/rate-limits/secrets/backup).
 
 ### M5 — Phone as a replica (first vertical slice)
 **Goal:** the phone becomes an offline op-log replica that syncs. **Depends on M4.**
@@ -114,7 +116,9 @@ stream); best after M6 so results are visible.**
   by the **shared `core`** (one implementation) + conformance/property tests in M3.
 - **Internet-facing server (new attack surface):** it now holds plaintext (trusted-
   server model). Mitigated by device auth, TLS, least-privilege S3, at-rest
-  encryption, monitoring — front-loaded in M4, reviewed in M9.
+  encryption, monitoring — front-loaded in M4, reviewed in M9. Full analysis +
+  accepted residuals in `../specs/2026-07-08-threat-model.md` (incl. operator
+  **prompt-injection** defense = scope/fuel/no-destructive-power + human-gated agents).
 - **Big-bang risk:** mitigated by the M5 vertical slice and keeping a bridge UI until
   M6/M7; core+server (M3/M4) are built alongside the running v0.2 app.
 - **Scope creep into Compose:** keep the native surface thin (M7) — content lives in
