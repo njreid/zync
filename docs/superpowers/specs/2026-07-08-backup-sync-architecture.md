@@ -305,13 +305,34 @@ Consequences of this scoping:
 | S3 | content-addressed encrypted attachment blobs + litestream SQLite backups |
 | Phone | local SQLite (Room) replica + local attachment files; syncs on reconnect |
 
-**Open decision remaining: server language (Go vs Rust).** SQLite is well-served by
-both (sqlc / sqlx / rusqlite), so this storage choice is neutral to it. The live
-tension (see §11/discussion): Rust enables a single shared merge+crypto core with
-the Kotlin phone via UniFFI (Automerge-style divergence-avoidance) at the cost of
-async-orchestration friction; Go offers velocity + easier operator/agent
-concurrency at the cost of a second merge implementation kept honest by conformance
-vectors.
+**Open decision remaining: server language.** SQLite is well-served by all
+candidates, so this storage choice is neutral to it. Three contenders:
+
+- **Kotlin/JVM + Ktor (LEADING for the "share with Android" priority).** The phone
+  is already Kotlin and already runs a Ktor server, so the merge+crypto+op core is a
+  single **Kotlin Multiplatform `commonMain` module** shared *natively* by Android
+  and the server — no FFI, no second implementation. Coroutines make the
+  operator/agent orchestration pleasant; **SQLDelight** (KMP typed SQL) can share
+  queries too. Costs: JVM footprint (use t4g.small or GraalVM native-image later);
+  HTML via **kotlinx.html** (good, less slick than maud); Datastar has no official
+  Kotlin SDK but its SSE+fragment backend is trivial in Ktor. To share the *data
+  layer* the phone would move Room→SQLDelight — or keep Room on phone and share only
+  the logic core (the recommended sweet spot).
+- **Rust + axum/maud/sqlx.** Shared core with the Kotlin phone via **UniFFI**
+  (an FFI boundary, binding gen); best compile-time correctness on the op/merge
+  model and leanest single-binary ops; cost: async-orchestration friction and a less
+  familiar ecosystem. (Note: Rust's "already in the project via Tauri desktop" is
+  weakening, since the desktop becomes a thin server client and that Rust largely
+  retires.)
+- **Go + sqlc/templ/Datastar.** Best velocity + operator/agent concurrency ergonomics
+  and the best Datastar SDK; cost: **no code sharing with Android** → two merge
+  implementations kept honest by conformance vectors.
+
+**Current lean (2026-07-08): Kotlin/JVM + Ktor + shared KMP `zync-core`**, because
+"share as much as possible between Android and server" is the stated priority and
+Kotlin shares natively (no FFI) in a stack the team already knows on both ends.
+Rust remains the pick only if lean ops / maximal compile-time correctness outrank
+sharing + velocity.
 
 **Next:** a companion spec — op schema (with provenance + HLC), the
 LWW/tombstone/tree-move merge rules, the operator manifest + lifecycle
