@@ -1,9 +1,11 @@
 # zync — Backup & Sync Architecture (ADR)
 
-> **Status: 🟡 PROPOSED — awaiting owner decision on two forks (§4, §9).**
-> Supersedes the Google-Drive backup direction in M2 Task 4 if accepted. Written
-> 2026-07-08 in response to "the Google Drive approach is wrong — what about an
-> EC2 host running a Go daemon (OT master) storing objects in S3?"
+> **Status: 🟢 DIRECTION SET (2026-07-08) — see §12 for resolved decisions.**
+> Supersedes the Google-Drive backup direction in M2 Task 4. Written 2026-07-08 in
+> response to "the Google Drive approach is wrong — what about an EC2 host running a
+> Go daemon (OT master) storing objects in S3?"; forks resolved after the
+> agents-vs-operators and offline-capture discussion. §1–§11 record how we got here;
+> **§12 is the current decision.**
 
 ## 1. Context
 
@@ -219,3 +221,53 @@ durability + phone-offline access, preserves zync's privacy ethos, and re-points
 (rather than discards) the M3 incremental-backup work. If accepted, this replaces
 M2 Task 4's Drive direction and reshapes M3 Tasks 4–5 into "sync to the zync
 daemon" instead of "backup to Drive."
+
+## 12. Resolved decisions (2026-07-08) — supersedes §10
+
+The forks are settled after the operators + offline-capture discussion:
+
+- **FORK B → operators run CENTRAL** on a trusted, always-on EC2 host. Therefore
+  **FORK A → the server sees plaintext**: E2E-to-server is **consciously dropped**.
+  The model is **trusted server + trusted devices + TLS**, not zero-knowledge cloud.
+  A server compromise discloses everything → the box must be hardened, monitored,
+  least-privilege, encrypted-at-rest (server-held keys), strong device auth.
+- **Operators** are deliberately simple: watch a declared scope → produce **typed
+  output**, with **a few retries on type-validation failure**. No open-ended tool
+  use. Rules: write only to **operator-owned fields / new child/annotation objects**,
+  **never clobber human-authored fields**; **version-keyed idempotency**
+  (“handled X@vN”); must be **re-entrant** to late-arriving offline history.
+- **Agents** are a separate, higher-cost tier: **human-gated**, possibly
+  long-running; an operator may *recommend* an agent task but the human triggers it;
+  agent results return as **proposed objects** (provenance=agent), never silent
+  mutation of human state.
+- **HARD REQUIREMENT — capture works offline, sync on reconnect.** This selects a
+  **multi-replica** model (ADR Option 2), *not* the Option 1 relay: edge devices
+  accept writes while partitioned and reconcile later. Because the offline workload
+  is **append-dominant** (capture = create) and the only offline writer is the
+  human (operators/agents are central), the merge stays **lightweight, not a heavy
+  CRDT and not OT**: edge-generated unique IDs (ULID/UUIDv7), a hybrid logical clock
+  (HLC), **LWW-register per field**, **tombstones** for deletes, and a **tree-move
+  rule** (Kleppmann) for concurrent reparents.
+
+**Resulting shape.** The **merged, provenance-tagged op log is the source of
+truth** — neither a device nor the server is "the authority." The EC2 daemon is a
+**privileged always-on replica** that holds the canonical merged log, stores
+content-addressed encrypted attachment blobs in **S3**, runs **operators** against
+merged state, and hosts **human-gated agents**. Every edge (which ones → see below)
+is a **replica**: local store + pending-op log + merge on sync.
+
+**Risks carried forward (from the 2026-07-08 red-team):** operator-vs-human write
+discipline (field ownership + provenance); operator re-entrancy on late-arriving
+history; operators are eventual, never on the offline capture hot path; the
+security model is trusted-not-zero-knowledge.
+
+**Remaining open decision (scope-defining): which edges must capture offline?**
+The phone is already a full local replica. Desktop/browser are currently *thin
+terminals* proxying the phone; making them offline-capture-capable turns them into
+**replicas** (local store + op log + merge) — a significant lift. Decide before
+scoping the sync work.
+
+**Next:** a companion spec — op schema (with provenance + HLC), the
+LWW/tombstone/tree-move merge rules, the operator manifest + lifecycle
+(scope/trigger/typed-output/retry/idempotency), and the agent handoff — then
+reshape M3 Tasks 4–5 around "sync to the zync daemon."
