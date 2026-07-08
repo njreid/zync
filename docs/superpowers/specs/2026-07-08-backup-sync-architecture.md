@@ -54,7 +54,10 @@ Two distinct problems are being conflated:
 - **Yes (only if you fully trust the box):** more options open (server-side
   indexing, search, OT) but you've given up E2E. Not recommended.
 
-**This ADR assumes "No" (E2E preserved) unless the owner overrides.**
+**This ADR assumes "No" (E2E preserved) unless the owner overrides.** But see the
+2026-07-08 addendum (§11): if content-aware LLM **operators** run server-side, the
+server must see plaintext, which forces FORK A to "Yes." Decide **FORK B (operator
+execution locus, §11)** first — it largely determines this one.
 
 ## 5. S3 is right for blobs, wrong for the live log
 
@@ -132,6 +135,67 @@ later evolution, not a rewrite. Reject OT.**
 - **Reuse:** M3 Task 4 (incremental content-addressed encrypted blobs + manifest)
   transfers almost directly — S3-via-daemon instead of Drive `appDataFolder`. So
   that work is not wasted; it's re-pointed.
+
+## 11. Addendum (2026-07-08) — writers: agents & operators
+
+Prompted by: "CRDT is attractive because it may not be only one human — multiple
+**agents** may contribute; or is our tree-node-watching **LLM-powered operator**
+model better? Operators have looping/conditionals — like agents but simpler to
+reason about."
+
+**Separate two orthogonal axes; don't conflate them.**
+- **State/replication:** single ordered authority vs. many replicas that merge
+  (CRDT).
+- **Compute/writers:** who emits ops — humans, open-ended agents, or scoped
+  reactive operators.
+
+**Multiple automated writers does NOT imply CRDT.** CRDT earns its (real) cost in
+exactly one case: multiple replicas accepting writes **while disconnected**,
+reconciling later. Agents/operators that are generally online and **funnel writes
+through one ordered log** are a single replica with one serialization point → no
+CRDT. Writer-count argues for a good *ordered log + concurrency control + reactive
+scheduler*, not CRDT. Keep CRDT for the offline multi-device **human** edge, added
+later at the edge — don't let it infect the core.
+
+**The op log is the unifying substrate.** Event sourcing (state = fold(ops)) gives
+backup, sync, provenance, replay, *and* the operator model from one primitive.
+Every writer appends ops carrying **provenance** (human / operator-id / agent-id) —
+provenance is what makes loop-breaking, idempotency, undo, and trust tractable.
+
+**Operators = scoped, fueled, provenance-idempotent log consumers.** With a
+declared **read scope** (subtree watched) and **write scope**, plus bounded
+loops/conditionals, an operator is analyzable where an open-ended agent isn't
+("triggers / stored procedures on the op stream" or spreadsheet recalc, not a free
+agent). The endorsement comes with the LLM-in-the-loop discipline:
+1. **Termination:** build the operator dependency graph from declared scopes;
+   detect cycles; per-cascade **fuel budgets**; an operator may not re-trigger on
+   its own output.
+2. **Fixpoint/idempotency:** the tree must settle. Since LLM calls are
+   nondeterministic, gate re-firing on **provenance/version** ("already handled
+   node X @ vN") or it never converges (and bleeds cost).
+3. **Cost/consequence:** every firing is a model call — debounce, budget, and gate
+   consequential ops behind human confirmation.
+The ordered log makes (1)-(2) tractable: operators consume at a cursor and append
+to the same timeline — naturally serialized and replayable, no CRDT merge.
+
+**FORK B (new, more consequential than CRDT-vs-not) — where do operators run?**
+Content-aware LLM operators need **plaintext**.
+- **Central (daemon/EC2):** the host holds the data key and sees plaintext; the
+  ADR's "dumb encrypted relay" becomes a **trusted compute node**. Coherent for a
+  personal system, but "cloud never sees plaintext" is consciously traded away (and
+  this re-opens server-side options incl. OT).
+- **Trusted end-devices only (phone/laptop):** E2E to the server holds, server
+  stays dumb — but operators fire only when that device is online, and compute is
+  device-bound.
+You cannot have both server-side content-aware operators **and** an E2E-blind
+server. This locus choice — not writer-count — sets the trust boundary and largely
+determines FORK A.
+
+**Revised recommendation.** Make the **ordered, provenance-carrying op log** the
+core (it serves backup, sync, and operators alike). Pursue the **operator model**
+over free agents for automated contributors, with fuel + provenance-idempotency +
+human gates. **Defer CRDT** to the offline-human edge. Decide **FORK B (operator
+locus)** before FORK A, since it dictates whether the server can be E2E-blind.
 
 ## 9. Open questions (owner)
 
