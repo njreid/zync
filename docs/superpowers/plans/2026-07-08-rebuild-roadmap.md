@@ -51,6 +51,9 @@ Kotlin — no UI, server, or networking.**
   Encrypt TLS, **litestream→S3**, S3 blob store (`putIfAbsent`/get), rate limiting.
 - Tested with a fake client replaying conformance vectors → server converges;
   restore-from-litestream drill.
+- **Deployment (decided):** single EC2 + Docker Compose (app + litestream + Caddy) +
+  GitHub Actions → GHCR → SSM, secrets in SSM Parameter Store. **Materialize** the
+  compose/Caddyfile/deploy-workflow here — see `../specs/2026-07-08-deployment.md`.
 - **Deliverable:** an EC2-deployable server that ingests ops, merges via `core`,
   persists to SQLite, backs up to S3. Minimal debug UI only.
 
