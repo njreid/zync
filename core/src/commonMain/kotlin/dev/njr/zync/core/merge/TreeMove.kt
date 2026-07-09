@@ -20,8 +20,11 @@ import dev.njr.zync.core.state.StateStore
  *
  * Result invariants: no cycles, no orphans — following any node's parent chain
  * terminates at a root (null parent).
+ *
+ * Internal: callers apply ops via [apply], which drives reintegration; the parent
+ * projection is read back through [StateStore.getParent]/[StateStore.allParents].
  */
-fun reintegrateMoves(store: StateStore) {
+internal fun reintegrateMoves(store: StateStore) {
     val ordered = store.moveLog().sortedBy { it.hlc }
     val parent = mutableMapOf<Ulid, Ulid>()
     for (move in ordered) {

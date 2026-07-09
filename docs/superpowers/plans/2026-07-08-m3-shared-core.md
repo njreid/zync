@@ -129,10 +129,12 @@ undo/redo on late move).
 - [x] **Step 3: Commit** `feat(core): operator manifest types + output validation`.
 
 ### Task 8: API surface + consumer smoke
-- [ ] **Step 1:** review/trim the public API (`internal` where possible); brief KDoc on
+- [x] **Step 1:** review/trim the public API (`internal` where possible); brief KDoc on
   the public types; confirm `:core` is consumable as a project dependency (a throwaway
   `:jvm` consumer or a test that exercises the public surface).
-- [ ] **Step 2: Commit** `chore(core): tidy public API + KDoc`.
+  `reintegrateMoves` + `ATTACHMENT_FIELD` made `internal`; `PublicApiSmokeTest` drives
+  the whole surface end-to-end as a consumer; scaffold test removed. 65 tests total.
+- [x] **Step 2: Commit** `chore(core): tidy public API + KDoc`.
 
 ## Interfaces / decisions
 - **`StateStore` port** keeps `core` DB-agnostic; `data` supplies the SQLDelight impl
@@ -154,3 +156,7 @@ undo/redo on late move).
 implemented; **conformance + convergence property tests green**; public API documented;
 zero platform/SQL deps in `commonMain`. Ready for `data` (M4) to persist and `server`
 (M4) to depend on.
+
+> **✅ COMPLETE (2026-07-09).** All 8 tasks done on branch `feat/m3-core`; 65 tests
+> green on JVM + Android (`./gradlew :core:allTests`). commonMain depends only on
+> kotlinx-serialization + kotlin stdlib. Next: M4 (server foundation) depends on this.
