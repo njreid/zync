@@ -52,36 +52,6 @@ private fun applyTag(store: StateStore, key: TagKey, present: Boolean, op: Op) {
 }
 
 /**
- * Recompute every node's parent from the full move log in HLC order (Kleppmann,
- * spec §4). Applying a move whose target is the node itself or a descendant of the
- * node would form a cycle, so it is **skipped**. Full replay over the sorted log is
- * order-independent by construction and inherently absorbs late-arriving moves
- * (they re-sort into place), so all replicas converge to one parent map.
- */
-fun reintegrateMoves(store: StateStore) {
-    val ordered = store.moveLog().sortedBy { it.hlc }
-    val parent = mutableMapOf<Ulid, Ulid>()
-    for (move in ordered) {
-        val node = move.entityId
-        val newParent = move.newParentId
-        if (!wouldCycle(node, newParent, parent)) parent[node] = newParent
-    }
-    // Reconcile the store's projected parents with the freshly integrated map.
-    for (node in store.allParents().keys - parent.keys) store.setParent(node, null)
-    for ((node, p) in parent) store.setParent(node, p)
-}
-
-/** True if setting `node.parent = newParent` would create a cycle (newParent is node or its descendant). */
-private fun wouldCycle(node: Ulid, newParent: Ulid, parent: Map<Ulid, Ulid>): Boolean {
-    var cursor: Ulid? = newParent
-    while (cursor != null) {
-        if (cursor == node) return true
-        cursor = parent[cursor]
-    }
-    return false
-}
-
-/**
  * Fold the store into a per-entity [EntitySnapshot] map — the queryable projection
  * used by tests and callers. Rebuildable from the log at any time.
  */

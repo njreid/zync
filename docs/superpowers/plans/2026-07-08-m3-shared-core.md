@@ -90,12 +90,14 @@ platform APIs.** Its tests (conformance + property) are the deliverable's teeth.
 ### Task 5: Tree-move algorithm (TDD) — the hard part
 **Files:** `core/…/merge/TreeMove.kt` (move log, HLC-ordered integration, cycle-skip,
 undo/redo on late move).
-- [ ] **Step 1 (RED):** concurrent A→under-B / B→under-A resolves to one winner, **no
+- [x] **Step 1 (RED):** concurrent A→under-B / B→under-A resolves to one winner, **no
   cycle**, both orders converge; a late (lower-HLC) move reorders correctly; moving
   under own descendant is skipped; orphan-free.
-- [ ] **Step 2 (GREEN):** implement Kleppmann move (server is the arbiter at runtime,
-  but the algorithm lives here and both replicas run it).
-- [ ] **Step 3: Commit** `feat(core): tree-move CRDT (cycle-safe, late-move reorder)`.
+- [x] **Step 2 (GREEN):** implement Kleppmann move — `merge/TreeMove.kt`
+  (`reintegrateMoves`, full-replay HLC-ordered + cycle-skip; extracted from Apply).
+  7 tests green (incl. V3 both-orders, late-move, descendant-skip, 3-party cycle,
+  shuffle convergence, acyclic invariant).
+- [x] **Step 3: Commit** `feat(core): tree-move CRDT (cycle-safe, late-move reorder)`.
 
 ### Task 6: Conformance + property tests (the proof)
 **Files:** `core/commonTest/…/ConformanceTest.kt`, `ConvergencePropertyTest.kt`.
