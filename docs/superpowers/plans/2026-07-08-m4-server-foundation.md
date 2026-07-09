@@ -94,9 +94,13 @@ SQLDelight impl, migration harness.
 **Files:** `server/…/Migrations.kt`, `litestream.yml`.
 - Startup migration runner; **litestream snapshot immediately before migrating**;
   restore-from-S3-on-boot.
-- [ ] **Step 1 (drill, MinIO):** backup→wipe→restore→state identical; migration applies
-  on startup; bad-migration recovery via a prior litestream generation.
-- [ ] **Step 2: Commit** `feat(server): litestream durability + startup migrations`.
+- [x] **Step 1 (drill):** backup→wipe→restore→state identical; migration applies on
+  startup (fresh→v1, usable); bad-migration recovery via a prior generation. 3 tests
+  via a `FileCopyGateway` that stands in for litestream (snapshots the SQLite file +
+  WAL sidecars as numbered generations). `StartupSequence` (restore-if-fresh →
+  snapshot → open+migrate), `DbBackupGateway` port, `LitestreamCli` prod impl, and
+  `litestream.yml` materialized. **MinIO/live litestream drill deferred** (no Docker).
+- [x] **Step 2: Commit** `feat(server): litestream durability + startup migrations`.
 
 ### Task 7: Rate limiting + baseline hardening + observability
 **Files:** `server/…/Plugins.kt`.

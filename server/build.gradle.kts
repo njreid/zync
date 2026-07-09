@@ -14,6 +14,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.bouncycastle.bcpkix)
     implementation(libs.awssdk.s3)
+    implementation(libs.sqldelight.sqlite.driver)
 
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
