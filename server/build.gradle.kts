@@ -13,6 +13,7 @@ dependencies {
     implementation(project(":data"))
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.bouncycastle.bcpkix)
+    implementation(libs.awssdk.s3)
 
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)

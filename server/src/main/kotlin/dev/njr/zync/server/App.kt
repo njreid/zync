@@ -1,6 +1,8 @@
 package dev.njr.zync.server
 
 import dev.njr.zync.server.auth.ServerAuth
+import dev.njr.zync.server.blob.BlobService
+import dev.njr.zync.server.blob.blobRoutes
 import dev.njr.zync.server.sync.SyncService
 import dev.njr.zync.server.sync.syncRoutes
 import io.ktor.http.HttpStatusCode
@@ -14,7 +16,12 @@ import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
 
 /** The zync server Ktor module: JSON negotiation, error mapping, and sync routes. */
-fun Application.zyncModule(service: SyncService, auth: ServerAuth = ServerAuth.AllowAll, json: Json = Json) {
+fun Application.zyncModule(
+    service: SyncService,
+    auth: ServerAuth = ServerAuth.AllowAll,
+    blobs: BlobService? = null,
+    json: Json = Json,
+) {
     install(ContentNegotiation) { json(json) }
     install(StatusPages) {
         exception<Throwable> { call, cause ->
@@ -23,5 +30,6 @@ fun Application.zyncModule(service: SyncService, auth: ServerAuth = ServerAuth.A
     }
     routing {
         syncRoutes(service, auth)
+        if (blobs != null) blobRoutes(blobs, auth)
     }
 }

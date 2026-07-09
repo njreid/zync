@@ -81,9 +81,14 @@ SQLDelight impl, migration harness.
 - Content-addressed `blob-<sha256>`; **server mediates S3** (clients never touch S3
   directly — keeps IAM to the instance role); `putIfAbsent`/get; size limits; tie to
   `AddAttachment` ops.
-- [ ] **Step 1 (TDD, MinIO):** putIfAbsent dedupe; get; missing→404; oversized
-  rejected; server computes the key (client can't choose it — traversal-safe).
-- [ ] **Step 2: Commit** `feat(server): S3 content-addressed blob store`.
+- [x] **Step 1 (TDD):** putIfAbsent dedupe; get; missing→404; malformed-key→404
+  (traversal-safe); oversized→413; server computes the `blob-<sha256>` key from
+  content (client can't choose it). 9 tests (service + HTTP) via InMemoryBlobStore.
+  `S3BlobStore` (AWS SDK v2, default cred chain / instance role, MinIO-compatible)
+  is implemented; its **MinIO integration test is deferred** until infra is available
+  (no Docker here). Bytes flow through server-mediated routes; keys tie to
+  `AddAttachment.blobHash`.
+- [x] **Step 2: Commit** `feat(server): S3 content-addressed blob store`.
 
 ### Task 6: Durability — litestream + startup migrations + restore drill
 **Files:** `server/…/Migrations.kt`, `litestream.yml`.
