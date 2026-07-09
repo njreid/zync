@@ -40,9 +40,13 @@ platform APIs.** Its tests (conformance + property) are the deliverable's teeth.
 `core/src/commonTest`.
 - KMP module with **jvm() + androidTarget()**; `commonMain` deps: kotlinx-serialization-json;
   `commonTest`: kotlin-test.
-- [ ] **Step 1:** Create `:core`; a trivial `commonTest` passes on both JVM and
-  Android targets (`./gradlew :core:jvmTest :core:testDebugUnitTest`).
-- [ ] **Step 2: Commit** `feat(core): scaffold KMP core module`.
+- [x] **Step 1:** Create `:core`; a trivial `commonTest` passes on both JVM and
+  Android targets (`./gradlew :core:allTests` → `jvmTest` + `testAndroidHostTest`).
+  Note: AGP 9 requires the `com.android.kotlin.multiplatform.library` plugin (not
+  `com.android.library`) with the `android {}` KMP DSL; the Android unit-test task
+  is `testAndroidHostTest`, not the old `testDebugUnitTest`. The module pins
+  `jvmToolchain(17)` because the build daemon runs on a headless JRE with no `javac`.
+- [x] **Step 2: Commit** `feat(core): scaffold KMP core module`.
 
 ### Task 2: Identity & clocks — ULID + HLC (TDD)
 **Files:** `core/…/id/Ulid.kt`, `core/…/clock/Hlc.kt` (+ tests).
