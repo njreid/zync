@@ -64,10 +64,12 @@ platform APIs.** Its tests (conformance + property) are the deliverable's teeth.
 ### Task 3: Op model + serialization (TDD)
 **Files:** `core/…/op/Op.kt` (sealed: `SetField`, `Move`, `AddTag`, `RemoveTag`,
 `AddAttachment`, `Tombstone`), `EntityType`, `Actor` (Human/Operator/Agent).
-- [ ] **Step 1 (RED):** JSON round-trip for every op type; a **golden** wire-format
+- [x] **Step 1 (RED):** JSON round-trip for every op type; a **golden** wire-format
   test (fixed JSON strings) to lock the format; `Actor`/provenance encode/decode.
-- [ ] **Step 2 (GREEN):** implement with kotlinx.serialization (sealed polymorphism).
-- [ ] **Step 3: Commit** `feat(core): op model + versioned serialization`.
+- [x] **Step 2 (GREEN):** implement with kotlinx.serialization (sealed polymorphism).
+  Modeled as a sealed `Op` (one subtype per mutation) instead of the spec's
+  nullable-field bag; discriminator `type` (snake_case SerialNames). 9 tests green.
+- [x] **Step 3: Commit** `feat(core): op model + versioned serialization`.
 
 ### Task 4: State + apply — LWW registers, tombstones, tags (TDD)
 **Files:** `core/…/state/StateStore.kt` (port), `InMemoryStateStore.kt` (test impl),
