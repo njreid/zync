@@ -106,9 +106,12 @@ undo/redo on late move).
 - **Property test:** generate random op sets (incl. moves), deliver to two replicas in
   shuffled orders → assert **identical** projected state (convergence). Seeded RNG for
   reproducibility.
-- [ ] **Step 1:** implement both; both green. Treat any failure as a spec/impl bug to
-  resolve before proceeding.
-- [ ] **Step 2: Commit** `test(core): conflict conformance + convergence property tests`.
+- [x] **Step 1:** implement both; both green. V1–V8 (10 cases incl. variants) each
+  also checked order-independent; property test = 40 seeds × 60 ops delivered to two
+  replicas in independent shuffles → identical projection, + idempotency (re-deliver).
+  HLCs kept globally unique in the generator (strict total order, as the real system
+  guarantees). V4's emission guard is deferred to Task 7 (pure write-scope predicate).
+- [x] **Step 2: Commit** `test(core): conflict conformance + convergence property tests`.
 
 ### Task 7: Operator-manifest types + typed-output validation (slim)
 **Files:** `core/…/operator/OperatorManifest.kt`, `OutputValidation.kt`.
