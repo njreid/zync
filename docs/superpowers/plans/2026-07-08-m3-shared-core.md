@@ -53,11 +53,13 @@ platform APIs.** Its tests (conformance + property) are the deliverable's teeth.
 - `Ulid` (time+entropy, lexically sortable, string enc/dec) with injected `Clock`+`Random`.
 - `Hlc(physical, counter, deviceId)` with `now()`, `observe(remote)`, total-order
   `compareTo` (physical → counter → deviceId), pack/unpack, serialization.
-- [ ] **Step 1 (RED):** tests — HLC monotonic across `now()`; `observe` advances past
+- [x] **Step 1 (RED):** tests — HLC monotonic across `now()`; `observe` advances past
   a remote HLC; tiebreak by deviceId; ULID uniqueness + sort order; determinism under
   fixed clock/RNG.
-- [ ] **Step 2 (GREEN):** implement. `./gradlew :core:test` green.
-- [ ] **Step 3: Commit** `feat(core): ULID + hybrid logical clock`.
+- [x] **Step 2 (GREEN):** implement. `./gradlew :core:allTests` green (19 tests).
+  Note: `now()`/`observe()` live on a stateful `HlcGenerator`; `Hlc` itself is the
+  immutable value (compareTo/pack/serialization). ULID uses Crockford Base32.
+- [x] **Step 3: Commit** `feat(core): ULID + hybrid logical clock`.
 
 ### Task 3: Op model + serialization (TDD)
 **Files:** `core/…/op/Op.kt` (sealed: `SetField`, `Move`, `AddTag`, `RemoveTag`,
