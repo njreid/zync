@@ -32,3 +32,4 @@ plugins {
 rootProject.name = "zync"
 include(":app")
 include(":core")
+include(":data")

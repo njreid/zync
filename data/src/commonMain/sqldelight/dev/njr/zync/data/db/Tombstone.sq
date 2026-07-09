@@ -1,0 +1,20 @@
+-- Terminal entity purge; max HLC wins, tombstone beats concurrent edits at projection.
+CREATE TABLE tombstone (
+  entity_id TEXT NOT NULL PRIMARY KEY,
+  hlc_physical INTEGER NOT NULL,
+  hlc_counter INTEGER NOT NULL,
+  hlc_device TEXT NOT NULL
+);
+
+getTombstone:
+SELECT hlc_physical, hlc_counter, hlc_device
+FROM tombstone
+WHERE entity_id = ?;
+
+putTombstone:
+INSERT OR REPLACE INTO tombstone(entity_id, hlc_physical, hlc_counter, hlc_device)
+VALUES (?, ?, ?, ?);
+
+allTombstones:
+SELECT entity_id, hlc_physical, hlc_counter, hlc_device
+FROM tombstone;

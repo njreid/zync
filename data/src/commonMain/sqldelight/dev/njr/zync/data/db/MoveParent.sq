@@ -1,0 +1,18 @@
+-- Integrated parent projection (rebuilt from move_log by the move algorithm).
+-- Absence of a row = root (null parent).
+CREATE TABLE move_parent (
+  node_id TEXT NOT NULL PRIMARY KEY,
+  parent_id TEXT NOT NULL
+);
+
+getParent:
+SELECT parent_id FROM move_parent WHERE node_id = ?;
+
+setParent:
+INSERT OR REPLACE INTO move_parent(node_id, parent_id) VALUES (?, ?);
+
+deleteParent:
+DELETE FROM move_parent WHERE node_id = ?;
+
+allParents:
+SELECT node_id, parent_id FROM move_parent;

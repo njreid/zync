@@ -1,0 +1,23 @@
+-- LWW-boolean tag membership keyed by (node_id, context_id). present = 0|1.
+CREATE TABLE tag (
+  node_id TEXT NOT NULL,
+  context_id TEXT NOT NULL,
+  present INTEGER NOT NULL,
+  hlc_physical INTEGER NOT NULL,
+  hlc_counter INTEGER NOT NULL,
+  hlc_device TEXT NOT NULL,
+  PRIMARY KEY (node_id, context_id)
+);
+
+getTag:
+SELECT present, hlc_physical, hlc_counter, hlc_device
+FROM tag
+WHERE node_id = ? AND context_id = ?;
+
+putTag:
+INSERT OR REPLACE INTO tag(node_id, context_id, present, hlc_physical, hlc_counter, hlc_device)
+VALUES (?, ?, ?, ?, ?, ?);
+
+allTags:
+SELECT node_id, context_id, present, hlc_physical, hlc_counter, hlc_device
+FROM tag;

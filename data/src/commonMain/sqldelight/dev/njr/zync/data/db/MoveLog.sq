@@ -1,0 +1,21 @@
+-- HLC-ordered move log; the integration (cycle-skip) recomputes move_parent.
+-- Stores enough to faithfully reconstruct the Op.Move (actor as JSON text).
+CREATE TABLE move_log (
+  op_id TEXT NOT NULL PRIMARY KEY,
+  node_id TEXT NOT NULL,
+  new_parent_id TEXT NOT NULL,
+  hlc_physical INTEGER NOT NULL,
+  hlc_counter INTEGER NOT NULL,
+  hlc_device TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  device_id TEXT NOT NULL,
+  wall_clock INTEGER NOT NULL
+);
+
+putMove:
+INSERT OR REPLACE INTO move_log(op_id, node_id, new_parent_id, hlc_physical, hlc_counter, hlc_device, actor, device_id, wall_clock)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+allMoves:
+SELECT op_id, node_id, new_parent_id, hlc_physical, hlc_counter, hlc_device, actor, device_id, wall_clock
+FROM move_log;

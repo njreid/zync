@@ -1,0 +1,36 @@
+-- Server-only tables from op/merge spec §10. Defined here as part of the schema
+-- deliverable; their queries land with the tasks that use them (op_log/sync_state in
+-- the sync endpoints, M4 Task 2–3; operator_run in the operator runtime, M8).
+
+-- Durable transport/audit log. `seq` is the server-assigned monotonic cursor (null
+-- until ingested); `payload` is the full serialized Op JSON. Distinct from the
+-- StateStore's applied_op ledger.
+CREATE TABLE op_log (
+  op_id TEXT NOT NULL PRIMARY KEY,
+  seq INTEGER,
+  entity_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  op_type TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  hlc_physical INTEGER NOT NULL,
+  hlc_counter INTEGER NOT NULL,
+  hlc_device TEXT NOT NULL,
+  device_id TEXT NOT NULL,
+  wall_clock INTEGER NOT NULL,
+  synced INTEGER NOT NULL DEFAULT 0
+);
+
+-- Per-peer pull cursor (max seq seen).
+CREATE TABLE sync_state (
+  peer TEXT NOT NULL PRIMARY KEY,
+  cursor INTEGER NOT NULL
+);
+
+-- Operator idempotency ledger (M8): a firing is keyed by (operator, entity, version).
+CREATE TABLE operator_run (
+  operator_id TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  input_version TEXT NOT NULL,
+  status TEXT NOT NULL,
+  PRIMARY KEY (operator_id, entity_id, input_version)
+);

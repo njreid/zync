@@ -1,0 +1,11 @@
+-- Idempotency ledger for the StateStore port (dedupe by opId). Independent of the
+-- server's op_log so ingest ordering can't accidentally short-circuit apply().
+CREATE TABLE applied_op (
+  op_id TEXT NOT NULL PRIMARY KEY
+);
+
+isApplied:
+SELECT COUNT(*) FROM applied_op WHERE op_id = ?;
+
+markApplied:
+INSERT OR IGNORE INTO applied_op(op_id) VALUES (?);

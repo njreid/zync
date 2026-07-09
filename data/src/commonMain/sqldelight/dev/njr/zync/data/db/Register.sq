@@ -1,0 +1,24 @@
+-- LWW register map keyed by (entity_id, field). `value` and `actor` are JSON text.
+CREATE TABLE register (
+  entity_id TEXT NOT NULL,
+  field TEXT NOT NULL,
+  value TEXT NOT NULL,
+  hlc_physical INTEGER NOT NULL,
+  hlc_counter INTEGER NOT NULL,
+  hlc_device TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  PRIMARY KEY (entity_id, field)
+);
+
+getRegister:
+SELECT value, hlc_physical, hlc_counter, hlc_device, actor
+FROM register
+WHERE entity_id = ? AND field = ?;
+
+putRegister:
+INSERT OR REPLACE INTO register(entity_id, field, value, hlc_physical, hlc_counter, hlc_device, actor)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+allRegisters:
+SELECT entity_id, field, value, hlc_physical, hlc_counter, hlc_device, actor
+FROM register;

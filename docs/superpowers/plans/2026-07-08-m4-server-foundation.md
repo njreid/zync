@@ -28,10 +28,15 @@ SQLDelight impl, migration harness.
 - Schema from op/merge spec §10: `op_log, register, tombstone, move_log, tag,
   sync_state, operator_run` + materialized projections (`node, context, node_context,
   attachment`). Implement `core`'s `StateStore` port over SQLDelight.
-- [ ] **Step 1 (TDD):** schema round-trip; `apply` (via `core`) persists + projects
-  correctly; JVM + Robolectric (Android driver); a migration-test harness (mirrors the
-  Room migration discipline).
-- [ ] **Step 2: Commit** `feat(data): SQLDelight schema + StateStore impl`.
+- [x] **Step 1 (TDD):** schema round-trip; `apply` (via `core`) persists + projects
+  correctly; migration-test harness (schema version tracked in `PRAGMA user_version`).
+  4 JVM tests: parity vs `InMemoryStateStore` over 25 random batches (all op types),
+  idempotent re-apply, state persists across file reopen, schema-version baseline.
+  `data` is KMP jvm+android (android-driver wired, android target compiles); the
+  **Robolectric android-driver test is deferred to M5** (phone-as-replica) since M4's
+  DoD is JVM-only. Tables: register/tombstone/tag/move_log/move_parent/applied_op +
+  op_log/sync_state/operator_run (CREATE-only; queries land with their tasks).
+- [x] **Step 2: Commit** `feat(data): SQLDelight schema + StateStore impl`.
 
 ### Task 2: Sync wire contract + `seq`
 **Files:** `server/…/sync/Dto.kt`, `SeqAllocator.kt`.
