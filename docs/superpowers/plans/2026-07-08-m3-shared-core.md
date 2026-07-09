@@ -78,10 +78,14 @@ platform APIs.** Its tests (conformance + property) are the deliverable's teeth.
   LWW by HLC, tombstone-wins, tag LWW-boolean; **idempotent** (dedupe by `opId`) and
   **commutative** for non-move ops. A `project()` fold to a queryable snapshot for
   assertions.
-- [ ] **Step 1 (RED):** higher-HLC-wins; apply-twice == apply-once; order-independent
+- [x] **Step 1 (RED):** higher-HLC-wins; apply-twice == apply-once; order-independent
   final state for a set of non-move ops; tombstone beats concurrent edit.
-- [ ] **Step 2 (GREEN):** implement against the `StateStore` port.
-- [ ] **Step 3: Commit** `feat(core): LWW registers, tombstones, tags + apply`.
+- [x] **Step 2 (GREEN):** implement against the `StateStore` port (9 tests green).
+  `apply` is total over the sealed `Op`; move integration (`reintegrateMoves`,
+  full-replay HLC-ordered + cycle-skip) landed here so the port/store are complete —
+  the hard move proofs are Task 5. `StateStore`/`InMemoryStateStore`/`project()` +
+  `AddAttachment` stored as an `@attachment` register (uniform tombstone lifecycle).
+- [x] **Step 3: Commit** `feat(core): LWW registers, tombstones, tags + apply`.
 
 ### Task 5: Tree-move algorithm (TDD) — the hard part
 **Files:** `core/…/merge/TreeMove.kt` (move log, HLC-ordered integration, cycle-skip,
