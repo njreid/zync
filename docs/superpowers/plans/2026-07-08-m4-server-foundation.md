@@ -106,8 +106,10 @@ SQLDelight impl, migration harness.
 **Files:** `server/…/Plugins.kt`.
 - Per-device rate limits; request size caps; structured logging + basic metrics;
   `/health`. (Full items tracked in the threat model; this is the baseline.)
-- [ ] **Step 1 (TDD):** rate limit trips; oversized request rejected; health OK.
-- [ ] **Step 2: Commit** `feat(server): rate limits, size caps, health, logging`.
+- [x] **Step 1 (TDD):** rate limit trips; oversized request rejected; health OK; metrics
+  report. 5 tests: token-bucket limiter (trip + refill + per-key isolation), HTTP 429
+  after capacity, 413 oversized, /health exempt, /metrics counts requests/rejections.
+- [x] **Step 2: Commit** `feat(server): rate limits, size caps, health, logging`.
 
 ### Task 8: Deployment materialization (from the deployment spec)
 **Files:** `Dockerfile` (arm64, JVM + litestream as PID 1), `docker-compose.yml`,
