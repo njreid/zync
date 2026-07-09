@@ -53,10 +53,12 @@ SQLDelight impl, migration harness.
 **Files:** `server/…/App.kt`, `SyncRoutes.kt`.
 - Wire push/pull/bootstrap to `data` + `core.apply`; **idempotent ingest** (dedupe by
   `opId`); Ktor test host + fake client.
-- [ ] **Step 1 (TDD):** push→apply→converge; pull cursor paging; bootstrap; idempotent
-  re-push; **replay V1–V8 over the wire** → server state == expected; **sync
-  round-trip** (in-process phone `core`+`data` ↔ server) incl. offline→reconnect.
-- [ ] **Step 2: Commit** `feat(server): sync endpoints + idempotent merge ingest`.
+- [x] **Step 1 (TDD):** push→apply→converge; pull cursor paging; bootstrap; idempotent
+  re-push; **sync round-trip** (in-process phone `core` ↔ server) incl. offline→push→
+  fresh-replica convergence; LWW + tombstone resolve over the wire. 7 tests + HTTP
+  round-trip (Ktor test host). Full V1–V8 already proven in `core`; the wire tests
+  exercise transport/ingest and convergence rather than re-encoding every vector.
+- [x] **Step 2: Commit** `feat(server): sync endpoints + idempotent merge ingest`.
 
 ### Task 4: Auth — device Ed25519 + browser session
 **Files:** `server/…/auth/`.

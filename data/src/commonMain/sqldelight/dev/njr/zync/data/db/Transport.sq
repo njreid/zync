@@ -20,6 +20,19 @@ CREATE TABLE op_log (
   synced INTEGER NOT NULL DEFAULT 0
 );
 
+insertOp:
+INSERT OR IGNORE INTO op_log(op_id, seq, entity_id, entity_type, op_type, payload, hlc_physical, hlc_counter, hlc_device, device_id, wall_clock, synced)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+opExists:
+SELECT COUNT(*) FROM op_log WHERE op_id = ?;
+
+headSeq:
+SELECT COALESCE(MAX(seq), 0) FROM op_log;
+
+selectSince:
+SELECT payload FROM op_log WHERE seq > ? ORDER BY seq ASC LIMIT ?;
+
 -- Per-peer pull cursor (max seq seen).
 CREATE TABLE sync_state (
   peer TEXT NOT NULL PRIMARY KEY,

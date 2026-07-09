@@ -1,6 +1,16 @@
 package dev.njr.zync.server
 
-/** Entry point — the real Ktor app is wired in M4 Task 3. */
+import dev.njr.zync.data.JvmZyncDatabase
+import dev.njr.zync.server.sync.SyncService
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.netty.Netty
+
+/** Entry point: open the durable DB, wire the sync service, serve. */
 fun main() {
-    println("zync server — endpoints arrive in M4 Task 3")
+    val dbPath = System.getenv("ZYNC_DB_PATH") ?: "zync.db"
+    val port = System.getenv("ZYNC_PORT")?.toInt() ?: 8080
+    val service = SyncService(JvmZyncDatabase.file(dbPath))
+    embeddedServer(Netty, port = port) {
+        zyncModule(service)
+    }.start(wait = true)
 }
