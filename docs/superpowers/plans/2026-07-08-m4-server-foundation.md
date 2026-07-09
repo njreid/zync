@@ -44,9 +44,10 @@ SQLDelight impl, migration harness.
   `GET /sync/pull?since=<cursor>` (paged ops by `seq`), `GET /sync/bootstrap`
   (compacted snapshot: register map + move-log tail + head seq). `seq` = monotonic,
   assigned **transactionally** on ingest.
-- [ ] **Step 1 (TDD):** DTO serialization; `seq` strictly monotonic + gap-free under
-  sequential ingest; snapshot serialization round-trip.
-- [ ] **Step 2: Commit** `feat(server): sync wire contract + seq allocation`.
+- [x] **Step 1 (TDD):** DTO serialization; `seq` strictly monotonic + gap-free under
+  sequential ingest; snapshot serialization round-trip. 7 tests (incl. seq gap-free
+  under 8-thread concurrent ingest). New `:server` JVM module (Ktor + core + data).
+- [x] **Step 2: Commit** `feat(server): sync wire contract + seq allocation`.
 
 ### Task 3: Ktor app — ingest/merge + endpoints (the heart)
 **Files:** `server/…/App.kt`, `SyncRoutes.kt`.
