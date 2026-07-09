@@ -120,9 +120,13 @@ undo/redo on late move).
   types (id, readScope handle, writeScope, trigger kind, output JSON-schema, retries,
   fuel) + **typed-output validation** (validate an LLM result against the schema;
   pure retry-count semantics). Flag that the shape may evolve when M8 lands.
-- [ ] **Step 1 (RED):** valid output passes; invalid fails; retry-budget accounting.
-- [ ] **Step 2 (GREEN):** implement; serialization round-trip for manifests.
-- [ ] **Step 3: Commit** `feat(core): operator manifest types + output validation`.
+- [x] **Step 1 (RED):** valid output passes; invalid fails; retry-budget accounting.
+- [x] **Step 2 (GREEN):** implement; serialization round-trip for manifests (8 tests).
+  `OperatorManifest`/`ReadScopeHandle` (opaque)/`WriteScope`/`TriggerKind`/`Fuel`;
+  slim typed `OutputSchema.validate` + pure `evaluate(attempts, retries)` retry
+  semantics; `WriteScope.permits(op)` is the V4 emission guard (field ownership by
+  construction). readScope stays an opaque handle; runtime is M8.
+- [x] **Step 3: Commit** `feat(core): operator manifest types + output validation`.
 
 ### Task 8: API surface + consumer smoke
 - [ ] **Step 1:** review/trim the public API (`internal` where possible); brief KDoc on
