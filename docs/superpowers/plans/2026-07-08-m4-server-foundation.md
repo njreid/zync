@@ -65,9 +65,16 @@ SQLDelight impl, migration harness.
 - Allowed-device registry (pubkeys); **signed-request auth** for native clients;
   **session/login** for browser (single-user — passkey/password to your own server).
   Reject unknown devices; nonce/replay protection; device **revocation**.
-- [ ] **Step 1 (TDD):** valid device accepted; unknown rejected; replayed request
-  rejected; revoked device rejected; browser session lifecycle.
-- [ ] **Step 2: Commit** `feat(server): device Ed25519 auth + browser sessions`.
+- [x] **Step 1 (TDD):** valid device accepted; unknown rejected; replayed request
+  rejected; revoked device rejected; stale-timestamp + bad-signature rejected; browser
+  session lifecycle; HTTP: unauthenticated 401, device-signed 200, login→bearer 200.
+- [x] **Step 2: Commit** `feat(server): device Ed25519 auth + browser sessions`.
+  **Decision:** native = Ed25519 signed requests (BouncyCastle); browser = password →
+  opaque session bearer via `SessionStore` with a pluggable `credentialCheck` so a
+  passkey/WebAuthn verifier swaps in later. Signature covers method+path+timestamp+
+  nonce (replay-protected via NonceCache); TLS covers body integrity. **Deferred:**
+  full WebAuthn (needs a browser + WebAuthn lib; unexercisable headless) and
+  persisting the device registry (in-memory now; SSM/DB-seeded in prod).
 
 ### Task 5: Blob store (S3) + attachments
 **Files:** `server/…/blob/S3BlobStore.kt`, blob routes.
