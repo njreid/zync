@@ -89,9 +89,12 @@ retires Drive; the LAN stack + phone-server are retired in **M7** (leave them fo
 **Files:** `capture/*`, `attach/CaptureRepository` → route through `OpWriter`.
 - Volume-key / share / voice / doc capture creates an inbox node **as ops** (offline-
   safe), with attachments via the local blob store. Capture never blocks on network.
-- [ ] **Step 1 (TDD):** a capture produces the expected create-ops + attachment;
-  offline capture is queued; appears after a later sync.
-- [ ] **Step 2: Commit** `feat(app): capture writes op-log entries offline`.
+- [x] **Step 1 (Robolectric):** `ReplicaCapture.captureNote`/`captureAttachment` create
+  the inbox node + attachment as ops, store the blob locally, and queue everything
+  unsynced (offline). 2 tests. `OpWriter.createAttachment` mints the attachment entity.
+  (Wiring the Android capture triggers to this seam is compile-safe glue, kept minimal
+  until the Task 7/8 restructure.)
+- [x] **Step 2: Commit** `feat(app): capture writes op-log entries offline`.
 
 ### Task 7: Bridge UI (keep the phone usable)
 **Files:** the existing `assets/web/` UI, re-pointed at op-log-backed reads.

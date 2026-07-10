@@ -11,6 +11,7 @@ import dev.njr.zync.data.db.ZyncDatabase
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlin.random.Random
 
 /**
@@ -52,6 +53,21 @@ class OpWriter(
 
     fun addAttachment(attachment: Ulid, payload: JsonElement): Op =
         record(Op.AddAttachment(newId(), attachment, EntityType.Attachment, hlc.now(), actor, deviceId, clock.nowMillis(), payload))
+
+    /** Mint an attachment entity linked to [node] (immutable payload); returns its id. */
+    fun createAttachment(node: Ulid, type: String, blobHash: String, relativePath: String): Ulid {
+        val id = newId()
+        addAttachment(
+            id,
+            buildJsonObject {
+                put("nodeId", JsonPrimitive(node.toString()))
+                put("type", JsonPrimitive(type))
+                put("blobHash", JsonPrimitive(blobHash))
+                put("relativePath", JsonPrimitive(relativePath))
+            },
+        )
+        return id
+    }
 
     fun tombstone(entity: Ulid, type: EntityType = EntityType.Node): Op =
         record(Op.Tombstone(newId(), entity, type, hlc.now(), actor, deviceId, clock.nowMillis()))
