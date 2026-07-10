@@ -113,10 +113,12 @@ retires Drive; the LAN stack + phone-server are retired in **M7** (leave them fo
 - [ ] **Step 2: Commit** `chore(app): retire Google Drive backup (server sync supersedes)`.
 
 ### Task 9: Vertical-slice acceptance
-- [ ] **Step 1 (acceptance):** end-to-end — **pair the phone; capture offline; reconnect;
-  the op appears on the server** (assert against the in-process `:server`/its bootstrap).
-  Property: phone projection == server projection after sync.
-- [ ] **Step 2: Commit** `test(app): offline-capture → sync → server vertical slice`.
+- [x] **Step 1 (Robolectric acceptance):** end-to-end — **pair → capture offline (note +
+  attachment) → reconnect → upload blob + sync → ops land on the server**, against a
+  fake server backed by the real `core` merge that verifies the paired device's
+  signatures. Property: phone projection == server projection; blob present; captured
+  titles on the server. (19 replica tests green together.)
+- [x] **Step 2: Commit** `test(app): offline-capture → sync → server vertical slice`.
 
 ## Interfaces / decisions
 - **HLC persistence** on the phone is mandatory (offline monotonicity across restarts).
