@@ -1,7 +1,7 @@
 package dev.njr.zync.server
 
 import dev.njr.zync.data.JvmZyncDatabase
-import dev.njr.zync.server.blob.BlobKeyResponse
+import dev.njr.zync.core.sync.BlobKeyResponse
 import dev.njr.zync.server.blob.BlobService
 import dev.njr.zync.server.blob.InMemoryBlobStore
 import dev.njr.zync.server.blob.blobKey

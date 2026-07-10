@@ -5,7 +5,7 @@ import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.op.Op
 import dev.njr.zync.core.state.InMemoryStateStore
 import dev.njr.zync.data.JvmZyncDatabase
-import dev.njr.zync.server.blob.BlobKeyResponse
+import dev.njr.zync.core.sync.BlobKeyResponse
 import dev.njr.zync.server.blob.BlobService
 import dev.njr.zync.server.blob.InMemoryBlobStore
 import dev.njr.zync.server.blob.blobKey

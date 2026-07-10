@@ -79,9 +79,11 @@ retires Drive; the LAN stack + phone-server are retired in **M7** (leave them fo
 **Files:** `app/.../blob/LocalBlobStore.kt`, upload in `SyncClient`.
 - Content-addressed local store (`blob-<sha256>`); `AddAttachment` op carries the hash;
   pending blobs upload to the server `/blob` on sync (`putIfAbsent` dedupes).
-- [ ] **Step 1 (TDD):** local put/get by hash; sync uploads pending blobs; op hash ==
-  uploaded key; re-upload deduped.
-- [ ] **Step 2: Commit** `feat(app): local blob store + upload on sync`.
+- [x] **Step 1:** content-addressed local put/get (golden sha256("") key matches the
+  server format); signed upload posts bytes to /blob and agrees on the key; missing key
+  is a no-op. 3 tests. `BlobKeyResponse` moved to `:core`; `signedHeaders` extracted
+  and shared by the sync client + uploader.
+- [x] **Step 2: Commit** `feat(app): local blob store + upload on sync`.
 
 ### Task 6: Capture writes local ops offline
 **Files:** `capture/*`, `attach/CaptureRepository` → route through `OpWriter`.

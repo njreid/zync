@@ -80,16 +80,6 @@ class SyncClient(
         }
     }
 
-    private fun authHeaders(method: String, path: String): Map<String, String> {
-        val timestamp = now()
-        val requestNonce = nonce()
-        val canonical = "$method\n$path\n$timestamp\n$requestNonce"
-        val signature = Base64.encode(signer.sign(canonical.encodeToByteArray()))
-        return mapOf(
-            "X-Device-Id" to signer.deviceId,
-            "X-Timestamp" to timestamp.toString(),
-            "X-Nonce" to requestNonce,
-            "X-Signature" to signature,
-        )
-    }
+    private fun authHeaders(method: String, path: String): Map<String, String> =
+        signedHeaders(signer, method, path, now(), nonce())
 }

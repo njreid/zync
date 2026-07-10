@@ -24,6 +24,10 @@ data class PushResponse(val ackedOpIds: List<Ulid>, val serverHead: Long)
 @Serializable
 data class PullResponse(val ops: List<Op>, val head: Long)
 
+/** `POST /blob` reply — the server-computed content-addressed key. */
+@Serializable
+data class BlobKeyResponse(val key: String)
+
 /** A LWW register in the bootstrap snapshot. */
 @Serializable
 data class RegisterEntry(val entityId: Ulid, val field: String, val value: JsonElement, val hlc: Hlc, val actor: Actor)
