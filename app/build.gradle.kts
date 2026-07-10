@@ -130,7 +130,15 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity)
 
-  // Room
+  // Shared op-log core + SQLDelight data (M5: phone as a replica)
+  implementation(project(":core"))
+  implementation(project(":data"))
+
+  // Sync client (device-signed push/pull to the central server)
+  implementation(libs.ktor.client.cio)
+  implementation(libs.ktor.client.content.negotiation)
+
+  // Room (read-only bridge until M6/M7)
   implementation(libs.room.runtime)
   implementation(libs.room.ktx)
   ksp(libs.room.compiler)

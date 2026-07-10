@@ -34,9 +34,11 @@ retires Drive; the LAN stack + phone-server are retired in **M7** (leave them fo
 ### Task 1: `:data` on Android (finish the deferred M4 item)
 **Files:** `data/build.gradle.kts` (android-driver already wired), a Robolectric
 `androidHostTest`.
-- [ ] **Step 1:** add a Robolectric test that runs `SqlDelightStateStore` over the
-  **AndroidSqliteDriver** (parity with the JVM impl over a small op batch).
-- [ ] **Step 2: Commit** `test(data): android SQLDelight driver parity (Robolectric)`.
+- [x] **Step 1:** Robolectric test runs `SqlDelightStateStore` over the
+  **AndroidSqliteDriver** (parity with the in-memory reference over a mixed op batch).
+  `AndroidZyncDatabase` factory added in `:data` androidMain; test lives in `:app`
+  (reuses the app's proven Robolectric). App now depends on `:core` + `:data`.
+- [x] **Step 2: Commit** `test(data): android SQLDelight driver parity (Robolectric)`.
 
 ### Task 2: Phone op-log write path
 **Files:** `app/.../oplog/OpWriter.kt`, `HlcClock.kt`, DI wiring.
