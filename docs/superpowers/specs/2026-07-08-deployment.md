@@ -126,3 +126,28 @@ minimal transfer.
 - **Backup/restore drills** (verify litestream restore end-to-end) — M4 acceptance +
   M9.
 - **ARM image:** build the server image `linux/arm64` to match Graviton.
+
+## 10. Decision — haloy (deferred, evaluated 2026-07-10)
+
+Evaluated **[haloy](https://haloy.dev/)** (CLI + `haloyd` daemon + reverse-proxy daemon;
+`haloy deploy` builds locally, uploads only changed layers — no registry — and does a
+zero-downtime swap with ACME TLS, rollback, and replicas) as a replacement for the
+Compose + Caddy + GHCR/buildx + SSM `deploy.sh` pipeline (§3–§5).
+
+**Verdict: viable and would simplify shipping, but deferred until after M5/M6.**
+- It would replace **Caddy** (proxy + TLS), the **GHCR + buildx + SSM deploy** path
+  (`haloy deploy`, direct layer upload), and add **instant rollback** — cutting the
+  fiddliest part of §3–§5.
+- **One real design change is required:** decouple **litestream from the app container.**
+  haloy's zero-downtime swap briefly runs old+new containers on the same volume; two
+  `litestream replicate` processes against the same S3 replica would conflict on
+  generations. Fix: run litestream as a **separate persistent process** (own container /
+  systemd) that haloy does not replace, replicating the shared SQLite volume; haloy
+  swaps only the JVM app. The brief single-writer SQLite overlap during a swap is
+  acceptable for the single-user workload (or use a stop-first deploy for zero overlap).
+- Cost: adopt `haloyd` on the box, rework the litestream/PID-1 arrangement, retire the
+  Compose/Caddy/workflow artifacts.
+- **Sequencing:** nothing is deployed yet and the current stack works, so this is a
+  post-product deployment-simplification pass — prototype `haloy.yaml` + the litestream
+  sidecar then. Not blocking. (haloy explicitly supports SQLite apps, so SQLite itself
+  is not the blocker — only the litestream-in-the-app-container arrangement is.)
