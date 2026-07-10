@@ -68,10 +68,12 @@ retires Drive; the LAN stack + phone-server are retired in **M7** (leave them fo
 - Scan the `zync://pair` QR → generate a device **Ed25519 key in the Android Keystore**
   → `POST /pair {devicePublicKey, code}` → **verify the server confirmation** against the
   pinned key → persist {server addr, pinned server pubkey, deviceId, device key ref}.
-- [ ] **Step 1 (TDD):** parse `zync://pair` payload; confirmation verification
-  accept/reject; a full pair handshake against in-process `:server` yields working
-  signed requests (ties Task 3 + M4 `/pair`).
-- [ ] **Step 2: Commit** `feat(app): device pairing (scan → keygen → /pair → pin)`.
+- [x] **Step 1:** parse `zync://pair` payload; full pair handshake against a MockEngine
+  `/pair` (real Ed25519 signing); **pin** the server key (must match the QR), **verify**
+  the server confirmation. 5 tests: parse, success returns pinned creds, wrong code /
+  key-mismatch / bad-confirmation all rejected. Pairing DTOs + confirmation message
+  moved to `:core` (`core.pairing`). URI values URL-encoded (base64 safe).
+- [x] **Step 2: Commit** `feat(app): device pairing (scan → keygen → /pair → pin)`.
 
 ### Task 5: Local blobs + upload on sync
 **Files:** `app/.../blob/LocalBlobStore.kt`, upload in `SyncClient`.

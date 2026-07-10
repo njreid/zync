@@ -1,32 +1,19 @@
 package dev.njr.zync.server.pairing
 
+import dev.njr.zync.core.pairing.PairRequest
+import dev.njr.zync.core.pairing.PairResponse
+import dev.njr.zync.core.pairing.pairingConfirmationMessage
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
-import kotlinx.serialization.Serializable
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
 /** Bundles the pairing endpoint's dependencies for wiring into the app. */
 class PairingEndpoint(val manager: PairingManager, val identity: ServerIdentity)
-
-@Serializable
-data class PairRequest(val devicePublicKey: String, val code: String)
-
-/**
- * Pairing confirmation: the assigned [deviceId], the server's public key, and a
- * signature over `zync-pair:<deviceId>:<devicePublicKey>` proving the server holds
- * the private key matching the pinned public key from the QR.
- */
-@Serializable
-data class PairResponse(val deviceId: String, val serverPublicKey: String, val confirmation: String)
-
-/** Signed message the server confirms a pairing with; the phone verifies it. */
-fun pairingConfirmationMessage(deviceId: String, devicePublicKeyBase64: String): ByteArray =
-    "zync-pair:$deviceId:$devicePublicKeyBase64".encodeToByteArray()
 
 /**
  * `POST /pair` — UNAUTHENTICATED but gated by the one-time [PairRequest.code] (shown

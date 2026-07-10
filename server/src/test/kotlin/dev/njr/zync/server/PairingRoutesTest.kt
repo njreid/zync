@@ -8,12 +8,12 @@ import dev.njr.zync.server.auth.SessionStore
 import dev.njr.zync.server.auth.SignedRequestVerifier
 import dev.njr.zync.server.auth.SqlDeviceRegistry
 import dev.njr.zync.server.auth.ZyncAuthenticator
-import dev.njr.zync.server.pairing.PairRequest
-import dev.njr.zync.server.pairing.PairResponse
+import dev.njr.zync.core.pairing.PairRequest
+import dev.njr.zync.core.pairing.PairResponse
 import dev.njr.zync.server.pairing.PairingEndpoint
 import dev.njr.zync.server.pairing.PairingManager
 import dev.njr.zync.server.pairing.ServerIdentity
-import dev.njr.zync.server.pairing.pairingConfirmationMessage
+import dev.njr.zync.core.pairing.pairingConfirmationMessage
 import dev.njr.zync.server.sync.SyncService
 import io.ktor.client.request.get
 import io.ktor.client.request.header

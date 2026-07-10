@@ -24,7 +24,9 @@ object PairCommand {
         out("")
     }
 
-    /** Compact pairing payload encoded in the QR. */
-    fun pairingUri(address: String, serverPublicKeyBase64: String, code: String, expiresAt: Long): String =
-        "zync://pair?h=$address&k=$serverPublicKeyBase64&c=$code&e=$expiresAt"
+    /** Compact pairing payload encoded in the QR (values URL-encoded — base64 may contain +//=). */
+    fun pairingUri(address: String, serverPublicKeyBase64: String, code: String, expiresAt: Long): String {
+        fun enc(value: String) = java.net.URLEncoder.encode(value, Charsets.UTF_8)
+        return "zync://pair?h=${enc(address)}&k=${enc(serverPublicKeyBase64)}&c=${enc(code)}&e=$expiresAt"
+    }
 }
