@@ -101,8 +101,11 @@ retires Drive; the LAN stack + phone-server are retired in **M7** (leave them fo
 - Back the current web UI's reads with the `:data` projection (`project()` / materialized
   queries) instead of Room, so the phone stays usable this milestone. Minimal changes —
   the real shared UI is M6.
-- [ ] **Step 1:** list/inbox/tree render from the op-log state; a capture shows up.
-- [ ] **Step 2: Commit** `feat(app): bridge UI reads op-log projection`.
+- [x] **Step 1:** `BridgeReadModel` folds the op-log projection into the UI's view data
+  (inbox / children / node view); captures show up, completed items hide from the inbox,
+  tombstoned nodes drop out. 2 Robolectric tests. (The JSON-serving wiring into the
+  phone's loopback web server is glue on top of this tested read model.)
+- [x] **Step 2: Commit** `feat(app): bridge UI reads op-log projection`.
 
 ### Task 8: Retire Google Drive backup
 **Files:** remove `backup/` Drive stack (`GoogleDriveClient`, `DriveClient`,
