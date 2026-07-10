@@ -1,4 +1,4 @@
-package dev.njr.zync.server.sync
+package dev.njr.zync.core.sync
 
 import dev.njr.zync.core.clock.Hlc
 import dev.njr.zync.core.id.Ulid

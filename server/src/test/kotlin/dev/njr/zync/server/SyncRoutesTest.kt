@@ -1,10 +1,10 @@
 package dev.njr.zync.server
 
 import dev.njr.zync.data.JvmZyncDatabase
-import dev.njr.zync.server.sync.BootstrapSnapshot
-import dev.njr.zync.server.sync.PullResponse
-import dev.njr.zync.server.sync.PushRequest
-import dev.njr.zync.server.sync.PushResponse
+import dev.njr.zync.core.sync.BootstrapSnapshot
+import dev.njr.zync.core.sync.PullResponse
+import dev.njr.zync.core.sync.PushRequest
+import dev.njr.zync.core.sync.PushResponse
 import dev.njr.zync.server.sync.SyncService
 import io.ktor.client.request.get
 import io.ktor.client.request.header

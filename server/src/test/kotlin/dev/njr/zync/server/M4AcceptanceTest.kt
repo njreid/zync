@@ -11,9 +11,9 @@ import dev.njr.zync.server.blob.InMemoryBlobStore
 import dev.njr.zync.server.blob.blobKey
 import dev.njr.zync.server.hardening.Hardening
 import dev.njr.zync.server.hardening.TokenBucketRateLimiter
-import dev.njr.zync.server.sync.BootstrapSnapshot
-import dev.njr.zync.server.sync.PullResponse
-import dev.njr.zync.server.sync.PushRequest
+import dev.njr.zync.core.sync.BootstrapSnapshot
+import dev.njr.zync.core.sync.PullResponse
+import dev.njr.zync.core.sync.PushRequest
 import dev.njr.zync.server.sync.SyncService
 import io.ktor.client.request.get
 import io.ktor.client.request.header

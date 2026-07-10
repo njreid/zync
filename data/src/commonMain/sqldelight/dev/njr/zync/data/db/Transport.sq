@@ -49,6 +49,12 @@ CREATE TABLE sync_state (
   cursor INTEGER NOT NULL
 );
 
+getCursor:
+SELECT cursor FROM sync_state WHERE peer = ?;
+
+setCursor:
+INSERT OR REPLACE INTO sync_state(peer, cursor) VALUES (?, ?);
+
 -- Operator idempotency ledger (M8): a firing is keyed by (operator, entity, version).
 CREATE TABLE operator_run (
   operator_id TEXT NOT NULL,

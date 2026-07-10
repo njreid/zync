@@ -55,10 +55,12 @@ retires Drive; the LAN stack + phone-server are retired in **M7** (leave them fo
 - Ktor client: push pending ops → mark acked `synced=1`; pull `seq > cursor` →
   `observe(hlc)` + `apply`; persist the cursor; **device-signed requests** (X-Device-Id
   /Timestamp/Nonce/Signature) + **pin the server key**. Trigger on connectivity.
-- [ ] **Step 1 (TDD):** against the **real `:server` in-process** (or Ktor test host):
-  offline writes → push → server has them; pull applies remote ops; cursor advances;
-  re-push idempotent; signed requests accepted, unsigned rejected.
-- [ ] **Step 2: Commit** `feat(app): sync client (signed push/pull + cursor)`.
+- [x] **Step 1 (Robolectric):** against a Ktor MockEngine server backed by the **real
+  `core` merge**: offline writes → push marks acked synced + server converges; a fresh
+  phone pulls + converges + advances the persisted cursor; second pull is a no-op;
+  re-push sends nothing new; **every request's Ed25519 signature is verified**. Wire
+  DTOs moved to `:core` (`core.sync`) so phone + server share the contract.
+- [x] **Step 2: Commit** `feat(app): sync client (signed push/pull + cursor)`.
 
 ### Task 4: Pairing — phone half
 **Files:** `app/.../pairing/` (new central-server pairing; reuse `QrScanBridge`),

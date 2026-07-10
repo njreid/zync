@@ -3,6 +3,13 @@ package dev.njr.zync.server.sync
 import dev.njr.zync.core.merge.apply
 import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.op.Op
+import dev.njr.zync.core.sync.BootstrapSnapshot
+import dev.njr.zync.core.sync.PullResponse
+import dev.njr.zync.core.sync.PushRequest
+import dev.njr.zync.core.sync.PushResponse
+import dev.njr.zync.core.sync.RegisterEntry
+import dev.njr.zync.core.sync.TagEntry
+import dev.njr.zync.core.sync.TombstoneEntry
 import dev.njr.zync.data.SqlDelightStateStore
 import dev.njr.zync.data.db.ZyncDatabase
 import kotlinx.serialization.json.Json
