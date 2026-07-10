@@ -1,0 +1,7 @@
+# Reverse proxy with automatic HTTPS (Let's Encrypt) in prod. Set ZYNC_DOMAIN to your
+# hostname (e.g. zync.example.com) and Caddy provisions/renews the certificate. For
+# local compose, ZYNC_DOMAIN=":80" serves plain HTTP.
+{$ZYNC_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy server:8080
+}

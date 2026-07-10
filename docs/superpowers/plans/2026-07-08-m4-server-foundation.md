@@ -115,9 +115,14 @@ SQLDelight impl, migration harness.
 **Files:** `Dockerfile` (arm64, JVM + litestream as PID 1), `docker-compose.yml`,
 `Caddyfile`, `.github/workflows/server-deploy.yml` (test→build→GHCR→SSM via OIDC),
 `litestream.yml`, `deploy/bootstrap.md` (EC2 user-data, EBS mount, SSM params, IAM).
-- [ ] **Step 1:** `docker compose up` locally serves (with MinIO for S3); image builds
-  arm64; workflow YAML validates + builds on CI (deploy step gated to real infra).
-- [ ] **Step 2: Commit** `build(server): Docker/Compose/Caddy + deploy workflow`.
+- [x] **Step 1:** materialized Dockerfile (arm64; litestream PID 1 via entrypoint),
+  docker-compose (server + MinIO + Caddy), Caddyfile, server-deploy.yml (test →
+  installDist → buildx arm64 → GHCR → SSM deploy gated behind `vars.ZYNC_DEPLOY_ENABLED`
+  + OIDC), litestream.yml, deploy/bootstrap.md. `Main` wired to the full stack
+  (StartupSequence + env-driven auth/blobs/hardening). **YAML validated** (pyyaml);
+  entrypoint compiles. **Live `docker compose up` / arm64 image build deferred** (no
+  Docker/AWS here) — documented in bootstrap.md.
+- [x] **Step 2: Commit** `build(server): Docker/Compose/Caddy + deploy workflow`.
 
 ### Task 9: Minimal debug UI + acceptance
 - A tiny server-rendered view (list nodes/ops/state) to eyeball convergence before the

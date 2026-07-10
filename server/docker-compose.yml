@@ -1,0 +1,70 @@
+# Local end-to-end stack: server + MinIO (S3) + Caddy (TLS/proxy).
+# Build the distribution first, then bring it up:
+#   ./gradlew :server:installDist
+#   docker compose -f server/docker-compose.yml up --build
+services:
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  createbuckets:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 1; done;
+      mc mb -p local/zync-blobs;
+      mc mb -p local/zync-litestream;
+      exit 0;
+      "
+
+  server:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    depends_on:
+      - minio
+    environment:
+      ZYNC_DB_PATH: /data/zync.db
+      ZYNC_PORT: "8080"
+      ZYNC_BLOB_BUCKET: zync-blobs
+      ZYNC_LITESTREAM_URL: s3://zync-litestream/zync.db
+      ZYNC_ADMIN_PASSWORD: localdev
+      # S3 credentials/endpoint for both the app (S3BlobStore) and litestream → MinIO
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_ENDPOINT_URL_S3: http://minio:9000
+      LITESTREAM_S3_ENDPOINT: http://minio:9000
+      ZYNC_S3_BUCKET: zync-litestream
+    volumes:
+      - server-data:/data
+
+  caddy:
+    image: caddy:2
+    depends_on:
+      - server
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ZYNC_DOMAIN: ":80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  minio-data:
+  server-data:
+  caddy-data:
+  caddy-config:
