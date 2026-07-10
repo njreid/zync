@@ -45,10 +45,10 @@ retires Drive; the LAN stack + phone-server are retired in **M7** (leave them fo
 - An `OpWriter` that builds ops (via `core`) with an Android-persisted `HlcGenerator`
   (deviceId = paired device id; clock = system; HLC state persisted across process
   death), applies them locally via `:data`, and enqueues them for sync (`synced=0`).
-- [ ] **Step 1 (TDD, JVM/Robolectric):** creating a task / editing a field / moving /
-  tagging / tombstoning each writes the right op and projects correctly; HLC survives
-  a simulated restart (reload from storage).
-- [ ] **Step 2: Commit** `feat(app): op-log write path (OpWriter + persisted HLC)`.
+- [x] **Step 1 (Robolectric):** create/setField/move/tag/tombstone each write the right
+  op, project correctly, and queue as unsynced; parity with InMemoryStateStore; HLC
+  survives a simulated restart (reload from `HlcStore`, wall clock moved backwards).
+- [x] **Step 2: Commit** `feat(app): op-log write path (OpWriter + persisted HLC)`.
 
 ### Task 3: Sync client (push/pull on reconnect)
 **Files:** `app/.../sync/SyncClient.kt`, `SyncScheduler.kt` (WorkManager).

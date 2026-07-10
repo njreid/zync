@@ -36,6 +36,13 @@ SELECT payload FROM op_log WHERE seq > ? ORDER BY seq ASC LIMIT ?;
 selectRecent:
 SELECT payload FROM op_log ORDER BY seq DESC LIMIT ?;
 
+-- Phone (replica): locally-authored ops awaiting push, in creation order.
+selectUnsynced:
+SELECT payload FROM op_log WHERE synced = 0 ORDER BY rowid;
+
+markSynced:
+UPDATE op_log SET synced = 1 WHERE op_id = ?;
+
 -- Per-peer pull cursor (max seq seen).
 CREATE TABLE sync_state (
   peer TEXT NOT NULL PRIMARY KEY,
