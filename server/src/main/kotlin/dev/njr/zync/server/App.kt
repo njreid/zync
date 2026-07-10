@@ -3,6 +3,7 @@ package dev.njr.zync.server
 import dev.njr.zync.server.auth.ServerAuth
 import dev.njr.zync.server.blob.BlobService
 import dev.njr.zync.server.blob.blobRoutes
+import dev.njr.zync.server.debug.debugRoutes
 import dev.njr.zync.server.hardening.Hardening
 import dev.njr.zync.server.hardening.installHardening
 import dev.njr.zync.server.sync.SyncService
@@ -36,6 +37,7 @@ fun Application.zyncModule(
     if (hardening != null) installHardening(hardening)
     routing {
         syncRoutes(service, auth)
+        debugRoutes(service, auth)
         if (blobs != null) blobRoutes(blobs, auth)
         if (hardening != null) get("/metrics") { call.respond(hardening.metrics.snapshot()) }
     }

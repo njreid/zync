@@ -33,6 +33,9 @@ SELECT COALESCE(MAX(seq), 0) FROM op_log;
 selectSince:
 SELECT payload FROM op_log WHERE seq > ? ORDER BY seq ASC LIMIT ?;
 
+selectRecent:
+SELECT payload FROM op_log ORDER BY seq DESC LIMIT ?;
+
 -- Per-peer pull cursor (max seq seen).
 CREATE TABLE sync_state (
   peer TEXT NOT NULL PRIMARY KEY,

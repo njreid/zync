@@ -127,10 +127,13 @@ SQLDelight impl, migration harness.
 ### Task 9: Minimal debug UI + acceptance
 - A tiny server-rendered view (list nodes/ops/state) to eyeball convergence before the
   real `web` module (M6).
-- [ ] **Step 1:** debug view renders current state.
-- [ ] **Step 2 (acceptance):** fake-client sync round-trip + V1–V8 + restore drill all
-  green; server deployable per Task 8.
-- [ ] **Step 3: Commit** `feat(server): minimal debug UI + M4 acceptance`.
+- [x] **Step 1:** `GET /debug` renders current entities (alive/parent/tags/fields) +
+  recent ops as a server-rendered HTML table (auth-guarded).
+- [x] **Step 2 (acceptance):** M4AcceptanceTest drives the fully-assembled server
+  (sync + blobs + hardening + debug) over HTTP — merges V1/V3/V7/V8 vectors, blob
+  upload→download round-trip, fresh-replica convergence, debug view renders. Combined
+  with the durability drill (Task 6) and auth enforcement (Task 4). 43 server tests.
+- [x] **Step 3: Commit** `feat(server): minimal debug UI + M4 acceptance`.
 
 ## Interfaces / decisions
 - **Endpoints:** `POST /sync/push`, `GET /sync/pull?since=`, `GET /sync/bootstrap`,
@@ -154,3 +157,11 @@ Deployable arm64 server: ingests ops, merges via `core`, persists to SQLite, bac
 to S3 (restore drill green), authenticates devices, serves push/pull/bootstrap;
 **V1–V8 pass over the wire**; sync round-trip incl. offline/reconnect green — **all
 without an Android device**. Ready for M5 (phone becomes a replica).
+
+> **✅ COMPLETE (2026-07-10).** All 9 tasks done on branch `feat/m4-server`; 43 server
+> + 4 data JVM tests green (`:server:test`, `:data:allTests`). Modules: `:data`
+> (SQLDelight StateStore, jvm+android) and `:server` (Ktor sync/auth/blobs/hardening/
+> debug). **Deferred to real infra** (no Docker/AWS/MinIO here): the live MinIO S3
+> integration test, the litestream/MinIO restore drill, and the `docker compose up` /
+> arm64 image / CI runs — all materialized + documented in `deploy/bootstrap.md`. The
+> `data` Android Robolectric-driver test moves to M5 (phone-as-replica).

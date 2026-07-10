@@ -1,6 +1,7 @@
 package dev.njr.zync.server.sync
 
 import dev.njr.zync.core.merge.apply
+import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.op.Op
 import dev.njr.zync.data.SqlDelightStateStore
 import dev.njr.zync.data.db.ZyncDatabase
@@ -48,6 +49,13 @@ class SyncService(
             .map { json.decodeFromString(Op.serializer(), it) }
         return PullResponse(ops = ops, head = seq.head())
     }
+
+    /** Current projected state (for the debug UI). */
+    fun state() = store.project()
+
+    /** The most recent ops by seq (for the debug UI). */
+    fun recentOps(limit: Long = 50): List<Op> =
+        db.transportQueries.selectRecent(limit).executeAsList().map { json.decodeFromString(Op.serializer(), it) }
 
     /** Compacted snapshot for a fresh install / new device. */
     fun bootstrap(): BootstrapSnapshot = BootstrapSnapshot(

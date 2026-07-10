@@ -36,6 +36,12 @@ class Ops(private val device: String = "phone") {
 
     fun move(node: Ulid, parent: Ulid, hlc: Hlc) =
         Op.Move(nextId(), node, EntityType.Node, hlc, Actor.Human, device, hlc.physical, parent)
+
+    fun addTag(node: Ulid, context: Ulid, hlc: Hlc) =
+        Op.AddTag(nextId(), node, EntityType.Tag, hlc, Actor.Human, device, hlc.physical, context)
+
+    fun removeTag(node: Ulid, context: Ulid, hlc: Hlc) =
+        Op.RemoveTag(nextId(), node, EntityType.Tag, hlc, Actor.Human, device, hlc.physical, context)
 }
 
 /** Diverse random batch with globally-unique HLCs (mirrors the core generator). */
