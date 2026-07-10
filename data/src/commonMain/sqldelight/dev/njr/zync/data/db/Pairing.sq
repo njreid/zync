@@ -1,0 +1,20 @@
+-- One-time pairing codes (op/merge auth). `zync pair` inserts a code with a short
+-- expiry; the /pair endpoint redeems it exactly once. DB-backed so the CLI and the
+-- running server (separate processes, same SQLite file) share it.
+CREATE TABLE pairing_code (
+  code TEXT NOT NULL PRIMARY KEY,
+  expires_at INTEGER NOT NULL,
+  used INTEGER NOT NULL DEFAULT 0
+);
+
+insertCode:
+INSERT INTO pairing_code(code, expires_at, used) VALUES (?, ?, 0);
+
+getCode:
+SELECT expires_at, used FROM pairing_code WHERE code = ?;
+
+useCode:
+UPDATE pairing_code SET used = 1 WHERE code = ?;
+
+purgeExpired:
+DELETE FROM pairing_code WHERE expires_at <= ?;

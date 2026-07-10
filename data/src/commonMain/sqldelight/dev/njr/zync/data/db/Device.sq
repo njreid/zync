@@ -1,0 +1,21 @@
+-- Paired devices: the allow-list of Ed25519 public keys the server accepts signed
+-- requests from. Populated by the pairing flow; survives restarts.
+CREATE TABLE device (
+  device_id TEXT NOT NULL PRIMARY KEY,
+  public_key TEXT NOT NULL,   -- base64
+  revoked INTEGER NOT NULL DEFAULT 0,
+  paired_at INTEGER NOT NULL
+);
+
+upsertDevice:
+INSERT OR REPLACE INTO device(device_id, public_key, revoked, paired_at)
+VALUES (?, ?, 0, ?);
+
+getDevice:
+SELECT public_key, revoked FROM device WHERE device_id = ?;
+
+revokeDevice:
+UPDATE device SET revoked = 1 WHERE device_id = ?;
+
+allDevices:
+SELECT device_id, public_key, revoked FROM device;

@@ -6,6 +6,8 @@ import dev.njr.zync.server.blob.blobRoutes
 import dev.njr.zync.server.debug.debugRoutes
 import dev.njr.zync.server.hardening.Hardening
 import dev.njr.zync.server.hardening.installHardening
+import dev.njr.zync.server.pairing.PairingEndpoint
+import dev.njr.zync.server.pairing.pairingRoutes
 import dev.njr.zync.server.sync.SyncService
 import dev.njr.zync.server.sync.syncRoutes
 import io.ktor.http.HttpStatusCode
@@ -26,6 +28,7 @@ fun Application.zyncModule(
     auth: ServerAuth = ServerAuth.AllowAll,
     blobs: BlobService? = null,
     hardening: Hardening? = null,
+    pairing: PairingEndpoint? = null,
     json: Json = Json,
 ) {
     install(ContentNegotiation) { json(json) }
@@ -39,6 +42,7 @@ fun Application.zyncModule(
         syncRoutes(service, auth)
         debugRoutes(service, auth)
         if (blobs != null) blobRoutes(blobs, auth)
+        if (pairing != null) pairingRoutes(pairing.manager, pairing.identity)
         if (hardening != null) get("/metrics") { call.respond(hardening.metrics.snapshot()) }
     }
 }
