@@ -149,10 +149,10 @@ Datastar/SSE, with all mutations flowing through the op log; served by both the 
 server and the phone loopback; the vanilla-JS UI + Playwright suite retired. Ready for M7
 (native hybrid shell + thin clients).
 
-> **🟢 SUBSTANTIALLY COMPLETE (2026-07-11).** Tasks 1–9 done; the shared `:web` module
-> (kotlinx.html + Datastar/SSE) renders + mutates the content UI over the op log, served
-> by the central server (Task 7, live) and drivable on the phone via `PhoneOpEmitter`
-> (Task 8); parity proven (Task 9). **~35 web + server tests green.** **Remaining: the
-> destructive phone-loopback cutover** — make `:web` the live phone UI + delete the
-> vanilla-JS UI/`ApiRoutes`/Playwright + rewire `ZyncApp` (turnkey scope in Task 8).
-> Non-blocking; the current UI still works. Ready for M7.
+> **✅ COMPLETE (2026-07-11).** Tasks 1–9 done; the shared `:web` module (kotlinx.html +
+> Datastar/SSE) renders + mutates the content UI over the op log, served by the central
+> server (Task 7, live) and drivable on the phone via `PhoneOpEmitter` (Task 8); parity
+> proven (Task 9). **~35 web + server tests green.** The **phone-loopback cutover** (make
+> `:web` the live phone UI + retire the vanilla-JS UI) is **folded into M7 Task 1–2**,
+> since it's the same work as M7's native-shell + loopback rebuild and M7 retires the
+> LAN/token infra it would otherwise build on. Ready for M7.
