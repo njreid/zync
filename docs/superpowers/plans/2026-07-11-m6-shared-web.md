@@ -54,9 +54,10 @@ hypermedia over the op log; Room + `ApiRoutes` retire here or in M7.
 **Files:** `web/…/views/*.kt`, routes.
 - Server-rendered layout (Geist/Inter tokens), inbox list, project/tree view, node detail
   (title/notes/status/tags/attachments). Read from the read model.
-- [ ] **Step 1 (TDD):** each view renders expected HTML from a seeded projection (assert
-  structure/content); routes return them.
-- [ ] **Step 2: Commit** `feat(web): kotlinx.html layout + inbox/tree/detail views`.
+- [x] **Step 1 (TDD):** layout (`page`) + inbox/tree/detail views render from the read
+  model; routes `/`, `/tree`, `/node/{id}`, `/health` return them (Ktor test host). Asserts
+  the seeded task/subtask appear in inbox, tree (recursive), and detail; bad id → 404.
+- [x] **Step 2: Commit** `feat(web): kotlinx.html layout + inbox/tree/detail views`.
 
 ### Task 4: Datastar reactivity — live updates via SSE
 **Files:** `web/…/sse/`, Datastar-bound views.

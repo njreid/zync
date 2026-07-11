@@ -20,7 +20,7 @@ import kotlin.test.assertTrue
 private class FixedClock(private val ms: Long) : Clock { override fun nowMillis() = ms }
 
 /** Applies emitted ops to [store] with monotonically increasing HLCs (later intent wins). */
-private class RecordingEmitter(private val store: StateStore) : OpEmitter {
+class RecordingEmitter(private val store: StateStore) : OpEmitter {
     private var counter = 0
     val emitted = mutableListOf<Op>()
 
