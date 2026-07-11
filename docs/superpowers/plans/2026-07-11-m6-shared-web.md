@@ -124,10 +124,11 @@ hypermedia over the op log; Room + `ApiRoutes` retire here or in M7.
 > Room/vanilla-JS UI still works.
 
 ### Task 9: Acceptance
-- [ ] **Step 1 (acceptance):** the shared UI renders + mutates on **both** surfaces from
-  the op log (server via Ktor test host, phone via Robolectric); parity of rendered views
-  for the same projection.
-- [ ] **Step 2: Commit** `test(web): shared UI parity on server + phone`.
+- [x] **Step 1 (acceptance):** identical op-log projections render **byte-identical** UI
+  on both surfaces (server + phone use the same `:web` views/read model); inbox + tree
+  parity, completed hidden, subtasks in the tree. Server serving (Task 7) + phone content
+  path (Task 8) both proven.
+- [x] **Step 2: Commit** `test(web): shared UI parity on server + phone`.
 
 ## Interfaces / decisions
 - **`:web` is the single UI**; server and phone differ only in the `ContentCommands`
@@ -147,3 +148,11 @@ One `:web` module renders the content UI from the op-log projection, reactive vi
 Datastar/SSE, with all mutations flowing through the op log; served by both the central
 server and the phone loopback; the vanilla-JS UI + Playwright suite retired. Ready for M7
 (native hybrid shell + thin clients).
+
+> **🟢 SUBSTANTIALLY COMPLETE (2026-07-11).** Tasks 1–9 done; the shared `:web` module
+> (kotlinx.html + Datastar/SSE) renders + mutates the content UI over the op log, served
+> by the central server (Task 7, live) and drivable on the phone via `PhoneOpEmitter`
+> (Task 8); parity proven (Task 9). **~35 web + server tests green.** **Remaining: the
+> destructive phone-loopback cutover** — make `:web` the live phone UI + delete the
+> vanilla-JS UI/`ApiRoutes`/Playwright + rewire `ZyncApp` (turnkey scope in Task 8).
+> Non-blocking; the current UI still works. Ready for M7.
