@@ -63,9 +63,13 @@ hypermedia over the op log; Room + `ApiRoutes` retire here or in M7.
 **Files:** `web/…/sse/`, Datastar-bound views.
 - An SSE stream that pushes updated fragments when the op-log state changes
   (tree/task/project/context/tag). Datastar `data-*` bindings drive the reactive DOM.
-- [ ] **Step 1 (TDD):** a state change emits the expected SSE fragment event; the view
-  carries the right Datastar attributes.
-- [ ] **Step 2: Commit** `feat(web): Datastar SSE live updates`.
+- [x] **Step 1 (TDD):** hand-rolled KMP Datastar emitter (patch-elements/patch-signals
+  wire format, matching v1.0.2); vendored runtime served at /assets/datastar.js
+  (offline-safe); layout wires the script + `data-on-load="@get('/updates')"`; `/updates`
+  SSE patches #inbox on `ChangeNotifier` fire. 7 tests (format + serving). **Decision:**
+  hand-rolled emitter over the official Datastar Kotlin SDK — the SDK is JVM/Java-21 (not
+  KMP), and `:web`'s android target (offline phone) must emit the same SSE.
+- [x] **Step 2: Commit** `feat(web): Datastar SSE live updates`.
 
 ### Task 5: Mutations wired to commands
 **Files:** action routes + Datastar actions in views.

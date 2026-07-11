@@ -19,6 +19,7 @@ kotlin {
             implementation(project(":core"))
             implementation(project(":data"))
             implementation(libs.kotlinx.serialization.json)
+            implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.html)
             implementation(libs.ktor.server.core)
             implementation(libs.ktor.server.html.builder)
@@ -26,6 +27,7 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
         jvmTest.dependencies {
             implementation(libs.ktor.server.test.host)
