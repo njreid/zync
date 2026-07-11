@@ -112,25 +112,10 @@ retires Drive; the LAN stack + phone-server are retired in **M7** (leave them fo
 `BackupManager`, `BackupWorker`, schedulers, Drive auth); drop Drive deps/permissions.
 - Server sync + litestream is durability now. Keep encrypted-backup crypto only if the
   op log needs a local export; otherwise remove.
-- [ ] **Step 1:** app builds without Drive; no dead references; tests green.
-- [ ] **Step 2: Commit** `chore(app): retire Google Drive backup (server sync supersedes)`.
+- [x] **Step 1:** app builds without Drive; no dead references; tests green (183).
+- [x] **Step 2: Commit** `chore(app): retire Google Drive backup (server sync supersedes)`.
 
-> **⏸ DEFERRED to a dedicated pass (2026-07-11).** This is an entangled *destructive*
-> refactor of the app's central wiring, not a contained delete — done as a focused pass
-> to avoid a half-removal. It is **non-blocking**: the new op-log path is additive and
-> the old Drive code still works alongside it. **Turnkey scope for the pass:**
-> - Delete `backup/*` (~13 files, 821 LOC) + its ~9 test classes; delete
->   `server/BackupRoutes.kt`.
-> - `ZyncApp.kt`: drop `backupSettings`/`backupController` vals + imports; remove the
->   `NodeRepository(onMutated = { BackupScheduler.requestBackupSoon(...) })` hook; drop
->   the `backupController = …` args (lines ~98, ~144).
-> - `MainActivity.kt`: remove `BackupAuthBridge` + the `ZyncBackup` `addJavascriptInterface`,
->   the `googleDriveSignIn` launcher, `BackupScheduler.schedulePeriodic`, and
->   `RestoreManager.restoreIfRequested`.
-> - `server/ZyncServer.kt`: remove the `backupController` param + `backupRoutes(...)` wiring.
-> - Remove the `play-services-auth` dependency; update the manifest comment (§allowBackup).
-> - Verify `:app:assembleDebug` + `:app:testDebugUnitTest` green.
-> - Decide whether to keep `BackupCrypto`/`DbSnapshot` for a local op-log export (else remove).
+
 
 ### Task 9: Vertical-slice acceptance
 - [x] **Step 1 (Robolectric acceptance):** end-to-end — **pair → capture offline (note +
@@ -160,11 +145,10 @@ syncs (signed push/pull) on reconnect, stores/uploads attachment blobs, and stay
 via the bridge UI; **Drive backup removed**; the **offline-capture → sync → server**
 slice is green. Ready for M6 (shared web module).
 
-> **🟢 SUBSTANTIALLY COMPLETE (2026-07-11).** Tasks 1–7 + 9 done, merged; **19 replica
+> **✅ COMPLETE (2026-07-11).** All 9 tasks done, merged; **19 replica
 > tests** green (Robolectric) + core/data/server suites. The vertical slice —
-> pair → capture offline → sync → lands on server, phone==server — is proven. Modules:
+> pair → capture offline → sync → lands on server, phone==server — is proven; Drive backup
+> retired (183 app tests). Modules:
 > replica logic in `:app` (op writer, sync client, pairing, blobs, capture, bridge read
 > model); wire DTOs shared via `:core` (`core.sync`, `core.pairing`); `:data` runs on
-> Android. **Only Task 8 (retire Drive) remains** — deferred as a dedicated destructive
-> pass (turnkey scope noted above); non-blocking since the op-log path is additive.
-> Ready for M6.
+> Android. Ready for M6.

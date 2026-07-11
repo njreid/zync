@@ -11,11 +11,10 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!--
-      allowBackup is off: the app manages its own encrypted Google Drive backup
-      (see backup/). Android Auto Backup would otherwise upload zync.db AND the
-      server's TLS keystore private key + password (pairing/ServerCertStore) to
-      Google's cloud in cleartext-at-rest, contradicting the on-device-secrets
-      posture from M1c.
+      allowBackup is off: durability is the central server (op-log sync + litestream),
+      not Android Auto Backup — which would otherwise upload zync.db AND the device
+      key material (pairing/ServerCertStore, the replica's device key) to Google's
+      cloud in cleartext-at-rest, contradicting the on-device-secrets posture.
     -->
     <application
         android:name=".ZyncApp"

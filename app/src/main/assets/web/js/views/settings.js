@@ -33,21 +33,6 @@ export async function renderSettings(el) {
       <h3>Paired devices</h3>
       <div id="device-list"><p>Loading…</p></div>
     </article>
-    <article>
-      <h3>Backup</h3>
-      <label>
-        <input type="checkbox" id="backup-toggle" role="switch">
-        Automatic encrypted backup to Google Drive
-      </label>
-      <input type="password" id="backup-passphrase" autocomplete="new-password" placeholder="Backup passphrase">
-      <div class="button-row">
-        <button id="backup-connect" class="secondary">Connect Google Drive</button>
-        <button id="backup-save">Save</button>
-        <button id="backup-now" class="secondary">Back up now</button>
-        <button id="backup-restore-next" class="secondary">Restore on next launch</button>
-      </div>
-      <p id="backup-info"></p>
-    </article>
   `;
 
   const toggle = el.querySelector('#remote-toggle');
@@ -56,9 +41,6 @@ export async function renderSettings(el) {
   const captureStatus = el.querySelector('#capture-status');
   const captureInfo = el.querySelector('#capture-info');
   const deviceList = el.querySelector('#device-list');
-  const backupToggle = el.querySelector('#backup-toggle');
-  const backupPassphrase = el.querySelector('#backup-passphrase');
-  const backupInfo = el.querySelector('#backup-info');
 
   function renderRemoteState(state) {
     toggle.checked = state.enabled;
@@ -102,19 +84,6 @@ export async function renderSettings(el) {
     }
   }
 
-  function renderBackupState(state) {
-    backupToggle.checked = state.enabled;
-    const parts = [
-      state.enabled ? 'On' : 'Off',
-      state.hasPassphrase ? 'passphrase saved' : 'passphrase required',
-    ];
-    if (state.lastSuccessAt) parts.push(`last backup ${new Date(state.lastSuccessAt).toLocaleString()}`);
-    if (state.lastBackupName) parts.push(state.lastBackupName);
-    if (state.restorePending) parts.push('restore pending for next launch');
-    if (state.lastError) parts.push(`last error: ${state.lastError}`);
-    backupInfo.textContent = parts.join(' — ');
-  }
-
   async function refreshState() {
     try {
       renderRemoteState(await get('/remote/state'));
@@ -128,14 +97,6 @@ export async function renderSettings(el) {
       renderDevices(await get('/devices'));
     } catch (e) {
       toast(e.message);
-    }
-  }
-
-  async function refreshBackup() {
-    try {
-      renderBackupState(await get('/backup/state'));
-    } catch (e) {
-      backupInfo.textContent = `Backup unavailable: ${e.message}`;
     }
   }
 
@@ -186,58 +147,9 @@ export async function renderSettings(el) {
     captureInfo.textContent = 'Android does not allow zync to show a permission prompt here. Find "zync quick capture" in Accessibility and turn it on.';
   };
 
-  el.querySelector('#backup-connect').onclick = () => {
-    if (!window.ZyncBackup || typeof window.ZyncBackup.connectGoogleDrive !== 'function') {
-      backupInfo.textContent = 'Google Drive connection is only available in the zync app.';
-      return;
-    }
-    backupInfo.textContent = 'Connecting Google Drive…';
-    window.__zyncGoogleDriveResult = async (email, error) => {
-      if (error) {
-        backupInfo.textContent = `Google Drive connection failed: ${error}`;
-        return;
-      }
-      backupInfo.textContent = `Connected Google Drive${email ? ` as ${email}` : ''}.`;
-      await refreshBackup();
-    };
-    window.ZyncBackup.connectGoogleDrive();
-  };
-
-  el.querySelector('#backup-save').onclick = async () => {
-    try {
-      const body = { enabled: backupToggle.checked };
-      if (backupPassphrase.value.trim()) body.passphrase = backupPassphrase.value;
-      renderBackupState(await post('/backup/config', body));
-      backupPassphrase.value = '';
-    } catch (e) {
-      toast(e.message);
-      await refreshBackup();
-    }
-  };
-
-  el.querySelector('#backup-now').onclick = async () => {
-    try {
-      backupInfo.textContent = 'Backing up…';
-      renderBackupState(await post('/backup/now'));
-    } catch (e) {
-      toast(e.message);
-      await refreshBackup();
-    }
-  };
-
-  el.querySelector('#backup-restore-next').onclick = async () => {
-    try {
-      renderBackupState(await post('/backup/restore-next-launch'));
-    } catch (e) {
-      toast(e.message);
-      await refreshBackup();
-    }
-  };
-
   await refreshState();
   refreshCaptureState();
   await refreshDevices();
-  await refreshBackup();
 
   function refreshCaptureState() {
     if (!window.ZyncCapture || typeof window.ZyncCapture.isQuickCaptureEnabled !== 'function') {
