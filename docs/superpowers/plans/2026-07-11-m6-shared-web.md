@@ -34,9 +34,11 @@ hypermedia over the op log; Room + `ApiRoutes` retire here or in M7.
 (kotlinx-html, ktor-server-sse), `web/src/commonMain`, Datastar JS asset.
 - KMP jvm+android; deps: ktor-server-core, kotlinx-html, ktor SSE; vendor the Datastar
   runtime as a served static file.
-- [ ] **Step 1:** a trivial kotlinx.html page + `/health` render, served by a Ktor test
-  host (jvm) and under Robolectric (android). `:web:allTests` green.
-- [ ] **Step 2: Commit** `feat(web): KMP web module scaffold + Datastar runtime`.
+- [x] **Step 1:** kotlinx.html shell + `/health` render via `respondHtml` (ktor
+  html-builder), served by a Ktor test host (jvm); android target compiles. `:web:jvmTest`
+  green. (Datastar JS runtime vendoring deferred to Task 4 — it needs the file content;
+  Robolectric phone-serving is Task 8.)
+- [x] **Step 2: Commit** `feat(web): KMP web module scaffold + kotlinx.html`.
 
 ### Task 2: Read model + command ports (domain views)
 **Files:** `web/…/ContentReadModel.kt`, `ContentCommands.kt`, view-model types.
