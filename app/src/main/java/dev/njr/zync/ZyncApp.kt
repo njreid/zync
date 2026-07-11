@@ -1,10 +1,25 @@
 package dev.njr.zync
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import dev.njr.zync.attach.AttachmentStore
+import dev.njr.zync.core.clock.Clock
+import dev.njr.zync.data.AndroidZyncDatabase
+import dev.njr.zync.data.SqlDelightStateStore
 import dev.njr.zync.data.ZyncDatabase
 import dev.njr.zync.domain.NodeRepository
+import dev.njr.zync.replica.AndroidHlcStore
+import dev.njr.zync.replica.LocalBlobStore
+import dev.njr.zync.replica.LocalHlc
+import dev.njr.zync.replica.OpWriter
+import dev.njr.zync.replica.PhoneOpEmitter
+import dev.njr.zync.replica.ReplicaCapture
+import dev.njr.zync.web.content.ContentCommands
+import dev.njr.zync.web.content.ContentReadModel
+import dev.njr.zync.web.sse.ChangeNotifier
+import java.io.File
+import kotlin.random.Random
 import dev.njr.zync.pairing.AndroidKeystorePasswordProtector
 import dev.njr.zync.pairing.AndroidNsdAdvertiser
 import dev.njr.zync.pairing.ConnectivityWifiIpAddressProvider
@@ -26,6 +41,26 @@ class ZyncApp : Application() {
     val repository: NodeRepository by lazy { NodeRepository(database) }
     val attachmentStore: AttachmentStore by lazy { AttachmentStore(AttachmentStore.defaultRoot(this)) }
     val serverToken: String = UUID.randomUUID().toString()
+
+    // --- Op-log stack (M7): the phone as a replica; the shared :web UI reads/writes this ---
+    private val opClock = Clock { System.currentTimeMillis() }
+
+    /** Stable per-device id for HLCs (independent of the server-assigned pairing deviceId). */
+    val deviceId: String by lazy {
+        getSharedPreferences("zync_device", Context.MODE_PRIVATE).let { prefs ->
+            prefs.getString("id", null) ?: UUID.randomUUID().toString().also { prefs.edit().putString("id", it).apply() }
+        }
+    }
+    val opDatabase: dev.njr.zync.data.db.ZyncDatabase by lazy { AndroidZyncDatabase.create(this) }
+    val opStore: SqlDelightStateStore by lazy { SqlDelightStateStore(opDatabase) }
+    val localBlobs: LocalBlobStore by lazy { LocalBlobStore(File(filesDir, "blobs")) }
+    val opWriter: OpWriter by lazy {
+        OpWriter(opDatabase, opStore, LocalHlc(AndroidHlcStore(this), deviceId, opClock), deviceId, opClock, Random.Default)
+    }
+    val replicaCapture: ReplicaCapture by lazy { ReplicaCapture(opWriter, localBlobs, inbox = { null }) }
+    val contentChanges: ChangeNotifier = ChangeNotifier()
+    val contentRead: ContentReadModel by lazy { ContentReadModel(opStore) }
+    val contentCommands: ContentCommands by lazy { ContentCommands(PhoneOpEmitter(opWriter)) }
 
     val pairingService: PairingService by lazy {
         PairingService(database.allowedDeviceDao(), randomNonce = { UUID.randomUUID().toString() })

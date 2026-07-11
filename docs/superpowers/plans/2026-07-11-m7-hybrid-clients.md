@@ -34,8 +34,13 @@ stack (`OpWriter`/`SyncClient`/`PairingClient`/`ReplicaCapture`) not yet wired l
 - Loopback serves `:web`: `install(SSE)` + `webRoutes(...)`; loopback-appropriate auth
   (token via cookie set on page load, so Datastar `@get/@post` carry it — or none for
   127.0.0.1). Remove the vanilla-JS asset catch-all + `apiRoutes` from the loopback.
-- [ ] **Step 1 (Robolectric):** the loopback renders `:web`; a `ContentCommands` mutation
-  shows up; Datastar SSE/actions authenticate on the loopback.
+- [~] **Step 1 (Robolectric):** op-log stack wired into `ZyncApp` (`opDatabase`/`opStore`/
+  `opWriter`[persisted `deviceId`+`AndroidHlcStore`]/`replicaCapture`/`contentRead`/
+  `contentCommands`/`contentChanges`) — the shared `:web` commands/read run against the
+  app's real store; captures land; mutations queue unsynced (1 test). **Remaining:** the
+  loopback *serves* `:web` (swap `apiRoutes`+vanilla-JS catch-all for `webRoutes`+SSE) with
+  the token-cookie auth (already present) + a CSP `unsafe-eval` carve-out for Datastar's
+  expression eval — needs real-WebView verification; coupled with Task 2's capture reroute.
 - [ ] **Step 2: Commit** `feat(app): phone loopback serves the shared web UI`.
 
 ### Task 2: Route capture through the op log + retire the vanilla-JS UI
