@@ -106,9 +106,22 @@ hypermedia over the op log; Room + `ApiRoutes` retire here or in M7.
 (or thin it); retire `webtest/` Playwright.
 - The phone loopback serves the same `:web` UI, backed by `OpWriter` + local store; remove
   the vanilla-JS UI and its Playwright suite (key flows rewritten as `:web` tests).
-- [ ] **Step 1 (Robolectric):** the phone loopback renders the shared UI + a capture/
-  mutation shows up via the op log.
-- [ ] **Step 2: Commit** `feat(app): phone loopback serves shared web UI; retire vanilla-JS`.
+- [x] **Step 1 (Robolectric):** the shared `:web` `ContentCommands`/`ContentReadModel`
+  run on the phone over the op log via `PhoneOpEmitter`(`OpWriter`) — mutations queue
+  unsynced + reflect in the read model (1 test). `:app` depends on `:web`; `OpWriter.newId`
+  public.
+- [x] **Step 2: Commit** `feat(app): phone content path over :web (PhoneOpEmitter)`.
+
+> **⏸ Destructive cutover DEFERRED (2026-07-11).** Making `:web` the *live* phone UI +
+> deleting the vanilla-JS UI is a large entangled change (the loopback `/` catch-all vs
+> `:web` `/` collide, so serving `:web` = retiring vanilla-JS), best as a focused pass.
+> **Turnkey scope:** wire the op-log stack into `ZyncApp` (AndroidZyncDatabase +
+> SqlDelightStateStore + OpWriter[paired deviceId, persisted LocalHlc] + SyncClient +
+> ChangeNotifier); mount `webRoutes` + `install(SSE)` in the app `ZyncServer.zyncModule`,
+> remove the vanilla-JS asset catch-all + `ApiRoutes` (Room); delete `assets/web/` +
+> `webtest/` (Playwright, rewritten as `:web` tests); route capture through
+> `ReplicaCapture`. Non-blocking — the phone content path is proven; the current
+> Room/vanilla-JS UI still works.
 
 ### Task 9: Acceptance
 - [ ] **Step 1 (acceptance):** the shared UI renders + mutates on **both** surfaces from

@@ -130,9 +130,10 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity)
 
-  // Shared op-log core + SQLDelight data (M5: phone as a replica)
+  // Shared op-log core + SQLDelight data (M5: phone as a replica) + web UI (M6)
   implementation(project(":core"))
   implementation(project(":data"))
+  implementation(project(":web"))
 
   // Sync client (device-signed push/pull to the central server)
   implementation(libs.ktor.client.cio)

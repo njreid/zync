@@ -72,7 +72,7 @@ class OpWriter(
     fun tombstone(entity: Ulid, type: EntityType = EntityType.Node): Op =
         record(Op.Tombstone(newId(), entity, type, hlc.now(), actor, deviceId, clock.nowMillis()))
 
-    private fun newId(): Ulid = Ulid.generate(clock, random)
+    fun newId(): Ulid = Ulid.generate(clock, random)
 
     private fun record(op: Op): Op {
         db.transaction {
