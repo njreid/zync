@@ -54,13 +54,40 @@ class ZyncApp : Application() {
     val opDatabase: dev.njr.zync.data.db.ZyncDatabase by lazy { AndroidZyncDatabase.create(this) }
     val opStore: SqlDelightStateStore by lazy { SqlDelightStateStore(opDatabase) }
     val localBlobs: LocalBlobStore by lazy { LocalBlobStore(File(filesDir, "blobs")) }
+    /** Shared HLC: the op writer issues, the sync client observes — one clock. */
+    val localHlc: LocalHlc by lazy { LocalHlc(AndroidHlcStore(this), deviceId, opClock) }
+    val pairingStore: dev.njr.zync.replica.PairingStore by lazy { dev.njr.zync.replica.AndroidPairingStore(this) }
     val opWriter: OpWriter by lazy {
-        OpWriter(opDatabase, opStore, LocalHlc(AndroidHlcStore(this), deviceId, opClock), deviceId, opClock, Random.Default)
+        OpWriter(opDatabase, opStore, localHlc, deviceId, opClock, Random.Default)
     }
     val replicaCapture: ReplicaCapture by lazy { ReplicaCapture(opWriter, localBlobs, inbox = { null }) }
     val contentChanges: ChangeNotifier = ChangeNotifier()
     val contentRead: ContentReadModel by lazy { ContentReadModel(opStore) }
     val contentCommands: ContentCommands by lazy { ContentCommands(PhoneOpEmitter(opWriter)) }
+
+    /**
+     * Sync once with the paired central server (push local ops, pull remote). No-op if
+     * the phone isn't paired yet. Called by [dev.njr.zync.sync.SyncWorker].
+     */
+    suspend fun syncOnce() {
+        val paired = pairingStore.load() ?: return
+        val http = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO)
+        try {
+            dev.njr.zync.replica.SyncClient(
+                http = http,
+                baseUrl = paired.address,
+                db = opDatabase,
+                store = opStore,
+                hlc = localHlc,
+                signer = dev.njr.zync.replica.Ed25519DeviceSigner(paired.deviceId, paired.deviceSeed),
+                now = { System.currentTimeMillis() },
+                nonce = { UUID.randomUUID().toString() },
+            ).sync()
+        } finally {
+            http.close()
+        }
+        contentChanges.notifyChanged()
+    }
 
     val pairingService: PairingService by lazy {
         PairingService(database.allowedDeviceDao(), randomNonce = { UUID.randomUUID().toString() })

@@ -58,9 +58,12 @@ stack (`OpWriter`/`SyncClient`/`PairingClient`/`ReplicaCapture`) not yet wired l
 - Wire M5 `PairingClient` (scan central-server QR → pair) + `SyncClient` (signed push/pull
   on connectivity) + `BlobUploader` live. Store paired-server creds; retire `Google Drive`
   remnants (already gone) — durability is server sync.
-- [ ] **Step 1 (Robolectric):** pair against an in-process server, capture offline, sync,
-  converge (extends the M5 vertical slice into the live app wiring).
-- [ ] **Step 2: Commit** `feat(app): live pairing + sync client`.
+- [x] **Step 1 (Robolectric):** `AndroidPairingStore` persists paired-server creds;
+  `ZyncApp.syncOnce()` builds a `SyncClient` (shared `localHlc`, device signer) from them
+  and syncs (no-op unpaired); `SyncWorker`/`SyncScheduler` run it connectivity-gated
+  (one-shot + periodic). 3 tests (creds round-trip, unpaired no-op, scheduler enqueue).
+  Live QR-scan pairing UI wires in with the Compose shell (Task 5).
+- [x] **Step 2: Commit** `feat(app): live sync client (pairing store + WorkManager)`.
 
 ### Task 4: Retire the M1c/M1d LAN stack
 **Files:** delete phone-as-LAN `ZyncServer` LAN path, `pairing/` NSD/QR-LAN/
