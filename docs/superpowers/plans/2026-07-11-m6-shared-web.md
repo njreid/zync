@@ -45,9 +45,10 @@ hypermedia over the op log; Room + `ApiRoutes` retire here or in M7.
 - `ContentReadModel` over the op-log projection: inbox, tree/children, node detail,
   contexts/tags, project decomposition. `ContentCommands` port for mutations (create,
   setField, complete/reopen, defer, move, convert task↔project, trash, tag) → ops.
-- [ ] **Step 1 (TDD):** read model folds projection into view models; command port turns
-  each intent into the right op(s); an in-memory impl (over `core` + InMemory store).
-- [ ] **Step 2: Commit** `feat(web): content read model + command ports`.
+- [x] **Step 1 (TDD):** `ContentReadModel` folds the projection (inbox/children/node/
+  contexts, defer-aware); `ContentCommands` maps GTD intents onto the `OpEmitter`
+  primitive port. 5 tests via a RecordingEmitter over InMemoryStateStore.
+- [x] **Step 2: Commit** `feat(web): content read model + command ports`.
 
 ### Task 3: Core views — layout, inbox, tree, detail (kotlinx.html)
 **Files:** `web/…/views/*.kt`, routes.
