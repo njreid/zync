@@ -65,14 +65,39 @@ fun FlowContent.treeSection(read: ContentReadModel, parent: Ulid?) {
     }
 }
 
-/** A node's detail: title, kind/status, notes, and its subtasks. */
+/** A node's detail: title, kind/status, notes, subtasks (decompose), and comments. */
 fun FlowContent.nodeDetail(read: ContentReadModel, node: NodeView) {
     h2 { +(node.title ?: "(untitled)") }
     p("muted") { +"${node.kind ?: "node"} · ${node.status ?: ""}" }
     node.notes?.let { p { +it } }
+    a(href = "/node/${node.id}/read") { +"Read" }
+
+    h3 { +"Subtasks" }
     val subs = read.children(node.id)
-    if (subs.isNotEmpty()) {
-        h3 { +"Subtasks" }
-        ul { subs.forEach { li { nodeRow(it) } } }
+    if (subs.isNotEmpty()) ul { subs.forEach { li { nodeRow(it) } } }
+    quickAdd(bind = "subtask", param = "title", action = "/node/${node.id}/subtask", label = "Add subtask")
+
+    h3 { +"Comments" }
+    val comments = read.comments(node.id)
+    if (comments.isNotEmpty()) ul { comments.forEach { c -> li { +(c.title ?: "") } } }
+    quickAdd(bind = "comment", param = "text", action = "/node/${node.id}/comment", label = "Comment")
+}
+
+/** A long-form reading view: title + notes as prose. */
+fun FlowContent.readingView(node: NodeView) {
+    h2 { +(node.title ?: "(untitled)") }
+    node.notes?.split("\n\n")?.forEach { para -> p { +para } }
+    a(href = "/node/${node.id}") { +"Back" }
+}
+
+/** A Datastar-bound text input + submit button that posts the signal as a query param. */
+private fun FlowContent.quickAdd(bind: String, param: String, action: String, label: String) {
+    input(type = InputType.text) {
+        attributes["data-bind"] = bind
+        attributes["placeholder"] = label
+    }
+    button {
+        attributes["data-on-click"] = "@post('$action?$param=' + encodeURIComponent(\$$bind))"
+        +label
     }
 }

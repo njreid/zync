@@ -85,8 +85,11 @@ hypermedia over the op log; Room + `ApiRoutes` retire here or in M7.
 **Files:** views + routes for read view, comments, project planning, decompose.
 - Long-form reading view; comments (as child nodes/annotations); project planning +
   decompose-into-subtasks flows.
-- [ ] **Step 1 (TDD):** each flow renders + mutates through the op log.
-- [ ] **Step 2: Commit** `feat(web): reading, comments, planning, decompose`.
+- [x] **Step 1 (TDD):** node detail gains decompose (add-subtask) + comments (add-comment)
+  Datastar forms patching #node-detail; a long-form `/node/{id}/read` renders notes as
+  prose. Comments = child nodes (kind=comment), excluded from subtask children. 1 test
+  covering subtask/comment/reading + validation.
+- [x] **Step 2: Commit** `feat(web): reading, comments, planning, decompose`.
 
 ### Task 7: Serve from the central server
 **Files:** `server/…` wires `:web` routes; server-side `ContentCommands` (apply + persist).

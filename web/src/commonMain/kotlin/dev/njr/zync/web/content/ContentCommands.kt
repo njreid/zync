@@ -19,6 +19,18 @@ class ContentCommands(private val ops: OpEmitter) {
         return id
     }
 
+    /** Add a comment/annotation as a child node (planning + discussion live in the tree). */
+    fun addComment(parent: Ulid, text: String): Ulid {
+        val id = ops.newId()
+        ops.setField(id, "kind", JsonPrimitive("comment"))
+        ops.setField(id, "title", JsonPrimitive(text))
+        ops.move(id, parent)
+        return id
+    }
+
+    /** Decompose a node by adding a subtask under it. */
+    fun addSubtask(parent: Ulid, title: String): Ulid = createTask(title, parent)
+
     fun rename(node: Ulid, title: String) = ops.setField(node, "title", JsonPrimitive(title))
     fun setNotes(node: Ulid, notes: String) = ops.setField(node, "notes", JsonPrimitive(notes))
 

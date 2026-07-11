@@ -30,12 +30,19 @@ data class ContextView(val id: Ulid, val name: String?)
 class ContentReadModel(private val store: StateStore) {
     private fun snapshots() = store.project().values.filter { it.alive }
 
-    /** Live children of [parent] (null = root), title-sorted. */
+    /** Live task/project children of [parent] (null = root), title-sorted (excludes comments). */
     fun children(parent: Ulid?): List<NodeView> =
         snapshots()
-            .filter { it.kind() != "context" && it.parent?.toString() == parent?.toString() }
+            .filter { it.kind() != "context" && it.kind() != "comment" && it.parent?.toString() == parent?.toString() }
             .map { it.toView() }
             .sortedBy { it.title ?: "" }
+
+    /** Comments/annotations under [node], oldest first (by id ≈ creation order). */
+    fun comments(node: Ulid): List<NodeView> =
+        snapshots()
+            .filter { it.kind() == "comment" && it.parent?.toString() == node.toString() }
+            .map { it.toView() }
+            .sortedBy { it.id.toString() }
 
     /** Inbox: live children of [inbox] that aren't completed/dropped/deferred-out. */
     fun inbox(inbox: Ulid?, now: Long = Long.MAX_VALUE): List<NodeView> =

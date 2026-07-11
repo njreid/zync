@@ -10,6 +10,7 @@ import dev.njr.zync.web.sse.respondDatastar
 import dev.njr.zync.web.views.inboxSection
 import dev.njr.zync.web.views.nodeDetail
 import dev.njr.zync.web.views.page
+import dev.njr.zync.web.views.readingView
 import dev.njr.zync.web.views.treeSection
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -57,8 +58,13 @@ fun Route.webRoutes(
         if (node == null) {
             call.respondText("not found", status = HttpStatusCode.NotFound)
         } else {
-            call.respondHtml { page(node.title ?: "Node") { nodeDetail(read, node) } }
+            call.respondHtml { page(node.title ?: "Node") { div { id = "node-detail"; nodeDetail(read, node) } } }
         }
+    }
+    get("/node/{id}/read") {
+        val node = call.parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }?.let(read::node)
+        if (node == null) call.respondText("not found", status = HttpStatusCode.NotFound)
+        else call.respondHtml { page(node.title ?: "Read") { readingView(node) } }
     }
     get("/assets/datastar.js") {
         call.respondText(WebPlatform.datastarRuntime(), ContentType("application", "javascript"))
@@ -100,6 +106,26 @@ fun Route.webRoutes(
         post("/node/{id}/move") {
             val parent = call.request.queryParameters["parent"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
             if (parent != null) call.nodeId()?.let { id -> call.applied { move(id, parent) } }
+        }
+
+        // Detail-page actions patch #node-detail (not the inbox).
+        suspend fun ApplicationCall.appliedDetail(id: Ulid, mutate: ContentCommands.() -> Unit) {
+            commands.mutate()
+            changes?.notifyChanged()
+            val node = read.node(id) ?: return respondText("not found", status = HttpStatusCode.NotFound)
+            respondDatastar(patchElementsEvent(WebPlatform.renderFragment("node-detail") { nodeDetail(read, node) }))
+        }
+        post("/node/{id}/subtask") {
+            val title = call.request.queryParameters["title"]?.trim().orEmpty()
+            val id = call.nodeId()
+            if (id != null && title.isNotEmpty()) call.appliedDetail(id) { addSubtask(id, title) }
+            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
+        post("/node/{id}/comment") {
+            val text = call.request.queryParameters["text"]?.trim().orEmpty()
+            val id = call.nodeId()
+            if (id != null && text.isNotEmpty()) call.appliedDetail(id) { addComment(id, text) }
+            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
         }
     }
 }
