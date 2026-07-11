@@ -33,21 +33,45 @@ fun Op.withSeq(seq: Long): Op = when (this) {
 class SyncService(
     private val db: ZyncDatabase,
     private val json: Json = Json,
+    private val onIngest: () -> Unit = {},
 ) {
     private val store = SqlDelightStateStore(db, json)
     private val seq = SeqAllocator(initialHead = db.transportQueries.headSeq().executeAsOne())
 
+    /** The merged state store — read surface for the server's content UI (M6). */
+    val stateStore get() = store
+
     /** Ingest pending ops; dedupe by opId; ack everything the server now holds. */
     fun push(request: PushRequest): PushResponse {
+        var ingested = false
         db.transaction {
             for (op in request.ops) {
                 if (db.transportQueries.opExists(op.opId.toString()).executeAsOne() > 0L) continue
                 val assigned = op.withSeq(seq.next())
                 insertOpLog(assigned)
                 apply(assigned, store)
+                ingested = true
             }
         }
+        if (ingested) onIngest()
         return PushResponse(ackedOpIds = request.ops.map { it.opId }, serverHead = seq.head())
+    }
+
+    /**
+     * Ingest a single server-authored op (from the browser content UI): assign seq,
+     * persist to op_log, merge — so it converges and later syncs to replicas.
+     */
+    fun ingestLocal(op: Op): Op {
+        var assigned = op
+        db.transaction {
+            if (db.transportQueries.opExists(op.opId.toString()).executeAsOne() == 0L) {
+                assigned = op.withSeq(seq.next())
+                insertOpLog(assigned)
+                apply(assigned, store)
+            }
+        }
+        onIngest()
+        return assigned
     }
 
     /** Ops with `seq > since`, ordered and paged; plus the current head. */

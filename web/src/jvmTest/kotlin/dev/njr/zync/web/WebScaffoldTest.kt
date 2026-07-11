@@ -37,6 +37,5 @@ class WebScaffoldTest {
         assertTrue(detail.contains("Subtasks") && detail.contains("Read book"))
 
         assertEquals(HttpStatusCode.NotFound, client.get("/node/not-a-ulid").status)
-        assertEquals("ok", client.get("/health").bodyAsText())
     }
 }

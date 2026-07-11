@@ -95,9 +95,11 @@ hypermedia over the op log; Room + `ApiRoutes` retire here or in M7.
 **Files:** `server/…` wires `:web` routes; server-side `ContentCommands` (apply + persist).
 - The central server serves the shared UI to desktop/browser (behind M4 auth/session);
   its command impl writes ops via the same ingest path so replicas converge.
-- [ ] **Step 1 (TDD):** Ktor test host — the server renders the UI + a mutation converges
-  to the server store.
-- [ ] **Step 2: Commit** `feat(server): serve the shared web UI`.
+- [x] **Step 1 (TDD):** the assembled server (`zyncModule(content=…)`) renders the shared
+  UI; a browser mutation becomes a server-authored op via `ServerOpEmitter` →
+  `SyncService.ingestLocal` (seq-assigned, logged, merged) → converges + renders back.
+  `onIngest` fires the change feed (phone pushes also update browser SSE). 1 server test.
+- [x] **Step 2: Commit** `feat(server): serve the shared web UI`.
 
 ### Task 8: Serve from the phone loopback + retire vanilla-JS UI
 **Files:** phone `ZyncServer`/loopback wires `:web`; delete `assets/web/` + `ApiRoutes`

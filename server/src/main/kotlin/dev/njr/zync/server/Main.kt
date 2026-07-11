@@ -4,6 +4,8 @@ import dev.njr.zync.data.JvmZyncDatabase
 import dev.njr.zync.server.auth.SqlDeviceRegistry
 import dev.njr.zync.server.blob.BlobService
 import dev.njr.zync.server.blob.S3BlobStore
+import dev.njr.zync.server.content.ServerContent
+import dev.njr.zync.web.sse.ChangeNotifier
 import dev.njr.zync.server.durability.DbBackupGateway
 import dev.njr.zync.server.durability.LitestreamCli
 import dev.njr.zync.server.durability.StartupSequence
@@ -40,7 +42,8 @@ fun main(args: Array<String>) {
     val gateway = System.getenv("ZYNC_LITESTREAM_URL")?.let(::LitestreamCli) ?: DbBackupGateway.None
     val db = StartupSequence.open(dbPath, gateway)
 
-    val service = SyncService(db)
+    val changes = ChangeNotifier()
+    val service = SyncService(db, onIngest = { changes.notifyChanged() })
     val registry = SqlDeviceRegistry(db)
     val auth = ServerConfig.buildAuth(registry)
     val pairing = PairingEndpoint(PairingManager(db, registry), identity)
@@ -48,8 +51,9 @@ fun main(args: Array<String>) {
         BlobService(S3BlobStore(S3Client.create(), bucket))
     }
     val hardening = Hardening(TokenBucketRateLimiter(capacity = 240, refillPerSecond = 4.0))
+    val content = ServerContent(service, changes)
 
     embeddedServer(Netty, port = port) {
-        zyncModule(service, auth = auth, blobs = blobs, hardening = hardening, pairing = pairing)
+        zyncModule(service, auth = auth, blobs = blobs, hardening = hardening, pairing = pairing, content = content)
     }.start(wait = true)
 }

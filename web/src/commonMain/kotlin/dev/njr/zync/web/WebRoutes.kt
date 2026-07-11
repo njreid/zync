@@ -69,9 +69,6 @@ fun Route.webRoutes(
     get("/assets/datastar.js") {
         call.respondText(WebPlatform.datastarRuntime(), ContentType("application", "javascript"))
     }
-    get("/health") {
-        call.respondText("ok")
-    }
 
     if (changes != null) {
         sse("/updates") {
