@@ -32,7 +32,7 @@ class DatastarServingTest {
 
         val home = client.get("/").bodyAsText()
         assertTrue(home.contains("""src="/assets/datastar.js""""), "datastar script tag missing: $home")
-        assertTrue(home.contains("""data-on-load="@get('/updates')""""), "SSE hook missing")
+        assertTrue(home.contains("""data-on:load="@get('/updates')""""), "SSE hook missing")
         assertTrue(home.contains("""id="inbox""""))
     }
 

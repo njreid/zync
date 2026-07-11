@@ -44,7 +44,7 @@ fun Route.webRoutes(
                 div {
                     id = "inbox"
                     // Datastar: open the SSE stream on load; the server patches #inbox on change.
-                    attributes["data-on-load"] = "@get('/updates')"
+                    attributes["data-on:load"] = "@get('/updates')"
                     inboxSection(read, inbox(), now())
                 }
             }

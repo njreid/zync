@@ -20,11 +20,11 @@ fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long) {
     h2 { +"Inbox" }
     // Quick add: Datastar binds the input to a signal and posts it.
     input(type = InputType.text) {
-        attributes["data-bind"] = "title"
+        attributes["data-bind:title"] = ""
         attributes["placeholder"] = "New task"
     }
     button {
-        attributes["data-on-click"] = "@post('/inbox?title=' + encodeURIComponent(\$title))"
+        attributes["data-on:click"] = "@post('/inbox?title=' + encodeURIComponent(\$title))"
         +"Add"
     }
     val items = read.inbox(inbox, now)
@@ -40,12 +40,12 @@ fun FlowContent.nodeRow(node: NodeView) {
     a(href = "/node/${node.id}") { +(node.title ?: "(untitled)") }
     node.status?.let { span("status") { +" · $it" } }
     button(classes = "action") {
-        attributes["data-on-click"] = "@post('/node/${node.id}/complete')"
+        attributes["data-on:click"] = "@post('/node/${node.id}/complete')"
         attributes["title"] = "Complete"
         +"✓"
     }
     button(classes = "action") {
-        attributes["data-on-click"] = "@post('/node/${node.id}/trash')"
+        attributes["data-on:click"] = "@post('/node/${node.id}/trash')"
         attributes["title"] = "Trash"
         +"🗑"
     }
@@ -93,11 +93,11 @@ fun FlowContent.readingView(node: NodeView) {
 /** A Datastar-bound text input + submit button that posts the signal as a query param. */
 private fun FlowContent.quickAdd(bind: String, param: String, action: String, label: String) {
     input(type = InputType.text) {
-        attributes["data-bind"] = bind
+        attributes["data-bind:$bind"] = ""
         attributes["placeholder"] = label
     }
     button {
-        attributes["data-on-click"] = "@post('$action?$param=' + encodeURIComponent(\$$bind))"
+        attributes["data-on:click"] = "@post('$action?$param=' + encodeURIComponent(\$$bind))"
         +label
     }
 }

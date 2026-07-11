@@ -32,3 +32,11 @@ dependencies {
 application {
     mainClass.set("dev.njr.zync.server.MainKt")
 }
+
+// Dev-only: serve the shared :web UI in-memory for headless browser (Playwright) testing.
+tasks.register<JavaExec>("webDevServer") {
+    group = "application"
+    description = "Run the in-memory dev server that serves the :web UI (for Playwright)."
+    mainClass.set("dev.njr.zync.server.DevServerKt")
+    classpath = sourceSets["main"].runtimeClasspath
+}
