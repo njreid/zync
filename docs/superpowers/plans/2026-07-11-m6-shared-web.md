@@ -75,9 +75,11 @@ hypermedia over the op log; Room + `ApiRoutes` retire here or in M7.
 **Files:** action routes + Datastar actions in views.
 - complete/reopen/defer/move/convert/trash/tag from the UI → `ContentCommands` → ops →
   live SSE refresh. Optimistic where sensible.
-- [ ] **Step 1 (TDD):** each action posts → emits the right op(s) → projection + SSE
-  reflect it (against the in-memory command impl).
-- [ ] **Step 2: Commit** `feat(web): content mutations via op-log commands`.
+- [x] **Step 1 (TDD):** action routes (create/complete/reopen/trash/defer/move) →
+  `ContentCommands` → ops → a one-shot Datastar patch of #inbox; views carry the
+  `data-on-click="@post(...)"` actions + a `data-bind` quick-add. 1 end-to-end test
+  covering all actions (status/parent reflect; completed/deferred drop from the patch).
+- [x] **Step 2: Commit** `feat(web): content mutations via op-log commands`.
 
 ### Task 6: Reading / commenting / planning / decomposing
 **Files:** views + routes for read view, comments, project planning, decompose.

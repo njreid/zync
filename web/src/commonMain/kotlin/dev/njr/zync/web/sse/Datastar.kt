@@ -1,5 +1,8 @@
 package dev.njr.zync.web.sse
 
+import io.ktor.http.ContentType
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.response.respondText
 import io.ktor.server.sse.ServerSSESession
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,6 +31,18 @@ fun patchSignalsEvent(signalsJson: String): DatastarEvent =
 /** Send a Datastar event over an SSE session. */
 suspend fun ServerSSESession.patch(event: DatastarEvent) {
     send(event = event.event, data = event.data)
+}
+
+/** Respond to a Datastar fetch action with one-shot SSE patch events. */
+suspend fun ApplicationCall.respondDatastar(vararg events: DatastarEvent) {
+    val body = buildString {
+        for (e in events) {
+            append("event: ").append(e.event).append('\n')
+            for (line in e.data.split('\n')) append("data: ").append(line).append('\n')
+            append('\n')
+        }
+    }
+    respondText(body, ContentType.parse("text/event-stream"))
 }
 
 /**

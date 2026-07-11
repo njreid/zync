@@ -1,20 +1,24 @@
 package dev.njr.zync.web
 
 import dev.njr.zync.core.id.Ulid
+import dev.njr.zync.web.content.ContentCommands
 import dev.njr.zync.web.content.ContentReadModel
 import dev.njr.zync.web.sse.ChangeNotifier
 import dev.njr.zync.web.sse.patch
 import dev.njr.zync.web.sse.patchElementsEvent
+import dev.njr.zync.web.sse.respondDatastar
 import dev.njr.zync.web.views.inboxSection
 import dev.njr.zync.web.views.nodeDetail
 import dev.njr.zync.web.views.page
 import dev.njr.zync.web.views.treeSection
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.html.respondHtml
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.sse.sse
 import kotlinx.html.div
 import kotlinx.html.h2
@@ -31,6 +35,7 @@ fun Route.webRoutes(
     inbox: () -> Ulid? = { null },
     now: () -> Long = { Long.MAX_VALUE },
     changes: ChangeNotifier? = null,
+    commands: ContentCommands? = null,
 ) {
     get("/") {
         call.respondHtml {
@@ -69,6 +74,32 @@ fun Route.webRoutes(
             )
             pushInbox()
             changes.changes.collect { pushInbox() }
+        }
+    }
+
+    if (commands != null) {
+        suspend fun ApplicationCall.applied(mutate: ContentCommands.() -> Unit) {
+            commands.mutate()
+            changes?.notifyChanged()
+            respondDatastar(patchElementsEvent(WebPlatform.renderFragment("inbox") { inboxSection(read, inbox(), now()) }))
+        }
+        fun ApplicationCall.nodeId(): Ulid? = parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+
+        post("/inbox") {
+            val title = call.request.queryParameters["title"]?.trim().orEmpty()
+            if (title.isEmpty()) call.respondText("title required", status = HttpStatusCode.BadRequest)
+            else call.applied { createTask(title, inbox()) }
+        }
+        post("/node/{id}/complete") { call.nodeId()?.let { id -> call.applied { complete(id) } } }
+        post("/node/{id}/reopen") { call.nodeId()?.let { id -> call.applied { reopen(id) } } }
+        post("/node/{id}/trash") { call.nodeId()?.let { id -> call.applied { trash(id) } } }
+        post("/node/{id}/defer") {
+            val until = call.request.queryParameters["until"]?.toLongOrNull() ?: 0L
+            call.nodeId()?.let { id -> call.applied { defer(id, until) } }
+        }
+        post("/node/{id}/move") {
+            val parent = call.request.queryParameters["parent"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+            if (parent != null) call.nodeId()?.let { id -> call.applied { move(id, parent) } }
         }
     }
 }
