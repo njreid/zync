@@ -127,7 +127,29 @@ minimal transfer.
   M9.
 - **ARM image:** build the server image `linux/arm64` to match Graviton.
 
-## 10. Decision — haloy (deferred, evaluated 2026-07-10)
+## 10. Decision — haloy (ADOPTED 2026-07-11; supersedes §3–§5)
+
+**Adopted** as the deploy mechanism, replacing Compose + Caddy + GHCR/buildx + SSM.
+`haloy deploy` builds the image locally from `server/Dockerfile`, uploads only changed
+layers (no registry), and does a zero-downtime swap with automatic TLS + rollback.
+Materialized: **`haloy.yaml`** (repo root), a **JVM-only `server/Dockerfile`** (litestream
+removed), and the **litestream host sidecar** (`deploy/litestream.service` +
+`deploy/litestream-restore.service`, config `server/litestream.yml`). Retired:
+`docker-compose.yml`, `Caddyfile`, `docker-entrypoint.sh`, `.github/workflows/server-deploy.yml`.
+
+**Key move — litestream decoupled from the app container.** haloy's swap briefly runs
+old+new containers; two `litestream replicate` processes against one S3 replica would
+conflict on generations. So litestream runs as a **single host sidecar** (systemd) against
+a **host bind-mount `/opt/zync/data`** shared with the app container. `litestream-restore`
+(oneshot) restores on a fresh box before the app starts; the app itself runs no litestream
+(`StartupSequence` just opens the file). Single writer = the app; the sidecar reads + replicates.
+
+**Deploy:** `haloy validate-config && haloy deploy` (a `pre_deploy` hook runs
+`./gradlew :server:installDist`). S3 (blobs + litestream) uses the EC2 instance role — no
+AWS keys in the container. **Not runtime-verified here** (no haloy/AWS); YAML validated,
+server compiles.
+
+### Prior evaluation (2026-07-10)
 
 Evaluated **[haloy](https://haloy.dev/)** (CLI + `haloyd` daemon + reverse-proxy daemon;
 `haloy deploy` builds locally, uploads only changed layers — no registry — and does a

@@ -1,15 +1,14 @@
-# litestream continuous replication of the server's SQLite DB to S3.
-# Runs as PID 1 in the container, supervising the JVM (deployment spec §3):
-#   litestream replicate -exec "java -jar /app/server.jar"
-# On boot the entrypoint first runs `litestream restore` if the local DB is absent.
+# litestream config for the host sidecar (deploy/litestream.service). Replicates the
+# SQLite DB on the shared bind-mount to S3. Runs as a single long-lived host process —
+# NOT inside the haloy-swapped app container — so a zero-downtime deploy never doubles up.
+# Credentials come from the EC2 instance role (default provider chain).
 dbs:
-  - path: ${ZYNC_DB_PATH}
+  - path: /opt/zync/data/zync.db
     replicas:
       - type: s3
         bucket: ${ZYNC_S3_BUCKET}
         path: litestream/zync.db
         region: ${AWS_REGION}
-        # Credentials come from the EC2 instance role (default provider chain).
         retention: 168h          # keep 7 days of generations for rollback
         snapshot-interval: 1h
         validation-interval: 12h

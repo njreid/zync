@@ -1,58 +1,52 @@
-# zync server — EC2 bootstrap
+# zync server — EC2 bootstrap (haloy)
 
-Single EC2 (Graviton/arm64) + Docker Compose (server + litestream + Caddy), image
-from GHCR, secrets in SSM Parameter Store, S3 for blobs + litestream. Per the
-deployment spec (`docs/superpowers/specs/2026-07-08-deployment.md`) and threat model.
+Single EC2 (Graviton/arm64). **haloy** deploys the app (zero-downtime, auto-TLS, no
+registry); **litestream** runs as a host sidecar replicating the SQLite DB to S3. Per the
+deployment spec (`docs/superpowers/specs/2026-07-08-deployment.md` §10).
 
-> **Not runtime-verified in this repo's CI sandbox** (no Docker/AWS). These are the
-> materialized artifacts + the runbook; the live `docker compose up` / arm64 image
-> build / restore drill run when infra exists.
+> **Not runtime-verified in this repo's sandbox** (no haloy/AWS). These are the
+> materialized artifacts + runbook; `haloy deploy` / the restore drill run when infra exists.
 
 ## 1. AWS resources
-- **EC2**: `t4g.small` (arm64), Amazon Linux 2023, tag `app=zync-server`.
-- **EBS**: a dedicated gp3 volume mounted at `/data` (the SQLite DB lives here).
-- **S3**: two buckets — `zync-blobs` (attachments) and `zync-litestream` (WAL replica).
-- **IAM instance role**: least-privilege — `s3:GetObject/PutObject/ListBucket` scoped
-  to the two buckets; `ssm:GetParameter*` on `/zync/*`.
-- **OIDC deploy role** (`AWS_DEPLOY_ROLE_ARN`): assumed by GitHub Actions to run the
-  SSM `send-command`; no static keys in CI.
+- **EC2** `t4g.small` (arm64), Amazon Linux 2023, tag `app=zync-server`, Elastic IP.
+- **EBS** gp3 mounted at `/opt/zync/data` (the SQLite DB + server identity key live here).
+- **S3** buckets: `zync-blobs` (attachments) + `zync-litestream` (WAL replica).
+- **IAM instance role**: `s3:GetObject/PutObject/ListBucket` on the two buckets only.
 
-## 2. SSM parameters (`/zync/*`, SecureString)
-- `/zync/admin_password` → `ZYNC_ADMIN_PASSWORD`
-- `/zync/devices` → contents of `ZYNC_DEVICES_FILE` (`deviceId=base64pubkey` lines)
-- Region/bucket names as plain params or instance tags.
-
-## 3. Instance user-data (once)
+## 2. One-time host setup (user-data or manual)
 ```sh
 #!/bin/bash
 set -eux
 dnf install -y docker
 systemctl enable --now docker
-# mount the data volume
+# data volume
 mkfs -t xfs /dev/nvme1n1 || true
-mkdir -p /data && mount /dev/nvme1n1 /data
-echo '/dev/nvme1n1 /data xfs defaults,nofail 0 2' >> /etc/fstab
-# fetch env from SSM → /opt/zync/.env, then compose up (see /opt/zync/deploy.sh)
+mkdir -p /opt/zync/data && mount /dev/nvme1n1 /opt/zync/data
+echo '/dev/nvme1n1 /opt/zync/data xfs defaults,nofail 0 2' >> /etc/fstab
+# litestream binary + config + sidecar units
+curl -fsSL https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-arm64.tar.gz \
+  | tar -xz -C /usr/local/bin litestream
+mkdir -p /etc/zync && cp server/litestream.yml /etc/zync/litestream.yml   # + set ZYNC_S3_BUCKET/AWS_REGION
+cp deploy/litestream-restore.service deploy/litestream.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now litestream-restore.service litestream.service
+# install + configure haloyd (the haloy server daemon) per haloy.dev docs
 ```
 
-## 4. `/opt/zync/deploy.sh <image>` (invoked by the CI SSM step)
+## 3. Deploy (from a dev machine or CI)
 ```sh
-#!/bin/sh
-set -eu
-aws ssm get-parameters-by-path --path /zync --with-decryption \
-  --query 'Parameters[].[Name,Value]' --output text \
-  | sed 's#/zync/##' | awk '{print toupper($1)"="$2}' > /opt/zync/.env
-docker pull "$1"
-IMAGE="$1" docker compose -f /opt/zync/docker-compose.prod.yml up -d
-docker image prune -f
+export AWS_REGION=us-east-1 ZYNC_BLOB_BUCKET=zync-blobs
+export ZYNC_ADMIN_PASSWORD=...            # or a haloy secret provider
+haloy validate-config
+haloy deploy                              # pre_deploy runs ./gradlew :server:installDist
 ```
+Edit `haloy.yaml` `server:` (the haloyd host) and `domains:` (your hostname) first; point a
+DNS A record at the Elastic IP. haloy provisions/renews the TLS cert automatically.
 
-## 5. TLS
-Caddy provisions/renews Let's Encrypt certs for `ZYNC_DOMAIN`. Point an A record at
-the instance's Elastic IP; open 80/443 in the security group. All routes require auth
-except `/health` and the ACME challenge.
+## 4. Restore drill (do before trusting it)
+Stop the app, `rm /opt/zync/data/zync.db*`, `systemctl restart litestream-restore` → the DB
+restores from S3; redeploy/restart the app; verify state via `/sync/bootstrap`. (Property
+covered by M4 Task 6's durability tests.)
 
-## 6. Restore drill (do this before trusting it)
-Stop the server, delete `/data/zync.db*`, restart → litestream restores from S3;
-verify state via `/sync/bootstrap`. See M4 Task 6's durability tests for the property
-being relied on.
+## 5. Rollback
+`haloy rollback` (local image history) — instant revert to the previous deploy.

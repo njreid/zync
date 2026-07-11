@@ -1,0 +1,55 @@
+# haloy deploy config for the zync server. Replaces the Compose + Caddy + GHCR + SSM
+# pipeline: `haloy deploy` builds the image locally (from server/Dockerfile), uploads only
+# the changed layers, and does a zero-downtime swap with automatic TLS.
+#
+# litestream is NOT in the app container — it runs as a host sidecar
+# (deploy/litestream.service) replicating the shared /opt/zync/data bind-mount, so the
+# swap's brief old+new overlap never doubles up litestream (see deployment spec §10).
+#
+# Prereqs: haloyd running on `server`; DNS A record for `domain` → the box; the EC2
+# instance role grants S3 (blobs) — no AWS keys needed in the container.
+# Deploy:  haloy validate-config && haloy deploy
+name: "zync-server"
+
+# The haloyd host (edit to your server, or set via ~/.config/haloy/client.yaml).
+server: "haloy.example.com"
+
+domains:
+  - domain: "zync.example.com"
+
+port: "8080"
+health_check_path: "/health"
+
+# Host bind-mount shared with the litestream sidecar (single writer: the app; the
+# sidecar only reads + replicates).
+volumes:
+  - "/opt/zync/data:/data"
+
+image:
+  build_config:
+    dockerfile: "server/Dockerfile"
+    context: "."
+    platform: "linux/arm64"
+
+env:
+  - name: "ZYNC_DB_PATH"
+    value: "/data/zync.db"
+  - name: "ZYNC_PORT"
+    value: "8080"
+  - name: "AWS_REGION"
+    from:
+      env: "AWS_REGION"
+  - name: "ZYNC_BLOB_BUCKET"
+    from:
+      env: "ZYNC_BLOB_BUCKET"
+  - name: "ZYNC_ADMIN_PASSWORD"
+    from:
+      env: "ZYNC_ADMIN_PASSWORD"
+  - name: "ZYNC_DEVICES_FILE"
+    value: "/data/devices"
+  - name: "ZYNC_SERVER_KEY_FILE"
+    value: "/data/server-identity.key"
+
+# Build the JVM distribution the Dockerfile packages, before haloy builds the image.
+pre_deploy:
+  - "./gradlew :server:installDist"

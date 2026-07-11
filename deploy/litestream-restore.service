@@ -1,0 +1,16 @@
+[Unit]
+Description=zync litestream restore (once, before the app is deployed)
+After=network-online.target
+Wants=network-online.target
+# Ordering hint: the haloy app container should start after this completes.
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=ZYNC_S3_BUCKET=%i
+# Restore the DB from S3 only if the local file is absent (fresh box / disk loss).
+ExecStart=/bin/sh -c 'test -f /opt/zync/data/zync.db || /usr/local/bin/litestream restore -if-replica-exists -config /etc/zync/litestream.yml /opt/zync/data/zync.db'
+
+[Install]
+WantedBy=multi-user.target

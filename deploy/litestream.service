@@ -1,0 +1,14 @@
+[Unit]
+Description=zync litestream continuous replication (host sidecar)
+After=litestream-restore.service network-online.target
+Requires=litestream-restore.service
+
+[Service]
+# One long-lived litestream process for the box — independent of haloy's app-container
+# swaps, so a zero-downtime deploy never runs two replicators against the same S3 replica.
+ExecStart=/usr/local/bin/litestream replicate -config /etc/zync/litestream.yml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
