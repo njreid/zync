@@ -152,7 +152,7 @@ class CaptureSettingsBridge(
         activity.lifecycleScope.launch(Dispatchers.IO) {
             runCatching {
                 val bytes = file.readBytes()
-                app.repository.captureToInbox("Voice note", AttachmentType.AUDIO, bytes, "m4a", store)
+                app.captureToInbox("Voice note", AttachmentType.AUDIO, bytes, "m4a")
                 file.delete()
             }.onSuccess {
                 withContext(Dispatchers.Main) {

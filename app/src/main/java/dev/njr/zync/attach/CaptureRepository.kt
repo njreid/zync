@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import androidx.room.withTransaction
 import dev.njr.zync.ZyncApp
 import dev.njr.zync.data.AttachmentEntity
+import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.data.AttachmentType
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -21,23 +22,11 @@ class CaptureRepository(private val app: ZyncApp) {
         type: AttachmentType,
         bytes: ByteArray,
         extension: String,
-    ): Long = withContext(Dispatchers.IO) {
-        val relativePath = app.attachmentStore.writeContent(bytes, extension)
-        try {
-            app.database.withTransaction {
-                val nodeId = app.repository.quickAddTask(title)
-                app.database.attachmentDao().insert(
-                    AttachmentEntity(nodeId = nodeId, type = type, relativePath = relativePath)
-                )
-                nodeId
-            }
-        } catch (t: Throwable) {
-            app.attachmentStore.delete(relativePath)
-            throw t
-        }
+    ): Ulid = withContext(Dispatchers.IO) {
+        app.captureToInbox(title, type, bytes, extension)
     }
 
-    suspend fun importUri(uri: Uri, fallbackTitle: String? = null): Long = withContext(Dispatchers.IO) {
+    suspend fun importUri(uri: Uri, fallbackTitle: String? = null): Ulid = withContext(Dispatchers.IO) {
         val mimeType = resolver.getType(uri)
         val type = attachmentTypeFor(mimeType, uri)
         val extension = extensionFor(mimeType, uri)
@@ -47,8 +36,9 @@ class CaptureRepository(private val app: ZyncApp) {
         importBytes(title, type, bytes, extension)
     }
 
-    suspend fun importSharedText(text: String): Long = withContext(Dispatchers.IO) {
-        app.repository.quickAddTask(text.lineSequence().firstOrNull()?.take(120) ?: "Shared text")
+    suspend fun importSharedText(text: String): Ulid = withContext(Dispatchers.IO) {
+        val title = text.lineSequence().firstOrNull()?.take(120) ?: "Shared text"
+        app.replicaCapture.captureNote(title).also { app.contentChanges.notifyChanged() }
     }
 
     companion object {

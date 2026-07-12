@@ -1,9 +1,7 @@
 package dev.njr.zync.server
 
-import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import dev.njr.zync.data.ZyncDatabase
-import dev.njr.zync.domain.NodeRepository
+import dev.njr.zync.ZyncApp
 import java.net.HttpURLConnection
 import java.net.URL
 import org.junit.Assert.assertEquals
@@ -14,23 +12,27 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class ZyncServerSmokeTest {
-    @Test fun `starts on ephemeral loopback port serves with token and stops`() {
-        val ctx = ApplicationProvider.getApplicationContext<Context>()
-        val db = ZyncDatabase.inMemory(ctx)
-        val server = ZyncServer(db, NodeRepository(db), "smoke-token", androidAssets(ctx.assets))
+    @Test
+    fun `starts on ephemeral loopback port, serves web with token, and stops`() {
+        val app = ApplicationProvider.getApplicationContext<ZyncApp>()
+        val server = ZyncServer(token = "smoke-token", content = app.webContent)
         val port = server.start()
         assertTrue(port in 1..65535)
-        val ok = URL("http://127.0.0.1:$port/api/roots").openConnection() as HttpURLConnection
-        ok.setRequestProperty(TOKEN_HEADER, "smoke-token")
+
+        // "/" with a valid ?token= is authorized on the loopback and renders the :web shell
+        val ok = URL("http://127.0.0.1:$port/?token=smoke-token").openConnection() as HttpURLConnection
         assertEquals(200, ok.responseCode)
-        val denied = URL("http://127.0.0.1:$port/api/roots").openConnection() as HttpURLConnection
+        assertTrue(ok.inputStream.bufferedReader().readText().contains("zync"))
+
+        // without a token the document route is rejected
+        val denied = URL("http://127.0.0.1:$port/").openConnection() as HttpURLConnection
         assertEquals(401, denied.responseCode)
+
         server.stop()
         val down = runCatching {
-            (URL("http://127.0.0.1:$port/api/roots").openConnection() as HttpURLConnection)
+            (URL("http://127.0.0.1:$port/").openConnection() as HttpURLConnection)
                 .apply { connectTimeout = 2000 }.responseCode
         }
         assertTrue(down.isFailure)
-        db.close()
     }
 }

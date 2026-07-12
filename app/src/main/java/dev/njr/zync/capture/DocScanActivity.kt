@@ -68,7 +68,7 @@ class DocScanActivity : ComponentActivity() {
                 withContext(Dispatchers.Main) { finishWith("Could not read the scan") }
                 return@launch
             }
-            app.repository.captureToInbox("Scanned document", AttachmentType.PDF, bytes, "pdf", store)
+            app.captureToInbox("Scanned document", AttachmentType.PDF, bytes, "pdf")
             withContext(Dispatchers.Main) { finishWith("Added scan to Inbox") }
         }
     }

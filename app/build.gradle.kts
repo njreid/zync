@@ -151,6 +151,7 @@ dependencies {
   implementation(libs.ktor.serialization.kotlinx.json)
   implementation(libs.ktor.server.websockets)
   implementation(libs.ktor.server.status.pages)
+  implementation(libs.ktor.server.sse)
   implementation(libs.ktor.network.tls.certificates)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.bouncycastle.bcpkix)

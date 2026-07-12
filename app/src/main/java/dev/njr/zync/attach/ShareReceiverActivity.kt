@@ -58,12 +58,11 @@ class ShareReceiverActivity : ComponentActivity() {
         val bytes = runCatching {
             contentResolver.openInputStream(uri)?.use { it.readBytes() }
         }.getOrNull() ?: return false
-        app.repository.captureToInbox(
+        app.captureToInbox(
             title = ShareImport.titleFor(type),
             type = type,
             bytes = bytes,
             extension = ShareImport.extensionFor(mime),
-            store = store,
         )
         return true
     }

@@ -29,7 +29,6 @@ import dev.njr.zync.pairing.ServerCertStore
 import dev.njr.zync.pairing.ServerController
 import dev.njr.zync.server.LanConfig
 import dev.njr.zync.server.ZyncServer
-import dev.njr.zync.server.androidAssets
 import java.util.UUID
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -64,6 +63,23 @@ class ZyncApp : Application() {
     val contentChanges: ChangeNotifier = ChangeNotifier()
     val contentRead: ContentReadModel by lazy { ContentReadModel(opStore) }
     val contentCommands: ContentCommands by lazy { ContentCommands(PhoneOpEmitter(opWriter)) }
+
+    /** The shared :web UI surface the loopback (and LAN) server serves. */
+    val webContent: dev.njr.zync.server.WebContent by lazy {
+        dev.njr.zync.server.WebContent(contentRead, contentCommands, contentChanges)
+    }
+
+    /** Capture an attachment into the inbox as op-log entries (blob + AddAttachment op). */
+    fun captureToInbox(
+        title: String,
+        type: dev.njr.zync.data.AttachmentType,
+        bytes: ByteArray,
+        extension: String,
+    ): dev.njr.zync.core.id.Ulid {
+        val node = replicaCapture.captureAttachment(title, bytes, type.name.lowercase(java.util.Locale.US), "capture.$extension")
+        contentChanges.notifyChanged()
+        return node
+    }
 
     /**
      * Sync once with the paired central server (push local ops, pull remote). No-op if
@@ -143,13 +159,10 @@ class ZyncApp : Application() {
                     try {
                         lanServer?.stop()
                         val newLan = ZyncServer(
-                            database,
-                            repository,
                             serverToken,
-                            androidAssets(assets),
+                            webContent,
                             lan = lan,
                             pairing = pairingService,
-                            attachmentStore = attachmentStore,
                         )
                         newLan.start()
                         lanServer = newLan
@@ -188,13 +201,10 @@ class ZyncApp : Application() {
                 Callable {
                     if (loopbackServer == null) {
                         val s = ZyncServer(
-                            database,
-                            repository,
                             serverToken,
-                            androidAssets(assets),
+                            webContent,
                             lan = null,
                             pairing = pairingService,
-                            attachmentStore = attachmentStore,
                         )
                         loopbackPort = s.start()
                         loopbackServer = s

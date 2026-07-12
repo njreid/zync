@@ -101,7 +101,7 @@ class VoiceCaptureActivity : ComponentActivity() {
         val store = AttachmentStore.default(this)
         lifecycleScope.launch(Dispatchers.IO) {
             val bytes = file.readBytes()
-            app.repository.captureToInbox("Voice note", AttachmentType.AUDIO, bytes, "m4a", store)
+            app.captureToInbox("Voice note", AttachmentType.AUDIO, bytes, "m4a")
             file.delete()
             withContext(Dispatchers.Main) { finishWith("Added voice note to Inbox") }
         }

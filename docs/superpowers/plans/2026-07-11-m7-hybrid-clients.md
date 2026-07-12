@@ -34,14 +34,12 @@ stack (`OpWriter`/`SyncClient`/`PairingClient`/`ReplicaCapture`) not yet wired l
 - Loopback serves `:web`: `install(SSE)` + `webRoutes(...)`; loopback-appropriate auth
   (token via cookie set on page load, so Datastar `@get/@post` carry it — or none for
   127.0.0.1). Remove the vanilla-JS asset catch-all + `apiRoutes` from the loopback.
-- [~] **Step 1 (Robolectric):** op-log stack wired into `ZyncApp` (`opDatabase`/`opStore`/
-  `opWriter`[persisted `deviceId`+`AndroidHlcStore`]/`replicaCapture`/`contentRead`/
-  `contentCommands`/`contentChanges`) — the shared `:web` commands/read run against the
-  app's real store; captures land; mutations queue unsynced (1 test). **Remaining:** the
-  loopback *serves* `:web` (swap `apiRoutes`+vanilla-JS catch-all for `webRoutes`+SSE) with
-  the token-cookie auth (already present) + a CSP `unsafe-eval` carve-out for Datastar's
-  expression eval — needs real-WebView verification; coupled with Task 2's capture reroute.
-- [ ] **Step 2: Commit** `feat(app): phone loopback serves the shared web UI`.
+- [x] **Step 1:** op-log stack in `ZyncApp` + the loopback now **serves `:web`** — `zyncModule`
+  swapped `apiRoutes`+vanilla-JS catch-all for `install(SSE)`+`webRoutes` over `WebContent`;
+  token-cookie auth carries Datastar's fetches; CSP gains `script-src 'unsafe-eval'`
+  (empirically required — Playwright csp.spec: strict CSP kills Datastar, the carve-out
+  fixes it). `ZyncServerSmokeTest` verifies the real loopback serves `:web` under a token.
+- [x] **Step 2: Commit** `feat(app): phone loopback serves the shared web UI`.
 
 ### Task 2: Route capture through the op log + retire the vanilla-JS UI
 **Files:** `attach/CaptureRepository`, capture Activities, delete `assets/web/`, `webtest/`.
@@ -49,9 +47,13 @@ stack (`OpWriter`/`SyncClient`/`PairingClient`/`ReplicaCapture`) not yet wired l
   `ReplicaCapture` (op log + `LocalBlobStore`), mapping `AttachmentType`→string. Delete the
   vanilla-JS UI (`assets/web/`) and its Playwright suite (`webtest/`); key flows are `:web`
   tests now. Add a phone blob route so `:web` can show attachments.
-- [ ] **Step 1 (Robolectric):** a capture creates an op-log inbox node + blob; it renders
-  in the loopback `:web` UI. Build has no vanilla-JS/`ApiRoutes` references.
-- [ ] **Step 2: Commit** `feat(app): capture via op log; retire vanilla-JS UI`.
+- [x] **Step 1:** all capture (Voice/Doc/Share/quick-add/import) routed through
+  `ReplicaCapture` (op log + `LocalBlobStore`) via `ZyncApp.captureToInbox`; deleted the
+  vanilla-JS UI (`assets/web/`), `ApiRoutes`, `AndroidAssets`, and the retired server/apiRoutes
+  tests (AuthGuard security coverage kept). App builds + 133 tests green; APK assembles.
+  **Datastar client verified headlessly** via Playwright (`webtest/web-ux.spec`). (Attachment
+  display in `:web` + `webtest/` Playwright-in-CI are follow-ups.)
+- [x] **Step 2: Commit** `feat(app): capture via op log; retire vanilla-JS UI`.
 
 ### Task 3: Wire the live sync client (phone ↔ central server)
 **Files:** `sync/` scheduler (WorkManager), pairing wiring.

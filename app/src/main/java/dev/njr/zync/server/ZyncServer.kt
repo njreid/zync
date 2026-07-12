@@ -26,6 +26,8 @@ import io.ktor.server.response.respondBytes
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
+import io.ktor.server.sse.SSE
+import dev.njr.zync.web.webRoutes
 import java.security.KeyStore
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.awaitClose
@@ -47,8 +49,11 @@ const val SESSION_COOKIE = "zync_session"
  * fallback) needs no `'unsafe-inline'` carve-out. `connect-src` allows both `ws:`/`wss:` for the
  * events socket (the loopback connector is plain `ws:`, the LAN connector is `wss:`).
  */
+// script-src carves out 'unsafe-eval': the shared :web UI uses Datastar, which evaluates
+// its data-* expressions — a strict default-src 'self' blocks that (verified via the
+// Playwright csp.spec against the loopback CSP). Scripts are still self-only otherwise.
 const val CSP_HEADER_VALUE =
-    "default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data:"
+    "default-src 'self'; script-src 'self' 'unsafe-eval'; connect-src 'self' ws: wss:; img-src 'self' data:"
 
 /**
  * Distinguishes and authorizes requests arriving on the two connectors the server can be bound
@@ -195,15 +200,13 @@ fun ZyncDatabase.changesFlow(): Flow<Unit> =
     }.debounce(100)
 
 fun Application.zyncModule(
-    db: ZyncDatabase,
-    repo: NodeRepository,
     token: String,
-    assets: (String) -> Pair<ByteArray, ContentType>?,
+    content: WebContent,
     pairing: PairingService? = null,
-    attachmentStore: AttachmentStore? = null,
 ) {
     install(ContentNegotiation) { json(Json { encodeDefaults = true; explicitNulls = true }) }
     install(WebSockets)
+    install(SSE)
     install(StatusPages) {
         exception<IllegalArgumentException> { call, cause ->
             call.respond(HttpStatusCode.BadRequest, ErrorDto(cause.message ?: "invalid request"))
@@ -227,18 +230,13 @@ fun Application.zyncModule(
     tokenGuard(token, pairing)
     routing {
         if (pairing != null) pairingRoutes(pairing)
-        apiRoutes(db, repo, attachmentStore)
-        get("/{path...}") {
-            val segments = call.parameters.getAll("path").orEmpty()
-            if (segments.any { it == ".." || it.contains('\u0000') }) {
-                call.respond(HttpStatusCode.NotFound, ErrorDto("not found"))
-                return@get
-            }
-            val path = segments.joinToString("/").ifEmpty { "index.html" }
-            val hit = assets(path)
-            if (hit == null) call.respond(HttpStatusCode.NotFound, ErrorDto("not found"))
-            else call.respondBytes(hit.first, hit.second)
-        }
+        // The shared :web UI over the op log, served on the loopback (and LAN until retired).
+        webRoutes(
+            content.read,
+            now = { System.currentTimeMillis() },
+            changes = content.changes,
+            commands = content.commands,
+        )
     }
 }
 
@@ -256,14 +254,11 @@ data class LanConfig(
 )
 
 class ZyncServer(
-    private val db: ZyncDatabase,
-    private val repo: NodeRepository,
     private val token: String,
-    private val assets: (String) -> Pair<ByteArray, ContentType>?,
+    private val content: WebContent,
     private val port: Int = 0,
     private val lan: LanConfig? = null,
     private val pairing: PairingService? = null,
-    private val attachmentStore: AttachmentStore? = null,
 ) {
     private var engine: EmbeddedServer<*, *>? = null
     private var httpPort: Int? = null
@@ -306,7 +301,7 @@ class ZyncServer(
                 }
             }
         }) {
-            zyncModule(db, repo, token, assets, pairing, attachmentStore)
+            zyncModule(token, content, pairing)
         }.also { engine = it }
         e.start(wait = false)
         val resolved = kotlinx.coroutines.runBlocking { e.engine.resolvedConnectors() }
