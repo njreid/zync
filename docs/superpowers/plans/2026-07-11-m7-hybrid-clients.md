@@ -71,8 +71,18 @@ stack (`OpWriter`/`SyncClient`/`PairingClient`/`ReplicaCapture`) not yet wired l
 **Files:** delete phone-as-LAN `ZyncServer` LAN path, `pairing/` NSD/QR-LAN/
 `RemoteAccessManager`/TLS-pinning, the Tauri reverse-proxy desktop; drop mDNS deps.
 - The phone talks only to the central server; no LAN server, no LAN pairing, no mDNS.
-- [ ] **Step 1:** app builds without the LAN stack; no dead refs; tests green.
-- [ ] **Step 2: Commit** `chore: retire the M1c/M1d LAN stack`.
+- [x] **Step 1:** deleted the `pairing/` package (RemoteAccessManager/PairingService/
+  ServerController/ServerCertStore/NSD/wifi-IP/QrScanBridge/Crypto cert-gen), `server/
+  PairingRoutes.kt`, the dead `RemoteAccessForegroundService`, the Room `ZyncDatabase`/
+  `AllowedDevice*` + `app/schemas/`, the entire `desktop/` Tauri app, `Casks/zync.rb`, and
+  the desktop CI jobs. `ZyncServer` collapsed to loopback-only (no `LanConfig`/`sslConnector`/
+  `tlsPort`/session-auth); extracted `constantTimeEquals` into `server/ConstantTime.kt` (the
+  loopback guard still needs it) before deleting `Crypto`. `ZyncApp` dropped
+  `database`/`pairingService`/`remoteAccess`/`serverController`/`lanServer`. Gradle lost
+  Room/KSP/ktor-tls-certs/code-scanner (kept **bouncycastle** — replica Ed25519 — and
+  **zxing** — server terminal-QR). Manifest lost the LAN perms + service. AGENTS.md
+  de-desktop'd. All modules build; full test suite + APK green.
+- [x] **Step 2: Commit** `chore: retire the M1c/M1d LAN stack`.
 
 ### Task 5: Native Compose shell
 **Files:** `ui/` Compose (launcher/capture entry/settings), WebView content host.

@@ -3,7 +3,6 @@ package dev.njr.zync.attach
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
-import androidx.room.withTransaction
 import dev.njr.zync.ZyncApp
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.data.AttachmentType

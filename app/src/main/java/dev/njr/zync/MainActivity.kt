@@ -10,7 +10,6 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import dev.njr.zync.capture.CaptureSettingsBridge
-import dev.njr.zync.pairing.QrScanBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,7 +30,6 @@ class MainActivity : ComponentActivity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             webChromeClient = WebChromeClient()
-            addJavascriptInterface(QrScanBridge(this@MainActivity, this), "ZyncNative")
             addJavascriptInterface(
                 CaptureSettingsBridge(this@MainActivity, this) { callback ->
                     recordAudioResult = callback
@@ -47,11 +45,6 @@ class MainActivity : ComponentActivity() {
             }
         })
         val app = application as ZyncApp
-        // Force the lazy `remoteAccess` manager into existence (and wired into
-        // `pairingService.remoteAccess`, see ZyncApp) up front, so the settings view's
-        // `/remote/*` routes are functional as soon as the WebView loads, not only after
-        // whatever first touches `app.remoteAccess` on some other path.
-        app.remoteAccess
         lifecycleScope.launch(Dispatchers.IO) {
             val port = app.ensureServerStarted()
             withContext(Dispatchers.Main) {

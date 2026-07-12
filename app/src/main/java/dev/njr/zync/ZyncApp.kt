@@ -6,7 +6,6 @@ import android.util.Log
 import dev.njr.zync.core.clock.Clock
 import dev.njr.zync.data.AndroidZyncDatabase
 import dev.njr.zync.data.SqlDelightStateStore
-import dev.njr.zync.data.ZyncDatabase
 import dev.njr.zync.replica.AndroidHlcStore
 import dev.njr.zync.replica.LocalBlobStore
 import dev.njr.zync.replica.LocalHlc
@@ -18,14 +17,6 @@ import dev.njr.zync.web.content.ContentReadModel
 import dev.njr.zync.web.sse.ChangeNotifier
 import java.io.File
 import kotlin.random.Random
-import dev.njr.zync.pairing.AndroidKeystorePasswordProtector
-import dev.njr.zync.pairing.AndroidNsdAdvertiser
-import dev.njr.zync.pairing.ConnectivityWifiIpAddressProvider
-import dev.njr.zync.pairing.PairingService
-import dev.njr.zync.pairing.RemoteAccessManager
-import dev.njr.zync.pairing.ServerCertStore
-import dev.njr.zync.pairing.ServerController
-import dev.njr.zync.server.LanConfig
 import dev.njr.zync.server.ZyncServer
 import java.util.UUID
 import java.util.concurrent.Callable
@@ -34,8 +25,6 @@ import java.util.concurrent.Executors
 private const val TAG = "zync"
 
 class ZyncApp : Application() {
-    /** Legacy Room DB — retained only for the LAN-pairing allow-list (retired with the LAN stack). */
-    val database: ZyncDatabase by lazy { ZyncDatabase.build(this) }
     val serverToken: String = UUID.randomUUID().toString()
 
     // --- Op-log stack (M7): the phone as a replica; the shared :web UI reads/writes this ---
@@ -61,7 +50,7 @@ class ZyncApp : Application() {
     val contentRead: ContentReadModel by lazy { ContentReadModel(opStore) }
     val contentCommands: ContentCommands by lazy { ContentCommands(PhoneOpEmitter(opWriter)) }
 
-    /** The shared :web UI surface the loopback (and LAN) server serves. */
+    /** The shared :web UI surface the loopback server serves. */
     val webContent: dev.njr.zync.server.WebContent by lazy {
         dev.njr.zync.server.WebContent(contentRead, contentCommands, contentChanges)
     }
@@ -102,107 +91,30 @@ class ZyncApp : Application() {
         contentChanges.notifyChanged()
     }
 
-    val pairingService: PairingService by lazy {
-        PairingService(database.allowedDeviceDao(), randomNonce = { UUID.randomUUID().toString() })
-    }
-
-    val remoteAccess: RemoteAccessManager by lazy {
-        RemoteAccessManager(
-            certStore = ServerCertStore(filesDir, AndroidKeystorePasswordProtector()),
-            server = serverController,
-            pairingService = pairingService,
-            nsd = AndroidNsdAdvertiser(this),
-            wifiIp = ConnectivityWifiIpAddressProvider(this),
-            deviceName = android.os.Build.MODEL ?: "zync",
-        ).also { pairingService.remoteAccess = it }
-    }
-
     /**
      * The PERMANENT loopback server: started once, on first [ensureServerStarted] call, bound to
      * `127.0.0.1` on a port that never changes for the life of the process. The in-app WebView
      * loads `http://127.0.0.1:<port>/...` once at launch and never again — so this server (and
      * this port) must never be restarted or replaced, or the WebView's connection dies underneath
-     * it (see m1c final-review CRIT-A: the old single-server `restart()` design killed the very
-     * server the WebView was talking to a few seconds after any remote-access toggle).
+     * it.
      */
     @Volatile private var loopbackServer: ZyncServer? = null
     @Volatile private var loopbackPort: Int = -1
 
-    /** The separate LAN (HTTPS) server, created by [RemoteAccessManager.enable] and destroyed by
-     * [RemoteAccessManager.disable]. `null` when remote access is disabled. Never affects
-     * [loopbackServer] — the two are independent Netty engines sharing the same [repository]/
-     * [pairingService]/[database]/assets. */
-    @Volatile private var lanServer: ZyncServer? = null
-
-    /**
-     * Serializes all server start/stop work onto a single dedicated background thread — never the
-     * caller's thread. This matters because [ServerController] methods can be invoked from inside
-     * a Ktor/Netty request-handling coroutine (`POST /remote/enable`, `/remote/disable`), which by
-     * default runs on the Netty engine's own event-loop worker threads. Unlike the old single-
-     * server design, `/remote/enable` and `/remote/disable` are only ever served by the *loopback*
-     * engine (see `requireLoopbackConnector` in `PairingRoutes.kt`) and only ever start/stop the
-     * *LAN* engine — a different `EmbeddedServer` instance — so there is no self-shutdown/circular
-     * -wait hazard here: a handler can safely await the LAN engine's stop()/start() synchronously
-     * without ever blocking on itself. Being a single thread also gives us the mutual exclusion
-     * previously spread across separate locks, without any lock-ordering hazard between them.
-     */
+    /** Serializes loopback server start onto a single dedicated background thread, off the caller's. */
     private val serverExecutor =
         Executors.newSingleThreadExecutor { r -> Thread(r, "zync-server") }
 
-    private val serverController = object : ServerController {
-        override fun enableLan(lan: LanConfig): Int =
-            serverExecutor.submit(
-                Callable {
-                    try {
-                        lanServer?.stop()
-                        val newLan = ZyncServer(
-                            serverToken,
-                            webContent,
-                            lan = lan,
-                            pairing = pairingService,
-                        )
-                        newLan.start()
-                        lanServer = newLan
-                        newLan.tlsPort()
-                            ?: error("LAN ZyncServer.start() returned no TLS port despite a LanConfig")
-                    } catch (t: Throwable) {
-                        Log.e(TAG, "enabling LAN server failed", t)
-                        throw t
-                    }
-                },
-            ).get()
-
-        override fun disableLan() {
-            serverExecutor.submit(
-                Callable {
-                    try {
-                        lanServer?.stop()
-                        lanServer = null
-                    } catch (t: Throwable) {
-                        Log.e(TAG, "disabling LAN server failed", t)
-                        throw t
-                    }
-                },
-            ).get()
-        }
-    }
-
     /**
      * Blocks while binding — call from a background thread. Starts (once) the permanent loopback
-     * server; a no-op on subsequent calls. Call [remoteAccess]`.enable()` to additionally start a
-     * separate LAN HTTPS server.
+     * server; a no-op on subsequent calls.
      */
     fun ensureServerStarted(): Int {
         if (loopbackServer == null) {
             serverExecutor.submit(
                 Callable {
                     if (loopbackServer == null) {
-                        val s = ZyncServer(
-                            serverToken,
-                            webContent,
-                            lan = null,
-                            pairing = pairingService,
-                        )
+                        val s = ZyncServer(serverToken, webContent)
                         loopbackPort = s.start()
                         loopbackServer = s
                     }

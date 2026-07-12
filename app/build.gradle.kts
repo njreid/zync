@@ -4,7 +4,6 @@ plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.kotlin.compose)
-  alias(libs.plugins.ksp)
 }
 
 val releaseKeyPropertiesFile = rootProject.file("key.properties")
@@ -93,15 +92,6 @@ android {
             isIncludeAndroidResources = true
         }
     }
-
-    // Robolectric unit tests (with isIncludeAndroidResources) read assets from the merged
-    // debug-variant assets, not a test-specific assets dir — so the exported Room schemas
-    // (needed by MigrationTestHelper) must be wired onto the "debug" sourceSet's assets.
-    sourceSets {
-        getByName("debug") {
-            assets.srcDirs("$projectDir/schemas")
-        }
-    }
 }
 
 gradle.taskGraph.whenReady {
@@ -114,10 +104,6 @@ gradle.taskGraph.whenReady {
                 "ZYNC_KEYSTORE_FILE, ZYNC_KEYSTORE_PASSWORD, ZYNC_KEY_ALIAS, ZYNC_KEY_PASSWORD"
         )
     }
-}
-
-ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 kotlin {
@@ -139,21 +125,15 @@ dependencies {
   implementation(libs.ktor.client.cio)
   implementation(libs.ktor.client.content.negotiation)
 
-  // Room (read-only bridge until M6/M7)
-  implementation(libs.room.runtime)
-  implementation(libs.room.ktx)
-  ksp(libs.room.compiler)
-
-  // Ktor server stack + serialization
+  // Ktor server stack + serialization (the loopback server that hosts the shared :web UI)
   implementation(libs.ktor.server.core)
   implementation(libs.ktor.server.netty)
   implementation(libs.ktor.server.content.negotiation)
   implementation(libs.ktor.serialization.kotlinx.json)
-  implementation(libs.ktor.server.websockets)
   implementation(libs.ktor.server.status.pages)
   implementation(libs.ktor.server.sse)
-  implementation(libs.ktor.network.tls.certificates)
   implementation(libs.kotlinx.serialization.json)
+  // Ed25519 for device-signed sync requests (replica).
   implementation(libs.bouncycastle.bcpkix)
   implementation(libs.glance)
   implementation(libs.glance.appwidget)
@@ -162,8 +142,7 @@ dependencies {
   // engine vanish silently instead of reaching logcat.
   implementation(libs.slf4j.android)
 
-  // On-device QR scanning for pairing (no camera permission required)
-  implementation(libs.play.services.code.scanner)
+  // On-device document scanning for capture (no camera permission required)
   implementation(libs.play.services.mlkit.document.scanner)
 
   // Local tests: jUnit, coroutines, Android runner
@@ -171,7 +150,6 @@ dependencies {
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
   testImplementation(libs.androidx.test.core)
-  testImplementation(libs.room.testing)
   testImplementation(libs.ktor.server.test.host)
   testImplementation(libs.ktor.client.content.negotiation)
   testImplementation(libs.ktor.client.cio)

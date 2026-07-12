@@ -3,18 +3,14 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Recording voice notes (double-Volume-Up capture gesture). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!--
       allowBackup is off: durability is the central server (op-log sync + litestream),
-      not Android Auto Backup — which would otherwise upload zync.db AND the device
-      key material (pairing/ServerCertStore, the replica's device key) to Google's
-      cloud in cleartext-at-rest, contradicting the on-device-secrets posture.
+      not Android Auto Backup — which would otherwise upload the op-log DB AND the
+      replica's device key material to Google's cloud in cleartext-at-rest,
+      contradicting the on-device-secrets posture.
     -->
     <application
         android:name=".ZyncApp"
@@ -60,13 +56,6 @@
             </intent-filter>
         </activity>
 
-        <!--
-          Keeps the pairing/sync server (and its NSD advertisement) alive while remote access is
-          enabled, even if the app is backgrounded — Android will otherwise kill the process's
-          network/socket state shortly after it loses foreground/visibility. `dataSync` is the
-          closest fit for "syncing data with a paired desktop over the LAN"; no notification UI is
-          implemented as part of this task, only the manifest declaration Task 7/8 wire up to.
-        -->
         <!-- Voice-note + document-scan capture screens, launched by the
              volume-key gestures (and reusable elsewhere). Not exported. -->
         <activity
@@ -108,12 +97,6 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/quick_capture_widget_info" />
         </receiver>
-
-        <service
-            android:name=".RemoteAccessForegroundService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
     </application>
 
 </manifest>
