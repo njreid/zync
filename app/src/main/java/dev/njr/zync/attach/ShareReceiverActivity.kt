@@ -37,11 +37,10 @@ class ShareReceiverActivity : ComponentActivity() {
             return
         }
         val app = application as ZyncApp
-        val store = AttachmentStore.default(this)
         lifecycleScope.launch(Dispatchers.IO) {
             var added = 0
             for (uri in uris) {
-                if (importOne(app, store, uri)) added++
+                if (importOne(app, uri)) added++
             }
             withContext(Dispatchers.Main) {
                 toastAndFinish(
@@ -52,7 +51,7 @@ class ShareReceiverActivity : ComponentActivity() {
         }
     }
 
-    private suspend fun importOne(app: ZyncApp, store: AttachmentStore, uri: Uri): Boolean {
+    private suspend fun importOne(app: ZyncApp, uri: Uri): Boolean {
         val mime = contentResolver.getType(uri)
         val type: AttachmentType = ShareImport.typeFor(mime) ?: return false
         val bytes = runCatching {

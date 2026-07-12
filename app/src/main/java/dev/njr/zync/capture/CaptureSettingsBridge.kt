@@ -14,7 +14,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import dev.njr.zync.MainActivity
 import dev.njr.zync.ZyncApp
-import dev.njr.zync.attach.AttachmentStore
 import dev.njr.zync.data.AttachmentType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -148,7 +147,6 @@ class CaptureSettingsBridge(
         }
 
         val app = activity.application as ZyncApp
-        val store = AttachmentStore.default(activity)
         activity.lifecycleScope.launch(Dispatchers.IO) {
             runCatching {
                 val bytes = file.readBytes()

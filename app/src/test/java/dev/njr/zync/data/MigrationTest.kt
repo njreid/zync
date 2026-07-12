@@ -55,5 +55,25 @@ class MigrationTest {
             }
         }
     }
+    @Test fun migrate3To4_dropsContentTables_keepsAllowedDevice() {
+        helper.createDatabase(TEST_DB, 3).use { db ->
+            db.execSQL("INSERT INTO node (id,kind,parentId,title,notes,status,deferUntil,createdAt,completedAt,sortOrder,builtin) " +
+                "VALUES (100,'TASK',1,'gone','','ACTIVE',NULL,1,NULL,0,0)")
+            db.execSQL("INSERT INTO allowed_device (id,name,pubkey,addedAt,lastSeen,revoked) " +
+                "VALUES (5,'phone','pk',1,NULL,0)")
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 4, true, Migration_3_4).use { db ->
+            // the LAN-pairing allow-list survives the content cutover
+            db.query("SELECT name FROM allowed_device WHERE id=5").use { c ->
+                assertTrue(c.moveToFirst()); assertEquals("phone", c.getString(0))
+            }
+            // the retired content tables are gone
+            db.query("SELECT name FROM sqlite_master WHERE type='table' AND " +
+                "name IN ('node','context','node_context','attachment')").use { c ->
+                assertTrue(!c.moveToFirst())
+            }
+        }
+    }
+
     companion object { const val TEST_DB = "migration-test" }
 }

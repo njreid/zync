@@ -96,8 +96,16 @@ stack (`OpWriter`/`SyncClient`/`PairingClient`/`ReplicaCapture`) not yet wired l
 ContextDao` (+ tests), thin Room to only what's still needed (if anything).
 - With capture + UI on the op log, the Room content layer is dead. Remove it; keep only
   any non-content Room use (revisit pairing/attachment storage).
-- [ ] **Step 1:** app builds; no dead refs; tests green.
-- [ ] **Step 2: Commit** `chore(app): retire Room content layer`.
+- [x] **Step 1:** deleted `NodeRepository`, `NestingRules`, `Node/Context/Attachment`
+  entities + DAOs, `AttachmentStore`, content DTOs (`Dto.kt`), and their tests. Extracted
+  `AttachmentType` to its own non-Room file (live capture still needs it) and preserved the
+  shared `ErrorDto`. Room `ZyncDatabase` thinned in place to ONLY `AllowedDeviceEntity`/
+  `allowedDeviceDao` (LAN pairing, retired later in Task 4) — content and pairing share one
+  inseparable `@Database`. Added `Migration_3_4` (drops the retired content tables, keeps
+  `allowed_device`) with a migration test; schema v4 exported. Dropped dead `ZyncApp.repository`/
+  `attachmentStore` + the Room-invalidation `changesFlow` (the `:web` UI uses `ChangeNotifier`).
+  App builds, 55-task suite + APK green.
+- [x] **Step 2: Commit** `chore(app): retire Room content layer`.
 
 ### Task 8: Acceptance
 - [ ] **Step 1 (acceptance):** phone (native shell + loopback `:web`) and browser (server

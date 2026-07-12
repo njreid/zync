@@ -7,41 +7,28 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+/**
+ * The legacy Room database. Since M7 (op-log cutover) it holds ONLY the LAN-pairing
+ * allow-list ([AllowedDeviceEntity]); all content (nodes/contexts/attachments) moved to
+ * the op-log store ([dev.njr.zync.data.db.ZyncDatabase] via SQLDelight). This class and
+ * its `allowed_device` table survive until the LAN stack is retired (M7 Task 4).
+ */
 @Database(
-    entities = [NodeEntity::class, ContextEntity::class, NodeContextCrossRef::class, AttachmentEntity::class, AllowedDeviceEntity::class],
-    version = 3,
+    entities = [AllowedDeviceEntity::class],
+    version = 4,
     exportSchema = true,
 )
 abstract class ZyncDatabase : RoomDatabase() {
-    abstract fun nodeDao(): NodeDao
-    abstract fun contextDao(): ContextDao
-    abstract fun attachmentDao(): AttachmentDao
     abstract fun allowedDeviceDao(): AllowedDeviceDao
 
     companion object {
-        const val INBOX_ID = 1L
-        const val SOMEDAY_ID = 2L
-
-        private val seedCallback = object : Callback() {
-            override fun onCreate(db: SupportSQLiteDatabase) {
-                val now = System.currentTimeMillis()
-                db.execSQL(
-                    "INSERT INTO node (id, kind, parentId, title, notes, status, deferUntil, createdAt, completedAt, sortOrder, builtin) " +
-                    "VALUES ($INBOX_ID, 'FOLDER', NULL, 'Inbox', '', 'ACTIVE', NULL, $now, NULL, 0, 1), " +
-                    "($SOMEDAY_ID, 'FOLDER', NULL, 'Someday', '', 'ACTIVE', NULL, $now, NULL, 1, 1)"
-                )
-            }
-        }
-
         fun build(context: Context): ZyncDatabase =
             Room.databaseBuilder(context, ZyncDatabase::class.java, "zync.db")
-                .addCallback(seedCallback)
-                .addMigrations(Migration_1_2, Migration_2_3)
+                .addMigrations(Migration_1_2, Migration_2_3, Migration_3_4)
                 .build()
 
         fun inMemory(context: Context): ZyncDatabase =
             Room.inMemoryDatabaseBuilder(context, ZyncDatabase::class.java)
-                .addCallback(seedCallback)
                 .allowMainThreadQueries()
                 .build()
     }
@@ -77,5 +64,15 @@ val Migration_2_3 = object : Migration(2, 3) {
         db.execSQL(
             "CREATE INDEX IF NOT EXISTS `index_attachment_nodeId` ON `attachment` (`nodeId`)"
         )
+    }
+}
+
+/** M7 op-log cutover: content now lives in the op-log store; drop the retired Room content tables. */
+val Migration_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS `attachment`")
+        db.execSQL("DROP TABLE IF EXISTS `node_context`")
+        db.execSQL("DROP TABLE IF EXISTS `context`")
+        db.execSQL("DROP TABLE IF EXISTS `node`")
     }
 }

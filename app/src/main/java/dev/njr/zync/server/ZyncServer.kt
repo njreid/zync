@@ -1,8 +1,5 @@
 package dev.njr.zync.server
 
-import dev.njr.zync.attach.AttachmentStore
-import dev.njr.zync.data.ZyncDatabase
-import dev.njr.zync.domain.NodeRepository
 import dev.njr.zync.pairing.Crypto
 import dev.njr.zync.pairing.PairingService
 import io.ktor.http.ContentType
@@ -29,11 +26,6 @@ import io.ktor.server.websocket.WebSockets
 import io.ktor.server.sse.SSE
 import dev.njr.zync.web.webRoutes
 import java.security.KeyStore
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.debounce
 import kotlinx.serialization.json.Json
 
 const val TOKEN_COOKIE = "zync_token"
@@ -186,18 +178,6 @@ private fun Application.tokenGuard(token: String, pairing: PairingService?) {
         }
     }
 }
-
-@OptIn(FlowPreview::class)
-fun ZyncDatabase.changesFlow(): Flow<Unit> =
-    callbackFlow {
-        val observer = object : androidx.room.InvalidationTracker.Observer(
-            arrayOf("node", "context", "node_context")
-        ) {
-            override fun onInvalidated(tables: Set<String>) { trySend(Unit) }
-        }
-        invalidationTracker.addObserver(observer)
-        awaitClose { invalidationTracker.removeObserver(observer) }
-    }.debounce(100)
 
 fun Application.zyncModule(
     token: String,

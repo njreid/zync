@@ -5,7 +5,6 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.room.withTransaction
 import dev.njr.zync.ZyncApp
-import dev.njr.zync.data.AttachmentEntity
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.data.AttachmentType
 import java.text.SimpleDateFormat

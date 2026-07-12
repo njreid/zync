@@ -15,7 +15,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import dev.njr.zync.ZyncApp
-import dev.njr.zync.attach.AttachmentStore
 import dev.njr.zync.data.AttachmentType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -25,7 +24,7 @@ import java.io.File
 /**
  * Minimal record-a-voice-note screen launched by the double-Volume-Up gesture
  * (or directly). Records with [MediaRecorder]; on "Stop & save" it stores the
- * clip and creates an Inbox task via `NodeRepository.captureToInbox`.
+ * clip and creates an Inbox task via `ZyncApp.captureToInbox` (op log).
  *
  * Runtime behaviour (mic, MediaRecorder) is device-verified.
  */
@@ -98,7 +97,6 @@ class VoiceCaptureActivity : ComponentActivity() {
             return
         }
         val app = application as ZyncApp
-        val store = AttachmentStore.default(this)
         lifecycleScope.launch(Dispatchers.IO) {
             val bytes = file.readBytes()
             app.captureToInbox("Voice note", AttachmentType.AUDIO, bytes, "m4a")

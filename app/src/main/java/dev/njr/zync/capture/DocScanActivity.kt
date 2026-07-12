@@ -13,7 +13,6 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import dev.njr.zync.ZyncApp
-import dev.njr.zync.attach.AttachmentStore
 import dev.njr.zync.data.AttachmentType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -59,7 +58,6 @@ class DocScanActivity : ComponentActivity() {
         val pdfUri = scan?.pdf?.uri ?: run { finishWith("No document captured"); return }
 
         val app = application as ZyncApp
-        val store = AttachmentStore.default(this)
         lifecycleScope.launch(Dispatchers.IO) {
             val bytes = runCatching {
                 contentResolver.openInputStream(pdfUri)?.use { it.readBytes() }

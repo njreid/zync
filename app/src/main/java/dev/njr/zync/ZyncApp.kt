@@ -3,12 +3,10 @@ package dev.njr.zync
 import android.app.Application
 import android.content.Context
 import android.util.Log
-import dev.njr.zync.attach.AttachmentStore
 import dev.njr.zync.core.clock.Clock
 import dev.njr.zync.data.AndroidZyncDatabase
 import dev.njr.zync.data.SqlDelightStateStore
 import dev.njr.zync.data.ZyncDatabase
-import dev.njr.zync.domain.NodeRepository
 import dev.njr.zync.replica.AndroidHlcStore
 import dev.njr.zync.replica.LocalBlobStore
 import dev.njr.zync.replica.LocalHlc
@@ -36,9 +34,8 @@ import java.util.concurrent.Executors
 private const val TAG = "zync"
 
 class ZyncApp : Application() {
+    /** Legacy Room DB — retained only for the LAN-pairing allow-list (retired with the LAN stack). */
     val database: ZyncDatabase by lazy { ZyncDatabase.build(this) }
-    val repository: NodeRepository by lazy { NodeRepository(database) }
-    val attachmentStore: AttachmentStore by lazy { AttachmentStore(AttachmentStore.defaultRoot(this)) }
     val serverToken: String = UUID.randomUUID().toString()
 
     // --- Op-log stack (M7): the phone as a replica; the shared :web UI reads/writes this ---
