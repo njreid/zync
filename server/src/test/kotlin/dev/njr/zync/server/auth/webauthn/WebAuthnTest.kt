@@ -154,6 +154,16 @@ class WebAuthnTest {
     }
 
     @Test
+    fun `the web gate cannot be bypassed with a spoofed device header`() = testApplication {
+        wire(JvmZyncDatabase.inMemory(), SessionStore(), regToken = "reg-secret")
+        // A client-supplied X-Device-Id must NOT skip the browser session gate (regression: it did).
+        assertEquals(
+            HttpStatusCode.Unauthorized,
+            client.get("/tree") { header("X-Device-Id", "anything") }.status,
+        )
+    }
+
+    @Test
     fun registrationRequiresTheRegistrationToken() = testApplication {
         wire(JvmZyncDatabase.inMemory(), SessionStore(), regToken = "reg-secret")
         assertEquals(HttpStatusCode.Forbidden, client.get("/auth/webauthn/register/options").status)

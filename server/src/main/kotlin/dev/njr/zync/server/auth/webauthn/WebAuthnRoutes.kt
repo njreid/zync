@@ -98,9 +98,10 @@ fun io.ktor.server.application.Application.installWebSessionGate(
 ) {
     intercept(ApplicationCallPipeline.Plugins) {
         val path = call.request.path()
+        // Device/operator APIs (/sync, /blob, /pair, /debug, …) carry their own per-route auth and
+        // are exempt by PATH. Do NOT exempt by a client-supplied header (e.g. X-Device-Id) — the
+        // :web routes have no other guard, so a header-based bypass would open all content.
         if (SESSION_EXEMPT.any { path == it || path.startsWith("$it/") }) return@intercept
-        // Device-signed API calls (native replicas) authenticate per-route; don't gate them here.
-        if (call.request.headers["X-Device-Id"] != null) return@intercept
         val token = sessionToken(call)
         if (token == null || !sessions.validate(token, now())) {
             if (path == "/" || path == "/index.html") call.respondRedirect("/login")
