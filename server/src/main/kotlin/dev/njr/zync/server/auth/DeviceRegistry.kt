@@ -3,8 +3,8 @@ package dev.njr.zync.server.auth
 /**
  * Allowed-device registry: maps a deviceId to its Ed25519 public key and tracks
  * revocation. Ops from an unknown or revoked device are rejected (spec §6). In
- * prod this is seeded from configuration/SSM; the in-memory impl backs tests and
- * small deployments.
+ * prod this is `SqlDeviceRegistry` (populated by the pairing flow); the in-memory
+ * impl backs tests and small deployments.
  */
 interface DeviceRegistry {
     fun publicKey(deviceId: String): ByteArray?

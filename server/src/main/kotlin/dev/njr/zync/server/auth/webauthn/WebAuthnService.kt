@@ -37,6 +37,7 @@ class WebAuthnService(
     private val attestedConverter = AttestedCredentialDataConverter(objectConverter)
     private val attestationObjectConverter = AttestationObjectConverter(objectConverter)
     private val origin = Origin(config.origin)
+    private val log = java.util.logging.Logger.getLogger("dev.njr.zync.webauthn")
 
     fun hasCredentials(): Boolean = credentials.count() > 0
 
@@ -62,7 +63,8 @@ class WebAuthnService(
         val params = RegistrationParameters(serverProperty, null, false, true)
         try {
             manager.verify(RegistrationRequest(attestationObject, clientDataJSON), params)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            log.log(java.util.logging.Level.WARNING, "WebAuthn registration verification failed", e)
             return false
         }
         val authData = attestationObjectConverter.convert(attestationObject)?.authenticatorData ?: return false
@@ -107,7 +109,8 @@ class WebAuthnService(
         val params = AuthenticationParameters(serverProperty, credentialRecord, null, false)
         val authData = try {
             manager.verify(authRequest, params)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            log.log(java.util.logging.Level.WARNING, "WebAuthn assertion verification failed", e)
             return false
         }
         authData.authenticatorData?.signCount?.let { credentials.updateSignCount(resp.rawId, it) }

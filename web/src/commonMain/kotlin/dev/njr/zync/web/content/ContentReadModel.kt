@@ -25,7 +25,7 @@ data class ContextView(val id: Ulid, val name: String?)
 
 /**
  * Reads for the shared content UI, folded from the `core` projection over a [StateStore].
- * The single read surface for both server and phone (supersedes the M5 `BridgeReadModel`).
+ * The single read surface for both the server and the phone.
  */
 class ContentReadModel(private val store: StateStore) {
     private fun snapshots() = store.project().values.filter { it.alive }

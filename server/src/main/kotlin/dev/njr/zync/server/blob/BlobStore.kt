@@ -1,6 +1,5 @@
 package dev.njr.zync.server.blob
 
-import java.security.MessageDigest
 
 /**
  * Content-addressed blob storage port. Keys are `blob-<sha256hex>` computed by the
@@ -37,8 +36,7 @@ class InMemoryBlobStore : BlobStore {
 
 /** Compute the content-addressed key for [bytes]: `blob-<sha256hex>`. */
 fun blobKey(bytes: ByteArray): String {
-    val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
-    return "blob-" + digest.joinToString("") { (it.toInt() and 0xFF).toString(16).padStart(2, '0') }
+    return "blob-" + dev.njr.zync.server.sha256Hex(bytes)
 }
 
 /** True if [key] is a well-formed content-addressed blob key (guards path traversal). */

@@ -2,7 +2,6 @@ package dev.njr.zync.server.pairing
 
 import dev.njr.zync.data.db.ZyncDatabase
 import dev.njr.zync.server.auth.SqlDeviceRegistry
-import java.security.MessageDigest
 import java.security.SecureRandom
 
 /** Result of redeeming a pairing code. */
@@ -53,10 +52,8 @@ class PairingManager(
         const val DEFAULT_TTL: Long = 2 * 60 * 1000L
         private const val CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789" // no ambiguous chars
 
-        /** Stable device id = first 16 hex of sha256(publicKey). */
-        fun fingerprint(publicKey: ByteArray): String =
-            MessageDigest.getInstance("SHA-256").digest(publicKey)
-                .joinToString("") { (it.toInt() and 0xFF).toString(16).padStart(2, '0') }
+        /** Stable device id = hex sha256(publicKey). */
+        fun fingerprint(publicKey: ByteArray): String = dev.njr.zync.server.sha256Hex(publicKey)
                 .take(16)
     }
 }

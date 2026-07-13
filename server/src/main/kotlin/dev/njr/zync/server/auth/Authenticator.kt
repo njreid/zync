@@ -48,9 +48,6 @@ class ZyncAuthenticator(
         if (token != null && sessions.validate(token, now())) return AuthOutcome.Authorized("browser")
         return AuthOutcome.Unauthorized("no valid credentials")
     }
-
-    private fun bearerToken(header: String?): String? =
-        header?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }?.substring(7)?.trim()
 }
 
 /** Enforce [authenticator] for this call; returns true if authorized, else responds 401. */
