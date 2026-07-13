@@ -116,6 +116,11 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity)
 
+  // Native Compose shell hosting the shared :web WebView (M7 Task 5)
+  implementation(libs.androidx.activity.compose)
+  implementation(libs.androidx.compose.ui)
+  implementation(libs.androidx.compose.foundation)
+
   // Shared op-log core + SQLDelight data (M5: phone as a replica) + web UI (M6)
   implementation(project(":core"))
   implementation(project(":data"))

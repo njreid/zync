@@ -88,9 +88,15 @@ stack (`OpWriter`/`SyncClient`/`PairingClient`/`ReplicaCapture`) not yet wired l
 **Files:** `ui/` Compose (launcher/capture entry/settings), WebView content host.
 - Compose launcher + settings + capture entry points; a WebView loads the loopback `:web`
   content. Shared design tokens (Geist/Inter) across Compose + `:web`.
-- [ ] **Step 1 (Robolectric/Compose test):** the shell renders; the WebView host targets
-  the loopback; settings actions work.
-- [ ] **Step 2: Commit** `feat(app): native Compose shell + WebView content host`.
+- [~] **Step 1:** `MainActivity` now hosts the WebView through a Compose shell —
+  `setContent { ZyncShell(webView) }` with an `AndroidView(factory = { webView })` so
+  recomposition never rebuilds the WebView (the loopback connection persists). Extracted
+  `createZyncWebView` + `loopbackUrl` into `ui/WebViewHost.kt`; capture bridge, back handling,
+  permission launcher, and the token URL are preserved. Robolectric-tested (`WebViewHostTest`:
+  loopback URL, JS + `ZyncCapture` wiring, shell inflates). Deps (activity-compose/ui/foundation
+  1.9.0) resolve from `google()`. **Deferred to a device (no KVM in the sandbox — see AGENTS.md):**
+  the real WebView rendering `:web`, JS round-trips, and native chrome beyond the bare host.
+- [x] **Step 2: Commit** `feat(app): native Compose shell + WebView content host`.
 
 ### Task 6: Desktop/browser thin clients + WebAuthn
 **Files:** `server` (WebAuthn registration/assertion → session), desktop packaging.
