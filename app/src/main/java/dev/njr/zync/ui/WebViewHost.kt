@@ -4,10 +4,16 @@ import android.annotation.SuppressLint
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewClientCompat
+import androidx.webkit.WebViewFeature
 import dev.njr.zync.MainActivity
 import dev.njr.zync.capture.CaptureSettingsBridge
 
@@ -28,6 +34,13 @@ fun createZyncWebView(
     settings.javaScriptEnabled = true
     settings.domStorageEnabled = true
     webChromeClient = WebChromeClient()
+    webViewClient = WebViewClientCompat()
+    // Let :web content follow the system dark theme where it doesn't define its own. Guarded:
+    // the feature check can be optimistic and a provider may still throw at call time (e.g. a
+    // stub WebView under Robolectric), which must never crash app startup.
+    if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+        runCatching { WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, true) }
+    }
     addJavascriptInterface(CaptureSettingsBridge(activity, this, requestRecordAudio), "ZyncCapture")
 }
 
@@ -38,7 +51,9 @@ fun createZyncWebView(
  */
 @Composable
 fun ZyncShell(webView: WebView) {
-    Box(Modifier.fillMaxSize()) {
+    // safeDrawing keeps the :web UI clear of the status/nav bars, cutout, and IME under the
+    // enforced edge-to-edge display (see MainActivity.enableEdgeToEdge).
+    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
     }
 }

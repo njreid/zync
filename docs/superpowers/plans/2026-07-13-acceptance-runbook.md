@@ -132,10 +132,14 @@ Each capture must create an **op-log inbox node** (+ a blob for attachments) via
 - [ ] **Loopback auth.** The `?token=` is exchanged for the `zync_token` cookie on the
   document; assets/data load. **Expect:** no 401 on cold start (a fresh token beats any
   stale cookie).
-- [ ] **WebView survives recomposition.** Interact heavily; the WebView is never rebuilt
-  (single instance). **Expect:** no reload/flash mid-session. (Note: a rotation *config
-  change* recreates the activity+WebView today — that's known/pre-existing, not a Task 5
-  regression.)
+- [ ] **WebView survives recomposition and rotation.** Interact heavily, then rotate the
+  device. **Expect:** the WebView (and its live loopback connection) persists with no
+  reload/flash — the activity declares `configChanges` so it isn't recreated.
+- [ ] **Edge-to-edge.** The `:web` content is not drawn under the status/navigation bars
+  or the display cutout, and the IME doesn't cover the quick-add field. **Expect:** the
+  shell applies `WindowInsets.safeDrawing` (targetSdk 36 enforces edge-to-edge).
+- [ ] **Predictive back.** The back-gesture preview animation shows (Android 14+); a full
+  swipe walks WebView history / exits (`enableOnBackInvokedCallback`).
 - [ ] **Back navigation** walks WebView history, then exits.
 - [ ] **Capture bridge.** Trigger voice capture from the `:web` settings surface
   (`ZyncCapture` bridge) — records, saves, and the UI updates via a dispatched event.

@@ -6,6 +6,7 @@ import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import dev.njr.zync.ui.ZyncShell
@@ -26,6 +27,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Edge-to-edge is enforced from Android 15 (targetSdk 36); the shell applies the
+        // safe-drawing insets so the :web UI isn't drawn under the status/navigation bars.
+        enableEdgeToEdge()
         // The single WebView is created once and hosted by the Compose shell; it must never be
         // rebuilt, so the loopback server connection it holds survives for the process life.
         webView = createZyncWebView(this) { callback ->

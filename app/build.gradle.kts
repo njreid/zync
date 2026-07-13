@@ -120,6 +120,7 @@ dependencies {
   implementation(libs.androidx.activity.compose)
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.foundation)
+  implementation(libs.androidx.webkit)
 
   // Shared op-log core + SQLDelight data (M5: phone as a replica) + web UI (M6)
   implementation(project(":core"))
