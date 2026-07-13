@@ -27,8 +27,7 @@ import java.io.File
  * gestures. Enabling an accessibility service cannot be done programmatically —
  * the OS requires the user to toggle it — so this just opens the right screen.
  *
- * Registered on the WebView in `MainActivity` as `ZyncCapture`. Java-only,
- * unreachable from any remote (LAN) page.
+ * Registered on the WebView (see `ui/WebViewHost.createZyncWebView`) as `ZyncCapture`.
  */
 class CaptureSettingsBridge(
     private val activity: MainActivity,

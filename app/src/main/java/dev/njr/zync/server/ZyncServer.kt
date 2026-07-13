@@ -107,7 +107,7 @@ fun Application.zyncModule(
         }
         // Without a logging backend AND a catch-all here, any other uncaught exception inside a
         // route handler is swallowed by Ktor and vanishes with no logcat trace at all (see
-        // m1c-task-8 report) — surface it, then still answer the request rather than hanging it.
+        // surface it in logcat, then still answer the request rather than hanging it.
         // A generic, fixed message goes in the response body rather than the real `cause.message`.
         exception<Throwable> { call, cause ->
             android.util.Log.e("zync", "unhandled exception in route handler", cause)
@@ -138,7 +138,6 @@ class ZyncServer(
     private val port: Int = 0,
 ) {
     private var engine: EmbeddedServer<*, *>? = null
-    private var httpPort: Int? = null
 
     /**
      * Blocks the calling thread while awaiting the server's port binding — call from a background
@@ -158,14 +157,11 @@ class ZyncServer(
         }.also { engine = it }
         e.start(wait = false)
         val resolved = kotlinx.coroutines.runBlocking { e.engine.resolvedConnectors() }
-        val resolvedHttp = resolved.first { it.type == ConnectorType.HTTP }.port
-        httpPort = resolvedHttp
-        return resolvedHttp
+        return resolved.first { it.type == ConnectorType.HTTP }.port
     }
 
     fun stop() {
         engine?.stop(500, 1000)
         engine = null
-        httpPort = null
     }
 }

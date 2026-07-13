@@ -34,11 +34,6 @@ class CaptureRepository(private val app: ZyncApp) {
         importBytes(title, type, bytes, extension)
     }
 
-    suspend fun importSharedText(text: String): Ulid = withContext(Dispatchers.IO) {
-        val title = text.lineSequence().firstOrNull()?.take(120) ?: "Shared text"
-        app.replicaCapture.captureNote(title).also { app.contentChanges.notifyChanged() }
-    }
-
     companion object {
         fun timestampTitle(prefix: String, now: Long = System.currentTimeMillis()): String {
             val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(now))
