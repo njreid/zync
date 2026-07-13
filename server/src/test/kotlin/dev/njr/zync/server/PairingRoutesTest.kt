@@ -44,7 +44,7 @@ class PairingRoutesTest {
         val manager = PairingManager(db, registry)
         val identity = ServerIdentity.fromSeed(ByteArray(32) { (it + 99).toByte() })
         val verifier = SignedRequestVerifier(registry, NonceCache(300_000), windowMillis = 300_000)
-        val auth = ServerAuth(ZyncAuthenticator(verifier, SessionStore(credentialCheck = { false }), now = { now }), null)
+        val auth = ServerAuth(ZyncAuthenticator(verifier, SessionStore(), now = { now }), null)
         application {
             zyncModule(SyncService(db), auth = auth, pairing = PairingEndpoint(manager, identity))
         }
@@ -85,7 +85,7 @@ class PairingRoutesTest {
         val manager = PairingManager(db, registry)
         val identity = ServerIdentity.fromSeed(ByteArray(32) { (it + 99).toByte() })
         val verifier = SignedRequestVerifier(registry, NonceCache(300_000), windowMillis = 300_000)
-        val auth = ServerAuth(ZyncAuthenticator(verifier, SessionStore(credentialCheck = { false }), now = { now }), null)
+        val auth = ServerAuth(ZyncAuthenticator(verifier, SessionStore(), now = { now }), null)
         application {
             zyncModule(SyncService(db), auth = auth, pairing = PairingEndpoint(manager, identity))
         }

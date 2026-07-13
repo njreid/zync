@@ -3,8 +3,6 @@ package dev.njr.zync.server
 import dev.njr.zync.data.JvmZyncDatabase
 import dev.njr.zync.server.auth.Ed25519
 import dev.njr.zync.server.auth.InMemoryDeviceRegistry
-import dev.njr.zync.server.auth.LoginRequest
-import dev.njr.zync.server.auth.LoginResponse
 import dev.njr.zync.server.auth.NonceCache
 import dev.njr.zync.server.auth.ServerAuth
 import dev.njr.zync.server.auth.SessionStore
@@ -34,7 +32,7 @@ class AuthRoutesTest {
     private fun serverAuth(): ServerAuth {
         val registry = InMemoryDeviceRegistry().apply { register("phone", Ed25519.publicKeyFor(seed)) }
         val verifier = SignedRequestVerifier(registry, NonceCache(300_000), windowMillis = 300_000)
-        val sessions = SessionStore(credentialCheck = { it == "hunter2" })
+        val sessions = SessionStore()
         return ServerAuth(ZyncAuthenticator(verifier, sessions, now = { now }), sessions)
     }
 
@@ -58,22 +56,17 @@ class AuthRoutesTest {
     }
 
     @Test
-    fun browserLoginThenSessionBearerIsAccepted() = testApplication {
-        application { zyncModule(SyncService(JvmZyncDatabase.inMemory()), serverAuth()) }
+    fun mintedSessionBearerIsAccepted() = testApplication {
+        val auth = serverAuth()
+        application { zyncModule(SyncService(JvmZyncDatabase.inMemory()), auth) }
 
-        val loginBody = client.post("/auth/login") {
-            header(HttpHeaders.ContentType, "application/json")
-            setBody(json.encodeToString(LoginRequest.serializer(), LoginRequest("hunter2")))
-        }.bodyAsText()
-        val token = json.decodeFromString(LoginResponse.serializer(), loginBody).token
-
+        // A session is minted only after a verified WebAuthn assertion (see WebAuthnTest); here
+        // we mint one directly and confirm the bearer is honored on device/sync routes.
+        val token = auth.sessions!!.mint(now)
         val ok = client.get("/sync/pull?since=0") { header(HttpHeaders.Authorization, "Bearer $token") }
         assertEquals(HttpStatusCode.OK, ok.status)
 
-        val bad = client.post("/auth/login") {
-            header(HttpHeaders.ContentType, "application/json")
-            setBody(json.encodeToString(LoginRequest.serializer(), LoginRequest("wrong")))
-        }
+        val bad = client.get("/sync/pull?since=0") { header(HttpHeaders.Authorization, "Bearer not-a-session") }
         assertEquals(HttpStatusCode.Unauthorized, bad.status)
     }
 }

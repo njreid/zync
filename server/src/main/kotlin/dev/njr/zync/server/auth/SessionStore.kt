@@ -5,21 +5,20 @@ import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
 /**
- * Browser session store for the single user. `login` checks a credential
- * (password today; a passkey/WebAuthn verifier can replace [credentialCheck]
- * later without touching the session lifecycle) and issues an opaque bearer token
- * with a TTL; `validate` gates protected routes; `logout` revokes.
+ * Browser session store for the single user. [mint] issues an opaque bearer token with a
+ * TTL once the caller has verified the user's credential (a WebAuthn assertion — see
+ * `webauthn.WebAuthnService`); `validate` gates protected routes; `logout` revokes. The
+ * session lifecycle is deliberately independent of how the credential was checked.
  */
 class SessionStore(
     private val ttlMillis: Long = 30 * 24 * 60 * 60 * 1000L,
-    private val credentialCheck: (password: String) -> Boolean,
     private val tokenGenerator: () -> String = ::randomToken,
 ) {
     private val sessions = mutableMapOf<String, Long>() // token -> expiry
 
+    /** Issue a fresh session token. Call only after the credential has been verified. */
     @Synchronized
-    fun login(password: String, now: Long): String? {
-        if (!credentialCheck(password)) return null
+    fun mint(now: Long): String {
         val token = tokenGenerator()
         sessions[token] = now + ttlMillis
         return token

@@ -85,13 +85,12 @@ class AuthTest {
     @Test
     fun sessionLifecycle() {
         var counter = 0
-        val store = SessionStore(ttlMillis = 100, credentialCheck = { it == "secret" }, tokenGenerator = { "tok${counter++}" })
-        assertNull(store.login("wrong", now))
-        val token = store.login("secret", now)!!
+        val store = SessionStore(ttlMillis = 100, tokenGenerator = { "tok${counter++}" })
+        val token = store.mint(now)
         assertTrue(store.validate(token, now))
         assertFalse(store.validate(token, now + 101), "expired session must be invalid")
 
-        val fresh = store.login("secret", now)!!
+        val fresh = store.mint(now)
         store.logout(fresh)
         assertFalse(store.validate(fresh, now))
     }

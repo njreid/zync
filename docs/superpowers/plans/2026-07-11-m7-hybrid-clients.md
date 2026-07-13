@@ -97,9 +97,16 @@ stack (`OpWriter`/`SyncClient`/`PairingClient`/`ReplicaCapture`) not yet wired l
 - Desktop/browser are plain-HTTPS clients of the central server's `:web`. Implement
   **WebAuthn/passkey** (registration + assertion → `SessionStore` token), replacing the
   password fallback. Desktop = a thin browser wrapper (retire the Tauri reverse-proxy).
-- [ ] **Step 1 (TDD where testable):** WebAuthn assertion → session; server `:web`
-  reachable by a browser session. (Ceremony parts needing a browser: note + integration.)
-- [ ] **Step 2: Commit** `feat(server): WebAuthn browser auth for thin clients`.
+- [x] **Step 1:** WebAuthn (webauthn4j) register + assert → session, gating the server-hosted
+  `:web` UI. New `webauthn_credential` table + `WebauthnCredentialStore`; `WebAuthnService`
+  (options + verification, `none` attestation, consume-once `ChallengeStore`); routes
+  `/auth/webauthn/{register,assert}/{options}` (enrolment gated by `ZYNC_WEBAUTHN_REG_TOKEN`);
+  `SessionStore` now `mint()`s passwordlessly (password + `/auth/login` + `ZYNC_ADMIN_PASSWORD`
+  removed); `installWebSessionGate` requires a session (cookie/bearer) for `:web`. Full ceremony
+  proven headlessly with webauthn4j's emulator (`WebAuthnTest`: register→assert→session→unlocks
+  `/tree`); a `/login` page runs the real browser `navigator.credentials` ceremony (needs a real
+  browser / virtual authenticator to exercise — the verification it drives is emulator-tested).
+- [x] **Step 2: Commit** `feat(server): WebAuthn browser auth for thin clients`.
 
 ### Task 7: Retire the old Room content layer
 **Files:** delete `domain/NodeRepository`, `data/NodeDao|NodeEntity|ContextEntity|

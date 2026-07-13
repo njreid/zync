@@ -17,6 +17,7 @@ dependencies {
     implementation(libs.awssdk.s3)
     implementation(libs.sqldelight.sqlite.driver)
     implementation(libs.zxing.core)
+    implementation(libs.webauthn4j.core)
 
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
@@ -26,6 +27,7 @@ dependencies {
     implementation(libs.ktor.server.sse)
 
     testImplementation(libs.ktor.server.test.host)
+    testImplementation(libs.webauthn4j.test)
     testImplementation(kotlin("test"))
 }
 

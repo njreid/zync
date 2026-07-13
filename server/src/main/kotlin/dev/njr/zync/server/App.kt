@@ -1,6 +1,9 @@
 package dev.njr.zync.server
 
 import dev.njr.zync.server.auth.ServerAuth
+import dev.njr.zync.server.auth.webauthn.WebAuthnEndpoint
+import dev.njr.zync.server.auth.webauthn.installWebSessionGate
+import dev.njr.zync.server.auth.webauthn.webAuthnRoutes
 import dev.njr.zync.server.blob.BlobService
 import dev.njr.zync.server.blob.blobRoutes
 import dev.njr.zync.server.content.ServerContent
@@ -33,6 +36,7 @@ fun Application.zyncModule(
     hardening: Hardening? = null,
     pairing: PairingEndpoint? = null,
     content: ServerContent? = null,
+    webauthn: WebAuthnEndpoint? = null,
     json: Json = Json,
 ) {
     install(ContentNegotiation) { json(json) }
@@ -43,11 +47,14 @@ fun Application.zyncModule(
     }
     if (hardening != null) installHardening(hardening)
     if (content != null) install(SSE)
+    // When browser passkey auth is configured, the server-hosted :web UI is gated behind a session.
+    if (content != null && webauthn != null) installWebSessionGate(webauthn.sessions)
     routing {
         syncRoutes(service, auth)
         debugRoutes(service, auth)
         if (blobs != null) blobRoutes(blobs, auth)
         if (pairing != null) pairingRoutes(pairing.manager, pairing.identity)
+        if (webauthn != null) webAuthnRoutes(webauthn)
         if (hardening != null) get("/metrics") { call.respond(hardening.metrics.snapshot()) }
         if (content != null) webRoutes(content.read, changes = content.changes, commands = content.commands)
     }
