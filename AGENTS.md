@@ -114,25 +114,23 @@ add deps via the version catalog, never a project/init-script repository block).
 
 ## Current Planning Context
 
-M1 (a–d) and the bulk of M2 are implemented and shipped (v0.2). M2 is tracked in
-`docs/superpowers/plans/2026-07-05-m2-capture-backup-distribution.md`; see its
-"Implementation Status" section for what's done vs deferred. A 2026-07-07 code
-review hardened the M2 work (backup snapshot consistency, `allowBackup=false`,
-download-route hardening, verify-before-destroy restore, dead-code removal). The
-next milestone (M3) is not yet written — confirm scope before starting.
+The v0.2 phone-as-server system (M1/M2, Room/vanilla-JS/LAN/Tauri) has been retired.
+The rebuild (roadmap: `docs/superpowers/plans/2026-07-08-rebuild-roadmap.md`) has
+landed M3–M7 on `main`: the op-log `core`, the `server` (sync + device pairing + S3
+blobs + litestream + WebAuthn browser auth), the shared `:web` UI, the phone as an
+op-log replica whose loopback serves `:web`, and a native Compose shell. Deployment is
+haloy + a litestream host sidecar (`deploy/`, deployment spec §10).
 
 Known deferred / follow-up work:
 
-- Backup: incremental content-addressed attachment upload is not implemented (the
-  live path re-encrypts/re-uploads the full archive each run); auto-detect-restore
-  on a fresh install is not wired; real-device Drive verification is pending.
-- Attachments: on-device transcription/OCR is not implemented (raw `AUDIO`/`PDF`
-  only); capture writes app-private external storage, not a portable
-  `Documents/Zync` root; real-device capture verification pending.
-- The quick-capture Accessibility-service (volume-key) path was added beyond the
-  M2 plan; revisit its privacy / Play-policy cost.
-- The Android/Robolectric suite could not run in the code-review environment
-  (no SDK; Gradle download egress-blocked) — run `./gradlew test` before releases.
+- **M7 Task 8 (acceptance)** is a real-hardware pass — see
+  `docs/superpowers/plans/2026-07-13-acceptance-runbook.md`. Device-level checks (the
+  Compose shell's real WebView, capture runtime paths) can't run on the sandbox's
+  unbootable emulator; verify on a device.
+- The `/login` WebAuthn ceremony needs a real browser / virtual authenticator; the
+  server-side verification is emulator-tested (`WebAuthnTest`).
+- App capture dedup (a shared `VoiceRecorder`; unifying the two mime→type/extension
+  mappings) is deferred until it can be device-verified.
 
 ## Style
 

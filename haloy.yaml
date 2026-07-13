@@ -42,13 +42,22 @@ env:
   - name: "ZYNC_BLOB_BUCKET"
     from:
       env: "ZYNC_BLOB_BUCKET"
-  - name: "ZYNC_ADMIN_PASSWORD"
-    from:
-      env: "ZYNC_ADMIN_PASSWORD"
-  - name: "ZYNC_DEVICES_FILE"
-    value: "/data/devices"
   - name: "ZYNC_SERVER_KEY_FILE"
     value: "/data/server-identity.key"
+  - name: "ZYNC_PUBLIC_ADDR"
+    from:
+      env: "ZYNC_PUBLIC_ADDR"
+  # Browser passkey auth. Without RP_ID + ORIGIN the :web UI ships UNGATED (the server
+  # warns on boot). ORIGIN must be the exact scheme+host; RP_ID the registrable domain.
+  - name: "ZYNC_WEBAUTHN_RP_ID"
+    from:
+      env: "ZYNC_WEBAUTHN_RP_ID"
+  - name: "ZYNC_WEBAUTHN_ORIGIN"
+    from:
+      env: "ZYNC_WEBAUTHN_ORIGIN"
+  - name: "ZYNC_WEBAUTHN_REG_TOKEN"
+    from:
+      env: "ZYNC_WEBAUTHN_REG_TOKEN"
 
 # Build the JVM distribution the Dockerfile packages, before haloy builds the image.
 pre_deploy:

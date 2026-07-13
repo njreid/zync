@@ -36,7 +36,10 @@ systemctl enable --now litestream-restore.service litestream.service
 ## 3. Deploy (from a dev machine or CI)
 ```sh
 export AWS_REGION=us-east-1 ZYNC_BLOB_BUCKET=zync-blobs
-export ZYNC_ADMIN_PASSWORD=...            # or a haloy secret provider
+export ZYNC_PUBLIC_ADDR=https://zync.example.com
+# Browser passkey auth — omit and the :web UI ships UNGATED (server warns on boot):
+export ZYNC_WEBAUTHN_RP_ID=zync.example.com ZYNC_WEBAUTHN_ORIGIN=https://zync.example.com
+export ZYNC_WEBAUTHN_REG_TOKEN=...        # one secret gating passkey enrolment
 haloy validate-config
 haloy deploy                              # pre_deploy runs ./gradlew :server:installDist
 ```
