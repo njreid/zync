@@ -1,6 +1,7 @@
 package dev.njr.zync.sync
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -36,16 +37,27 @@ object SyncScheduler {
         .build()
 
     /** Request a prompt sync (e.g. after a capture/mutation), when connectivity allows. */
-    fun requestSync(context: Context) {
+    fun requestSync(context: Context) = ifWorkManager(context) { wm ->
         val work = OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(connected).build()
-        WorkManager.getInstance(context).enqueueUniqueWork(ONESHOT, ExistingWorkPolicy.REPLACE, work)
+        wm.enqueueUniqueWork(ONESHOT, ExistingWorkPolicy.REPLACE, work)
     }
 
     /** Ensure a periodic background sync is scheduled. */
-    fun schedulePeriodic(context: Context) {
+    fun schedulePeriodic(context: Context) = ifWorkManager(context) { wm ->
         val work = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
             .setConstraints(connected)
             .build()
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.KEEP, work)
+        wm.enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.KEEP, work)
+    }
+
+    /**
+     * WorkManager auto-initializes in production (its `androidx.startup` provider ships with
+     * `work-runtime`), but not under Robolectric unit tests that don't wire it up — so skip
+     * (rather than crash app startup / a capture) when it isn't available.
+     */
+    private inline fun ifWorkManager(context: Context, block: (WorkManager) -> Unit) {
+        runCatching { WorkManager.getInstance(context) }
+            .onSuccess(block)
+            .onFailure { Log.w("zync", "WorkManager unavailable; sync not scheduled", it) }
     }
 }

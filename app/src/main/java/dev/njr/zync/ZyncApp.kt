@@ -48,7 +48,9 @@ class ZyncApp : Application() {
     val replicaCapture: ReplicaCapture by lazy { ReplicaCapture(opWriter, localBlobs, inbox = { null }) }
     val contentChanges: ChangeNotifier = ChangeNotifier()
     val contentRead: ContentReadModel by lazy { ContentReadModel(opStore) }
-    val contentCommands: ContentCommands by lazy { ContentCommands(PhoneOpEmitter(opWriter)) }
+    val contentCommands: ContentCommands by lazy {
+        ContentCommands(PhoneOpEmitter(opWriter) { dev.njr.zync.sync.SyncScheduler.requestSync(this) })
+    }
 
     /** The shared :web UI surface the loopback server serves. */
     val webContent: dev.njr.zync.server.WebContent by lazy {
@@ -64,6 +66,7 @@ class ZyncApp : Application() {
     ): dev.njr.zync.core.id.Ulid {
         val node = replicaCapture.captureAttachment(title, bytes, type.name.lowercase(java.util.Locale.US), "capture.$extension")
         contentChanges.notifyChanged()
+        dev.njr.zync.sync.SyncScheduler.requestSync(this)
         return node
     }
 
@@ -131,5 +134,8 @@ class ZyncApp : Application() {
             Log.e(TAG, "uncaught exception on thread ${thread.name}", throwable)
             previous?.uncaughtException(thread, throwable)
         }
+        // Activate background sync: a connectivity-gated periodic sweep (prompt pushes come
+        // from captures + local :web mutations via SyncScheduler.requestSync). No-op unpaired.
+        dev.njr.zync.sync.SyncScheduler.schedulePeriodic(this)
     }
 }
