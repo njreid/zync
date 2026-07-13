@@ -59,6 +59,35 @@ shared contracts.
 First-time web work may need `npm install` in `webtest/` and
 `npx playwright install chromium`.
 
+## Emulator & Environment Notes
+
+The dev sandbox is a JRE-only host (no `javac`/`javap`; Gradle provisions its own JDK via
+foojay — see the `jvmToolchain(17)` pins). To introspect a library API without `javap`,
+write a throwaway reflection test and run it through Gradle (`Class.forName(...).declaredConstructors`).
+
+An Android emulator is reachable via the `android` CLI (`/usr/local/bin/android`), which can
+fetch from `dl.google.com` even though other flows historically could not — so it downloads the
+emulator + system image on demand:
+
+- Create: `android emulator create medium_phone` (profiles: `android emulator create --list-profiles`).
+- Start: `android emulator start medium_phone`, or the binary directly for flags.
+- Deploy: `android run --apks app/build/outputs/apk/debug/app-debug.apk`; `adb` is at
+  `/opt/android-sdk/platform-tools/adb`.
+
+**But the runtime is not practical for instrumented/device testing here:** there is no
+`/dev/kvm` (no nested virtualization), so the emulator only runs in software (TCG) mode and does
+not finish booting in a reasonable time. It also needs `-no-audio` (no `libpulse.so.0`, and no
+root to install it) and the AVD relocated onto the `/tmp` tmpfs (the root FS is ~91% full, and
+the disk-space precheck fails otherwise: copy `~/.android/avd/<name>.avd` + `.ini` to `/tmp/avd`,
+repoint `path=` in the `.ini`, and launch with `ANDROID_AVD_HOME=/tmp/avd emulator @<name>
+-no-accel -no-audio -no-window -gpu swiftshader_indirect`). Treat emulator-level verification as
+CI/real-device work; cover as much as possible with Robolectric (JVM) locally.
+
+`dl.google.com` and Maven Central are both reachable, so Gradle can resolve new AndroidX/Google
+artifacts from the configured `google()`/`mavenCentral()` repos on demand (repos are declared in
+`settings.gradle.kts` under `dependencyResolutionManagement`, which uses `FAIL_ON_PROJECT_REPOS` —
+add deps via the version catalog, never a project/init-script repository block).
+
 ## Android Notes
 
 - The phone is an op-log replica. Content lives in the SQLDelight op-log store via
