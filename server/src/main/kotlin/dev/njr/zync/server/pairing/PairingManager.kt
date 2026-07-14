@@ -30,7 +30,8 @@ class PairingManager(
     }
 
     /** Redeem [code] for [devicePublicKey]; on success the device is registered and returned. */
-    fun redeem(code: String, devicePublicKey: ByteArray, now: Long): PairingResult {
+    fun redeem(code: String, devicePublicKey: ByteArray, replicaId: String, now: Long): PairingResult {
+        if (replicaId.isBlank()) return PairingResult.Rejected("missing replica id")
         db.pairingQueries.purgeExpired(now)
         val row = db.pairingQueries.getCode(code).executeAsOneOrNull()
             ?: return PairingResult.Rejected("unknown or expired code")
@@ -39,7 +40,13 @@ class PairingManager(
 
         db.pairingQueries.useCode(code)
         val deviceId = fingerprint(devicePublicKey)
-        registry.register(deviceId, devicePublicKey, pairedAt = now)
+        // The pairing→replica binding is immutable: a key that re-pairs gets the same
+        // fingerprint deviceId, so refuse to silently re-bind it to a different replica.
+        val existing = registry.replicaId(deviceId)
+        if (existing != null && existing != replicaId) {
+            return PairingResult.Rejected("device is already bound to a different replica id")
+        }
+        registry.register(deviceId, devicePublicKey, pairedAt = now, replicaId = replicaId)
         return PairingResult.Paired(deviceId)
     }
 

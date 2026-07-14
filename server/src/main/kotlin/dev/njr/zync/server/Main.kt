@@ -55,6 +55,15 @@ fun main(args: Array<String>) {
     val content = ServerContent(service, changes)
 
     embeddedServer(Netty, port = port) {
-        zyncModule(service, auth = auth, blobs = blobs, hardening = hardening, pairing = pairing, content = content, webauthn = webauthn)
+        zyncModule(
+            service,
+            auth = auth,
+            blobs = blobs,
+            hardening = hardening,
+            pairing = pairing,
+            content = content,
+            webauthn = webauthn,
+            allowUnauthenticatedWeb = System.getenv("ZYNC_ALLOW_UNAUTHENTICATED_WEB") == "true",
+        )
     }.start(wait = true)
 }

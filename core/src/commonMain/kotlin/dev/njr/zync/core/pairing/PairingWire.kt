@@ -2,9 +2,14 @@ package dev.njr.zync.core.pairing
 
 import kotlinx.serialization.Serializable
 
-/** `POST /pair` body — the phone's device public key (base64) + the one-time code. */
+/**
+ * `POST /pair` body — the phone's device public key (base64), the one-time code, and
+ * the replica's op-authoring id ([replicaId], the stable per-device UUID stamped on
+ * every op/HLC this phone authors). The server binds replicaId to the pairing
+ * identity, immutably, and `/sync/push` rejects ops authored under any other id.
+ */
 @Serializable
-data class PairRequest(val devicePublicKey: String, val code: String)
+data class PairRequest(val devicePublicKey: String, val code: String, val replicaId: String)
 
 /**
  * Pairing confirmation: the assigned [deviceId], the server's public key, and a

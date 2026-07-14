@@ -19,7 +19,7 @@ class ServerContentTest {
         val db = JvmZyncDatabase.inMemory()
         val service = SyncService(db)
         val content = ServerContent(service)
-        application { zyncModule(service, content = content) }
+        application { zyncModule(service, content = content, allowUnauthenticatedWeb = true) }
 
         // the assembled server serves the shared UI
         val home = client.get("/").bodyAsText()
@@ -37,5 +37,17 @@ class ServerContentTest {
 
         // and it renders back in the inbox
         assertTrue(client.get("/").bodyAsText().contains("Write spec"))
+    }
+
+    @Test
+    fun refusesToServeWebWithoutBrowserAuthUnlessExplicitlyAllowed() = testApplication {
+        val db = JvmZyncDatabase.inMemory()
+        val service = SyncService(db)
+        val content = ServerContent(service)
+        application { zyncModule(service, content = content) }
+
+        // Startup must fail closed: content + no webauthn + no explicit dev opt-in.
+        val result = runCatching { client.get("/") }
+        assertTrue(result.isFailure, "expected startup to fail without ZYNC_ALLOW_UNAUTHENTICATED_WEB")
     }
 }

@@ -21,20 +21,27 @@ class Hardening(
     val metrics: Metrics = Metrics(),
 )
 
+/** The abuse surfaces the hardening interceptor covers (sync, blobs, pairing, browser auth). */
+private val PROTECTED_PREFIXES = listOf("/sync", "/blob", "/pair", "/auth", "/login")
+
 /**
- * Intercepts protected paths (`/sync`, `/blob`): rejects oversized requests (413),
- * rate-limits by device id or client IP (429), logs one structured line per request,
- * and counts requests/rejections. `/health` and `/metrics` are exempt.
+ * Intercepts protected paths ([PROTECTED_PREFIXES]): rejects oversized requests (413),
+ * rate-limits by client IP (429), logs one structured line per request, and counts
+ * requests/rejections. `/health` and `/metrics` are exempt.
+ *
+ * The limiter key is the normalized remote address, never a client-supplied header:
+ * this runs before authentication, and keying on `X-Device-Id` would let an attacker
+ * both evade per-IP limiting and grow the bucket map by rotating header values.
  */
 fun Application.installHardening(hardening: Hardening) {
     val log = LoggerFactory.getLogger("zync.access")
 
     intercept(ApplicationCallPipeline.Plugins) {
         val path = call.request.path()
-        if (!(path.startsWith("/sync") || path.startsWith("/blob"))) return@intercept
+        if (PROTECTED_PREFIXES.none { path.startsWith(it) }) return@intercept
 
         hardening.metrics.onRequest()
-        val principal = call.request.header("X-Device-Id") ?: call.request.origin.remoteHost
+        val principal = call.request.origin.remoteHost
 
         val contentLength = call.request.header(HttpHeaders.ContentLength)?.toLongOrNull()
         if (contentLength != null && contentLength > hardening.maxRequestBytes) {

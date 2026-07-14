@@ -26,7 +26,20 @@ class LocalBlobStore(private val dir: File) {
         return key
     }
 
-    fun get(key: String): ByteArray? = File(dir, key).let { if (it.exists()) it.readBytes() else null }
+    fun get(key: String): ByteArray? =
+        if (!isValidKey(key)) null
+        else File(dir, key).let { if (it.exists()) it.readBytes() else null }
 
-    fun has(key: String): Boolean = File(dir, key).exists()
+    fun has(key: String): Boolean = isValidKey(key) && File(dir, key).exists()
+
+    companion object {
+        private val KEY_FORMAT = Regex("blob-[0-9a-f]{64}")
+
+        /**
+         * Keys originate internally today, but they are joined onto [dir] as file
+         * names — enforcing the exact content-hash format at the storage boundary
+         * forecloses any future path-traversal mistake.
+         */
+        fun isValidKey(key: String): Boolean = KEY_FORMAT.matches(key)
+    }
 }

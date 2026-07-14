@@ -56,8 +56,10 @@ class SyncClientTest {
 
     private fun db() = AndroidZyncDatabase.create(ApplicationProvider.getApplicationContext<Context>(), name = null)
 
-    private fun verifySignature(method: String, path: String, headers: (String) -> String?): Boolean {
-        val canonical = "$method\n$path\n${headers("X-Timestamp")}\n${headers("X-Nonce")}"
+    private fun verifySignature(method: String, path: String, query: String, body: ByteArray, headers: (String) -> String?): Boolean {
+        val bodyHash = java.security.MessageDigest.getInstance("SHA-256").digest(body)
+            .joinToString("") { (it.toInt() and 0xFF).toString(16).padStart(2, '0') }
+        val canonical = "$method\n$path\n$query\n${headers("X-Timestamp")}\n${headers("X-Nonce")}\n$bodyHash"
         val sig = Base64.decode(headers("X-Signature")!!)
         return Ed25519Signer().apply {
             init(false, Ed25519PublicKeyParameters(devicePub, 0))
@@ -71,14 +73,22 @@ class SyncClientTest {
         val log = mutableListOf<Op>()
         var head = 0L
         val seenOps = mutableSetOf<String>()
+        var pushRequests = 0
+        var maxBatchSize = 0
 
         val engine = MockEngine { request ->
             val path = request.url.encodedPath
             val method = request.method.value
-            assertTrue("request must be signed", verifySignature(method, path, request.headers::get))
+            val body = request.body.toByteArray()
+            assertTrue(
+                "request must be signed (incl. query + body)",
+                verifySignature(method, path, request.url.encodedQuery, body, request.headers::get),
+            )
             when {
                 method == "POST" && path == "/sync/push" -> {
                     val req = json.decodeFromString(PushRequest.serializer(), request.body.toByteArray().decodeToString())
+                    pushRequests += 1
+                    maxBatchSize = maxOf(maxBatchSize, req.ops.size)
                     for (op in req.ops) {
                         if (seenOps.add(op.opId.toString())) {
                             head += 1
@@ -151,6 +161,28 @@ class SyncClientTest {
         // second pull is a no-op (cursor at head)
         client(bDb, bStore, server.http, FakeHlcStore(), clock).pull()
         assertEquals(server.store.project(), bStore.project())
+    }
+
+    @Test
+    fun pushPagesLargeBacklogsIntoBoundedBatches() = runBlocking {
+        val server = FakeServer()
+        val clock = MutableClock(1000)
+        val db = db(); val store = SqlDelightStateStore(db)
+        val writer = OpWriter(db, store, LocalHlc(FakeHlcStore(), "phone", clock), "phone", clock, Random(5))
+        repeat(5) { writer.createNode("task $it") } // each createNode emits several ops
+
+        val backlog = db.transportQueries.selectUnsynced().executeAsList().size
+        val c = SyncClient(
+            server.http, "https://srv", db, store, LocalHlc(FakeHlcStore(), "phone", clock), signer,
+            now = { clock.nowMillis() }, nonce = { "n${clock.nowMillis()}-${Random.nextInt()}" },
+            pushBatchOps = 3,
+        )
+        c.push()
+
+        assertTrue("expected multiple batches for $backlog ops", server.pushRequests > 1)
+        assertTrue("no batch may exceed the page size", server.maxBatchSize <= 3)
+        assertTrue(db.transportQueries.selectUnsynced().executeAsList().isEmpty())
+        assertEquals(store.project(), server.store.project())
     }
 
     @Test

@@ -24,8 +24,11 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.application.log
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.doublereceive.DoubleReceive
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.request.path
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
@@ -40,11 +43,21 @@ fun Application.zyncModule(
     content: ServerContent? = null,
     webauthn: WebAuthnEndpoint? = null,
     json: Json = Json,
+    allowUnauthenticatedWeb: Boolean = false,
 ) {
     install(ContentNegotiation) { json(json) }
+    // Device auth hashes the request body into the signed canonical string, so the
+    // authenticator consumes the body before the route does.
+    install(DoubleReceive)
     install(StatusPages) {
+        exception<BadRequestException> { call, cause ->
+            call.application.log.info("bad request for ${call.request.path()}: ${cause.message}")
+            call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
         exception<Throwable> { call, cause ->
-            call.respondText(cause.message ?: "internal error", status = HttpStatusCode.InternalServerError)
+            // Internal detail (paths, SQL, library messages) must not reach clients.
+            call.application.log.error("unhandled exception for ${call.request.path()}", cause)
+            call.respondText("internal error", status = HttpStatusCode.InternalServerError)
         }
     }
     if (hardening != null) installHardening(hardening)
@@ -52,9 +65,13 @@ fun Application.zyncModule(
     // When browser passkey auth is configured, the server-hosted :web UI is gated behind a session.
     if (content != null && webauthn != null) installWebSessionGate(webauthn.sessions)
     if (content != null && webauthn == null) {
-        // Fail-loud: the browser :web UI (incl. mutation POSTs) is being served with no session
-        // gate. Intended only for the dev/AllowAll server; a production deploy must set the
-        // ZYNC_WEBAUTHN_* env vars (see ServerConfig.buildWebAuthn) so passkey auth is enforced.
+        // Fail closed: serving the browser :web UI (incl. mutation POSTs) with no session gate
+        // must be an explicit dev-only decision, never the result of a missing/typo'd
+        // ZYNC_WEBAUTHN_* env var on a production deploy (see ServerConfig.buildWebAuthn).
+        check(allowUnauthenticatedWeb) {
+            "refusing to serve :web without browser auth — set ZYNC_WEBAUTHN_RP_ID/_ORIGIN, " +
+                "or ZYNC_ALLOW_UNAUTHENTICATED_WEB=true for a dev server"
+        }
         log.warn("Serving :web WITHOUT browser auth — set ZYNC_WEBAUTHN_RP_ID/_ORIGIN to gate it")
     }
     routing {

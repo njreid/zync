@@ -9,8 +9,13 @@ const BASE = process.env.ZYNC_BASE || 'http://127.0.0.1:8099';
 
 test('Datastar reactivity works under the served CSP', async ({ page }) => {
   await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('#inbox')).toContainText('Buy milk');
-  await page.locator('#inbox li', { hasText: 'Buy milk' }).getByTitle('Complete').click();
+  // Self-contained: create the task this spec consumes, so it never races other
+  // specs over the shared dev server's seeded state. Both the add and the complete
+  // go through Datastar expressions — exactly what a too-strict CSP would block.
+  await page.locator('#inbox input[placeholder="New task"]').fill('CSP probe');
+  await page.locator('#inbox button', { hasText: 'Add' }).click();
+  await expect(page.locator('#inbox')).toContainText('CSP probe', { timeout: 5000 });
+  await page.locator('#inbox li', { hasText: 'CSP probe' }).getByTitle('Complete').click();
   // If the CSP blocks Datastar's eval, this never happens.
-  await expect(page.locator('#inbox')).not.toContainText('Buy milk', { timeout: 5000 });
+  await expect(page.locator('#inbox')).not.toContainText('CSP probe', { timeout: 5000 });
 });

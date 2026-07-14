@@ -40,6 +40,10 @@ SELECT payload FROM op_log ORDER BY seq DESC LIMIT ?;
 selectUnsynced:
 SELECT payload FROM op_log WHERE synced = 0 ORDER BY rowid;
 
+-- Phone (replica): one bounded push batch, in creation order.
+selectUnsyncedBatch:
+SELECT payload FROM op_log WHERE synced = 0 ORDER BY rowid LIMIT ?;
+
 markSynced:
 UPDATE op_log SET synced = 1 WHERE op_id = ?;
 

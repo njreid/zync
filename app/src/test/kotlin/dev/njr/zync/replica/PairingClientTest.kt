@@ -57,7 +57,7 @@ class PairingClientTest {
 
     @Test
     fun successfulPairingReturnsPinnedCredentials() = runBlocking {
-        val outcome = PairingClient(fakeServer()).pair(invite(), deviceSeed)
+        val outcome = PairingClient(fakeServer()).pair(invite(), deviceSeed, replicaId = "replica-1")
         assertTrue(outcome is PairingOutcome.Paired); val paired = outcome as PairingOutcome.Paired
         assertEquals("device-abc", paired.server.deviceId)
         assertTrue(paired.server.serverPublicKey.contentEquals(serverPub))
@@ -66,7 +66,7 @@ class PairingClientTest {
 
     @Test
     fun wrongCodeIsRejected() = runBlocking {
-        val outcome = PairingClient(fakeServer()).pair(invite().copy(code = "NOPE"), deviceSeed)
+        val outcome = PairingClient(fakeServer()).pair(invite().copy(code = "NOPE"), deviceSeed, replicaId = "replica-1")
         assertTrue(outcome is PairingOutcome.Failed)
     }
 
@@ -74,7 +74,7 @@ class PairingClientTest {
     fun serverKeyMismatchIsRejected() = runBlocking {
         // server returns a different key than the one pinned in the QR
         val otherKey = Ed25519DeviceSigner.publicKeyOf(ByteArray(32) { (it + 50).toByte() })
-        val outcome = PairingClient(fakeServer(returnKey = otherKey)).pair(invite(), deviceSeed)
+        val outcome = PairingClient(fakeServer(returnKey = otherKey)).pair(invite(), deviceSeed, replicaId = "replica-1")
         assertTrue(outcome is PairingOutcome.Failed)
     }
 
@@ -82,7 +82,7 @@ class PairingClientTest {
     fun badConfirmationSignatureIsRejected() = runBlocking {
         // confirmation signed by the wrong key
         val impostor = Ed25519DeviceSigner("impostor", ByteArray(32) { (it + 90).toByte() })
-        val outcome = PairingClient(fakeServer(signWith = impostor)).pair(invite(), deviceSeed)
+        val outcome = PairingClient(fakeServer(signWith = impostor)).pair(invite(), deviceSeed, replicaId = "replica-1")
         assertTrue(outcome is PairingOutcome.Failed)
     }
 }

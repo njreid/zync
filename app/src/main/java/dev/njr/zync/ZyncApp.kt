@@ -71,23 +71,32 @@ class ZyncApp : Application() {
     }
 
     /**
-     * Sync once with the paired central server (push local ops, pull remote). No-op if
-     * the phone isn't paired yet. Called by [dev.njr.zync.sync.SyncWorker].
+     * Sync once with the paired central server: upload pending attachment blobs, then
+     * push local ops and pull remote ([dev.njr.zync.replica.ReplicaSynchronizer]).
+     * No-op if the phone isn't paired yet. Called by [dev.njr.zync.sync.SyncWorker].
      */
     suspend fun syncOnce() {
         val paired = pairingStore.load() ?: return
         val http = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO)
         try {
-            dev.njr.zync.replica.SyncClient(
-                http = http,
-                baseUrl = paired.address,
+            val signer = dev.njr.zync.replica.Ed25519DeviceSigner(paired.deviceId, paired.deviceSeed)
+            val now = { System.currentTimeMillis() }
+            val nonce = { UUID.randomUUID().toString() }
+            dev.njr.zync.replica.ReplicaSynchronizer(
+                client = dev.njr.zync.replica.SyncClient(
+                    http = http,
+                    baseUrl = paired.address,
+                    db = opDatabase,
+                    store = opStore,
+                    hlc = localHlc,
+                    signer = signer,
+                    now = now,
+                    nonce = nonce,
+                ),
+                blobs = dev.njr.zync.replica.BlobUploader(http, paired.address, localBlobs, signer, now, nonce),
                 db = opDatabase,
-                store = opStore,
-                hlc = localHlc,
-                signer = dev.njr.zync.replica.Ed25519DeviceSigner(paired.deviceId, paired.deviceSeed),
-                now = { System.currentTimeMillis() },
-                nonce = { UUID.randomUUID().toString() },
-            ).sync()
+                warn = { Log.w(TAG, it) },
+            ).syncOnce()
         } finally {
             http.close()
         }

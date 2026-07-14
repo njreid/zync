@@ -54,6 +54,20 @@ can; **browsers** are thin clients that sign in with a passkey. All three run th
 | `deploy/` | Server deployment (haloy + litestream sidecar) — see `deploy/bootstrap.md` |
 | `docs/superpowers/` | Design specs + dated milestone plans (the authoritative design) |
 
+## Architecture status
+
+Landed and wired end-to-end: op-log sync (batched push / paged pull, blobs uploaded
+before their referencing ops), device pairing + signed requests, WebAuthn-gated
+browser UI (fails closed in production), capture, and the shared `:web` UI on both
+hosts. Partially landed seams:
+
+- **Bootstrap**: the server serves `/sync/bootstrap`, but a fresh phone install does
+  not consume it yet — it replays the full op log from cursor zero.
+- **Browser sessions** are in-memory: a server restart logs browsers out.
+- **Server HLC** is not persisted across restarts (the phone's is).
+- **Operators (M8) / agents (M9)**: manifest types exist in `core` as groundwork;
+  the runtimes are in progress.
+
 ## Getting started
 
 Prerequisites: a JDK 17 toolchain (Gradle provisions one via foojay if the host has
@@ -105,8 +119,15 @@ On the server host, mint a one-time pairing code + QR:
 ./gradlew :server:run --args="pair"        # or: server/build/install/server/bin/server pair
 ```
 
-Scan it from the phone app — it registers the phone's Ed25519 device key and pins the
-server's identity. Captures then sync push/pull automatically (connectivity-gated).
+Scan it from the phone app — it registers the phone's Ed25519 device key, pins the
+server's identity, and immutably binds the phone's op-authoring replica id to the
+pairing (the server rejects pushed ops authored under any other id). Captures then
+sync push/pull automatically (connectivity-gated).
+
+> **Upgrading across schema v2 / the signed-request change:** the server migrates its
+> database automatically on boot, but request signatures now cover the query string
+> and body hash, and pushes require the replica binding — phones paired before this
+> must **re-pair** (scan a fresh QR) before sync resumes.
 
 ### Install the phone app
 

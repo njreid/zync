@@ -9,8 +9,8 @@ androidxTestRunner = "1.7.0"
 androidxTestEspresso = "3.7.0"
 coroutines = "1.11.0"
 junit = "4.13.2"
-# Held at 2.3.21 (newest 2.3.x). The old KSP/Room codegen constraint is gone
-# (Room was retired with the LAN stack), so a bump can be revisited independently.
+# No known constraint pins Kotlin (the old KSP/Room codegen constraint went with the
+# LAN stack); bump alongside AGP/SQLDelight compatibility checks.
 kotlin = "2.3.21"
 ktor = "3.5.1"
 kotlinxSerialization = "1.11.0"
@@ -55,6 +55,7 @@ ktor-server-status-pages = { group = "io.ktor", name = "ktor-server-status-pages
 ktor-server-test-host = { group = "io.ktor", name = "ktor-server-test-host", version.ref = "ktor" }
 ktor-server-html-builder = { group = "io.ktor", name = "ktor-server-html-builder", version.ref = "ktor" }
 ktor-server-sse = { group = "io.ktor", name = "ktor-server-sse", version.ref = "ktor" }
+ktor-server-double-receive = { group = "io.ktor", name = "ktor-server-double-receive", version.ref = "ktor" }
 kotlinx-html = { group = "org.jetbrains.kotlinx", name = "kotlinx-html", version.ref = "kotlinxHtml" }
 ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
 ktor-client-cio = { group = "io.ktor", name = "ktor-client-cio", version.ref = "ktor" }

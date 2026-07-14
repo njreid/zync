@@ -1,16 +1,18 @@
 # zync web functional tests
 
 > These Playwright tests drive the shared `:web` UI (kotlinx.html + Datastar) — the
-> same module the server and the phone loopback serve — rendered headlessly by a
-> Robolectric-hosted dev `ZyncServer` that the Gradle command below starts automatically.
+> same module the server and the phone loopback serve — against the server's dev
+> instance (`./gradlew :server:webDevServer`, port 8099), which the Playwright
+> `webServer` config starts automatically.
 
-Run: `cd webtest && npx playwright test` (spins up a Robolectric-hosted `ZyncServer`
-dev instance via Gradle automatically; first run also needs `npm install` and
-`npx playwright install chromium`).
+Run: `cd webtest && npx playwright test` (first run also needs `npm install` and
+`npx playwright install chromium`). Override the target with `ZYNC_BASE` /
+`ZYNC_DEV_PORT` to point at an already-running server.
 
 Covers: Inbox quick-add, Clarify (Done/Someday), Tree (folder/project/task creation),
 Contexts (create + chip filter), Detail (edit/persist, defer/clear), and the
-unauthenticated-load 401 path — driven against the real web UI in a headless browser.
+CSP policy the phone loopback applies (csp.spec, via `ZYNC_DEV_CSP`).
 
 Not covered here: the Android WebView shell itself (token injection into the
-WebView, back-button handling, native chrome) — that still needs an emulator smoke test.
+WebView, back-button handling, native chrome) — that still needs an emulator smoke
+test — and the loopback token-gate 401 path, which is unit-tested in `:app`.

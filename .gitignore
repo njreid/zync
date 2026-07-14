@@ -22,3 +22,4 @@ key.properties
 
 # adb capture logs from emulator verification
 adb*.log
+.claude/worktrees/

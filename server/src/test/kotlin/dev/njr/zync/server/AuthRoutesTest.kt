@@ -45,7 +45,10 @@ class AuthRoutesTest {
     @Test
     fun deviceSignedSyncIsAccepted() = testApplication {
         application { zyncModule(SyncService(JvmZyncDatabase.inMemory()), serverAuth()) }
-        val sig = Base64.encode(Ed25519.sign(seed, SignedRequestVerifier.canonicalString("GET", "/sync/pull", now, "nonce-1").encodeToByteArray()))
+        val canonical = SignedRequestVerifier.canonicalString(
+            "GET", "/sync/pull", "since=0", now, "nonce-1", sha256Hex(ByteArray(0)),
+        )
+        val sig = Base64.encode(Ed25519.sign(seed, canonical.encodeToByteArray()))
         val response = client.get("/sync/pull?since=0") {
             header("X-Device-Id", "phone")
             header("X-Timestamp", now.toString())

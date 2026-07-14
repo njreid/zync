@@ -27,6 +27,6 @@ fun main() {
                 call.response.headers.append("Content-Security-Policy", csp)
             }
         }
-        zyncModule(service, content = content)
+        zyncModule(service, content = content, allowUnauthenticatedWeb = true)
     }.start(wait = true)
 }

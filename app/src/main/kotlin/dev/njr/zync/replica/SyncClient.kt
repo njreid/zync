@@ -12,13 +12,29 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+
+/**
+ * A sync request the server refused. [permanent] distinguishes failures that will
+ * never succeed by retrying the same request (auth, malformed) from transient ones
+ * (5xx, 408 timeout, 429 rate limit) — [dev.njr.zync.sync.SyncWorker] keys its
+ * WorkManager retry policy off this.
+ */
+class SyncRequestException(val status: Int, message: String) : Exception("$message: HTTP $status") {
+    val permanent: Boolean get() = status in 400..499 && status != 408 && status != 429
+}
+
+internal fun HttpResponse.requireOk(what: String) {
+    if (!status.isSuccess()) throw SyncRequestException(status.value, what)
+}
 
 /**
  * The phone's sync client (spec §6). On reconnect it **pushes** locally-authored
@@ -26,6 +42,10 @@ import kotlin.io.encoding.ExperimentalEncodingApi
  * with `seq > cursor`, `observe()`-ing each HLC and applying it, advancing the
  * persisted cursor. Every request is signed with the device key (M4 auth). Idempotent:
  * re-push is deduped server-side; re-pull is deduped by `applied_op`.
+ *
+ * Pushes are paged ([pushBatchOps] ops / [pushBatchBytes] encoded bytes per request,
+ * each batch acked and marked synced before the next) so an arbitrarily large backlog
+ * can never exceed the server's request-size cap and progress survives interruption.
  */
 @OptIn(ExperimentalEncodingApi::class)
 class SyncClient(
@@ -40,6 +60,8 @@ class SyncClient(
     private val json: Json = Json,
     private val peer: String = "server",
     private val pageLimit: Long = 500,
+    private val pushBatchOps: Long = 200,
+    private val pushBatchBytes: Long = 1024 * 1024,
 ) {
     suspend fun sync() {
         push()
@@ -47,25 +69,36 @@ class SyncClient(
     }
 
     suspend fun push() {
-        val payloads = db.transportQueries.selectUnsynced().executeAsList()
-        if (payloads.isEmpty()) return
-        val ops = payloads.map { json.decodeFromString(Op.serializer(), it) }
-        val body = json.encodeToString(PushRequest.serializer(), PushRequest(ops))
-        val response = http.post("$baseUrl/sync/push") {
-            authHeaders("POST", "/sync/push").forEach { (k, v) -> header(k, v) }
-            contentType(ContentType.Application.Json)
-            setBody(body)
+        while (true) {
+            val payloads = db.transportQueries.selectUnsyncedBatch(pushBatchOps).executeAsList()
+            if (payloads.isEmpty()) return
+            // Trim the batch to the byte budget (always keeping at least one op so a
+            // single oversized op fails loudly server-side instead of looping forever).
+            var bytes = 0L
+            val batch = payloads.takeWhile { p -> (bytes + p.length).also { bytes = it } <= pushBatchBytes }
+                .ifEmpty { payloads.take(1) }
+            val ops = batch.map { json.decodeFromString(Op.serializer(), it) }
+            val body = json.encodeToString(PushRequest.serializer(), PushRequest(ops)).encodeToByteArray()
+            val response = http.post("$baseUrl/sync/push") {
+                authHeaders("POST", "/sync/push", body = body).forEach { (k, v) -> header(k, v) }
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+            response.requireOk("push")
+            val ack = json.decodeFromString(PushResponse.serializer(), response.bodyAsText())
+            db.transaction { ack.ackedOpIds.forEach { db.transportQueries.markSynced(it.toString()) } }
+            if (ack.ackedOpIds.isEmpty()) return // defensive: no progress, don't spin
         }
-        val ack = json.decodeFromString(PushResponse.serializer(), response.bodyAsText())
-        db.transaction { ack.ackedOpIds.forEach { db.transportQueries.markSynced(it.toString()) } }
     }
 
     suspend fun pull() {
         var cursor = db.transportQueries.getCursor(peer).executeAsOneOrNull() ?: 0L
         while (true) {
-            val response = http.get("$baseUrl/sync/pull?since=$cursor&limit=$pageLimit") {
-                authHeaders("GET", "/sync/pull").forEach { (k, v) -> header(k, v) }
+            val query = "since=$cursor&limit=$pageLimit"
+            val response = http.get("$baseUrl/sync/pull?$query") {
+                authHeaders("GET", "/sync/pull", query = query).forEach { (k, v) -> header(k, v) }
             }
+            response.requireOk("pull")
             val page = json.decodeFromString(PullResponse.serializer(), response.bodyAsText())
             if (page.ops.isEmpty()) break
             db.transaction {
@@ -80,6 +113,6 @@ class SyncClient(
         }
     }
 
-    private fun authHeaders(method: String, path: String): Map<String, String> =
-        signedHeaders(signer, method, path, now(), nonce())
+    private fun authHeaders(method: String, path: String, query: String = "", body: ByteArray = ByteArray(0)): Map<String, String> =
+        signedHeaders(signer, method, path, now(), nonce(), query, body)
 }

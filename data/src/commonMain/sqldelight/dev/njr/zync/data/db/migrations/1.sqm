@@ -1,0 +1,3 @@
+-- v1 → v2: bind each pairing to the phone's op-authoring replica id. Existing rows
+-- stay NULL — those devices must re-pair before /sync/push accepts their ops.
+ALTER TABLE device ADD COLUMN replica_id TEXT;

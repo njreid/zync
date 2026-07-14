@@ -30,7 +30,7 @@ fun Route.pairingRoutes(manager: PairingManager, identity: ServerIdentity, now: 
             call.respondText("malformed device public key", status = HttpStatusCode.BadRequest)
             return@post
         }
-        when (val result = manager.redeem(request.code, publicKey, now())) {
+        when (val result = manager.redeem(request.code, publicKey, request.replicaId, now())) {
             is PairingResult.Paired -> {
                 val confirmation = identity.sign(pairingConfirmationMessage(result.deviceId, request.devicePublicKey))
                 call.respond(PairResponse(result.deviceId, identity.publicKeyBase64, Base64.encode(confirmation)))

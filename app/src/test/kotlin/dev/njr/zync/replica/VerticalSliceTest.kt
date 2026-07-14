@@ -70,9 +70,11 @@ class VerticalSliceTest {
         val devices = mutableMapOf<String, ByteArray>() // deviceId -> pubkey
         val blobs = mutableMapOf<String, ByteArray>()
 
-        private fun verified(method: String, path: String, h: (String) -> String?): Boolean {
+        private fun verified(method: String, path: String, query: String, body: ByteArray, h: (String) -> String?): Boolean {
             val pub = devices[h("X-Device-Id")] ?: return false
-            val canonical = "$method\n$path\n${h("X-Timestamp")}\n${h("X-Nonce")}"
+            val bodyHash = java.security.MessageDigest.getInstance("SHA-256").digest(body)
+                .joinToString("") { (it.toInt() and 0xFF).toString(16).padStart(2, '0') }
+            val canonical = "$method\n$path\n$query\n${h("X-Timestamp")}\n${h("X-Nonce")}\n$bodyHash"
             return Ed25519DeviceSigner.verify(pub, canonical.encodeToByteArray(), Base64.decode(h("X-Signature")!!))
         }
 
@@ -100,7 +102,8 @@ class VerticalSliceTest {
                         respond(json.encodeToString(PairResponse.serializer(), PairResponse(deviceId, Base64.encode(serverPub), Base64.encode(confirmation))), HttpStatusCode.OK, headersOf("Content-Type", "application/json"))
                     }
                 }
-                !verified(method, path, request.headers::get) -> respond("unauthorized", HttpStatusCode.Unauthorized)
+                !verified(method, path, request.url.encodedQuery, request.body.toByteArray(), request.headers::get) ->
+                    respond("unauthorized", HttpStatusCode.Unauthorized)
                 method == "POST" && path == "/sync/push" -> {
                     val req = json.decodeFromString(PushRequest.serializer(), request.body.toByteArray().decodeToString())
                     for (op in req.ops) if (seen.add(op.opId.toString())) { head += 1; op.withSeq(head).let { apply(it, store); log += it } }
@@ -128,7 +131,7 @@ class VerticalSliceTest {
         // 1. pair the phone
         val deviceSeed = Ed25519DeviceSigner.generateSeed()
         val invite = PairingInvite("https://srv", serverPub, validCode, expiresAt = Long.MAX_VALUE)
-        val paired = (PairingClient(server.http).pair(invite, deviceSeed) as PairingOutcome.Paired).server
+        val paired = (PairingClient(server.http).pair(invite, deviceSeed, replicaId = "replica-1") as PairingOutcome.Paired).server
 
         // 2. build the phone replica
         val db = AndroidZyncDatabase.create(ApplicationProvider.getApplicationContext<Context>(), name = null)

@@ -12,9 +12,10 @@ sealed interface AuthResult {
 
 /**
  * Verifies an Ed25519 signed request from a native device. The signature covers a
- * canonical `method\npath\ntimestamp\nnonce` string; TLS protects the body. Rejects
- * unknown/revoked devices, stale timestamps (clock-skew window), replayed nonces,
- * and bad signatures.
+ * canonical `method\npath\nquery\ntimestamp\nnonce\nsha256(body)` string, so the
+ * authorization is self-contained for the specific payload — not just transport-
+ * protected by TLS. Rejects unknown/revoked devices, stale timestamps (clock-skew
+ * window), replayed nonces, and bad signatures.
  */
 class SignedRequestVerifier(
     private val registry: DeviceRegistry,
@@ -25,6 +26,8 @@ class SignedRequestVerifier(
     fun verify(
         method: String,
         path: String,
+        query: String,
+        bodySha256Hex: String,
         deviceId: String,
         timestamp: Long,
         nonce: String,
@@ -40,7 +43,7 @@ class SignedRequestVerifier(
         } catch (_: Exception) {
             return AuthResult.Rejected("malformed signature")
         }
-        val message = canonicalString(method, path, timestamp, nonce).encodeToByteArray()
+        val message = canonicalString(method, path, query, timestamp, nonce, bodySha256Hex).encodeToByteArray()
         if (!Ed25519.verify(publicKey, message, signature)) return AuthResult.Rejected("bad signature")
 
         // Record the nonce only after the signature is valid (don't let junk fill the cache).
@@ -49,7 +52,13 @@ class SignedRequestVerifier(
     }
 
     companion object {
-        fun canonicalString(method: String, path: String, timestamp: Long, nonce: String): String =
-            "$method\n$path\n$timestamp\n$nonce"
+        fun canonicalString(
+            method: String,
+            path: String,
+            query: String,
+            timestamp: Long,
+            nonce: String,
+            bodySha256Hex: String,
+        ): String = "$method\n$path\n$query\n$timestamp\n$nonce\n$bodySha256Hex"
     }
 }

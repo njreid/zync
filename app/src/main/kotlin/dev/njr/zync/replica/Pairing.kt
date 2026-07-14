@@ -62,13 +62,18 @@ class PairingClient(
     private val http: HttpClient,
     private val json: Json = Json,
 ) {
-    suspend fun pair(invite: PairingInvite, deviceSeed: ByteArray): PairingOutcome {
+    /**
+     * [replicaId] is this phone's op-authoring id ([dev.njr.zync.ZyncApp.deviceId]);
+     * the server binds it to the pairing immutably and rejects pushed ops authored
+     * under any other id.
+     */
+    suspend fun pair(invite: PairingInvite, deviceSeed: ByteArray, replicaId: String): PairingOutcome {
         val devicePublicKey = Ed25519DeviceSigner.publicKeyOf(deviceSeed)
         val devicePublicKeyB64 = Base64.encode(devicePublicKey)
 
         val response = http.post("${invite.address}/pair") {
             contentType(ContentType.Application.Json)
-            setBody(json.encodeToString(PairRequest.serializer(), PairRequest(devicePublicKeyB64, invite.code)))
+            setBody(json.encodeToString(PairRequest.serializer(), PairRequest(devicePublicKeyB64, invite.code, replicaId)))
         }
         if (!response.status.isSuccess()) {
             return PairingOutcome.Failed("server rejected pairing (${response.status}): ${response.bodyAsText()}")

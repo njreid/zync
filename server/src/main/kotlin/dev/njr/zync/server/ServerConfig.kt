@@ -1,11 +1,11 @@
 package dev.njr.zync.server
 
 import dev.njr.zync.data.db.ZyncDatabase
-import dev.njr.zync.server.auth.DeviceRegistry
 import dev.njr.zync.server.auth.NonceCache
 import dev.njr.zync.server.auth.ServerAuth
 import dev.njr.zync.server.auth.SessionStore
 import dev.njr.zync.server.auth.SignedRequestVerifier
+import dev.njr.zync.server.auth.SqlDeviceRegistry
 import dev.njr.zync.server.auth.ZyncAuthenticator
 import dev.njr.zync.server.auth.webauthn.ChallengeStore
 import dev.njr.zync.server.auth.webauthn.WebAuthnConfig
@@ -19,10 +19,10 @@ object ServerConfig {
      * Device auth is always on (keys come from pairing). Browser session auth is passwordless:
      * a session is minted only after a verified WebAuthn assertion (see [buildWebAuthn]).
      */
-    fun buildAuth(registry: DeviceRegistry): ServerAuth {
+    fun buildAuth(registry: SqlDeviceRegistry): ServerAuth {
         val verifier = SignedRequestVerifier(registry, NonceCache(ttlMillis = 5 * 60 * 1000L))
         val sessions = SessionStore()
-        return ServerAuth(ZyncAuthenticator(verifier, sessions), sessions)
+        return ServerAuth(ZyncAuthenticator(verifier, sessions), sessions, replicaIdOf = registry::replicaId)
     }
 
     /**

@@ -1,12 +1,12 @@
 package dev.njr.zync.server.auth
 
+import dev.njr.zync.server.sha256Hex
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalEncodingApi::class)
@@ -15,14 +15,33 @@ class AuthTest {
     private val pub = Ed25519.publicKeyFor(seed)
     private val now = 1_000_000L
     private val window = 300_000L
+    private val emptyBodyHash = sha256Hex(ByteArray(0))
 
-    private fun sign(method: String, path: String, ts: Long, nonce: String): String =
-        Base64.encode(Ed25519.sign(seed, SignedRequestVerifier.canonicalString(method, path, ts, nonce).encodeToByteArray()))
+    private fun sign(
+        method: String,
+        path: String,
+        ts: Long,
+        nonce: String,
+        query: String = "",
+        bodyHash: String = emptyBodyHash,
+    ): String = Base64.encode(
+        Ed25519.sign(seed, SignedRequestVerifier.canonicalString(method, path, query, ts, nonce, bodyHash).encodeToByteArray()),
+    )
 
     private fun verifier(registry: DeviceRegistry, nonces: NonceCache = NonceCache(window)) =
         SignedRequestVerifier(registry, nonces, windowMillis = window)
 
     private fun registryWithPhone() = InMemoryDeviceRegistry().apply { register("phone", pub) }
+
+    private fun SignedRequestVerifier.verifyPull(
+        deviceId: String = "phone",
+        ts: Long = now,
+        nonce: String = "n1",
+        query: String = "",
+        bodyHash: String = emptyBodyHash,
+        signature: String,
+        at: Long = now,
+    ): AuthResult = verify("GET", "/sync/pull", query, bodyHash, deviceId, ts, nonce, signature, at)
 
     // --- Ed25519 ---
     @Test
@@ -39,21 +58,21 @@ class AuthTest {
     @Test
     fun validDeviceAccepted() {
         val v = verifier(registryWithPhone())
-        val result = v.verify("GET", "/sync/pull", "phone", now, "n1", sign("GET", "/sync/pull", now, "n1"), now)
+        val result = v.verifyPull(signature = sign("GET", "/sync/pull", now, "n1"))
         assertEquals(AuthResult.Authorized("phone"), result)
     }
 
     @Test
     fun unknownDeviceRejected() {
         val v = verifier(InMemoryDeviceRegistry())
-        val r = v.verify("GET", "/sync/pull", "ghost", now, "n1", sign("GET", "/sync/pull", now, "n1"), now)
+        val r = v.verifyPull(deviceId = "ghost", signature = sign("GET", "/sync/pull", now, "n1"))
         assertIs<AuthResult.Rejected>(r)
     }
 
     @Test
     fun revokedDeviceRejected() {
         val registry = registryWithPhone().apply { revoke("phone") }
-        val r = verifier(registry).verify("GET", "/sync/pull", "phone", now, "n1", sign("GET", "/sync/pull", now, "n1"), now)
+        val r = verifier(registry).verifyPull(signature = sign("GET", "/sync/pull", now, "n1"))
         assertEquals(AuthResult.Rejected("revoked device"), r)
     }
 
@@ -61,7 +80,7 @@ class AuthTest {
     fun staleTimestampRejected() {
         val v = verifier(registryWithPhone())
         val old = now - window - 1
-        val r = v.verify("GET", "/sync/pull", "phone", old, "n1", sign("GET", "/sync/pull", old, "n1"), now)
+        val r = v.verifyPull(ts = old, signature = sign("GET", "/sync/pull", old, "n1"))
         assertEquals(AuthResult.Rejected("stale timestamp"), r)
     }
 
@@ -69,7 +88,31 @@ class AuthTest {
     fun badSignatureRejected() {
         val v = verifier(registryWithPhone())
         // signature for a different path than the one presented
-        val r = v.verify("GET", "/sync/pull", "phone", now, "n1", sign("GET", "/sync/push", now, "n1"), now)
+        val r = v.verifyPull(signature = sign("GET", "/sync/push", now, "n1"))
+        assertEquals(AuthResult.Rejected("bad signature"), r)
+    }
+
+    @Test
+    fun tamperedBodyRejected() {
+        val v = verifier(registryWithPhone())
+        // signed over one body, presented with another (hash mismatch)
+        val signedHash = sha256Hex("original body".encodeToByteArray())
+        val presentedHash = sha256Hex("tampered body".encodeToByteArray())
+        val r = v.verifyPull(
+            bodyHash = presentedHash,
+            signature = sign("GET", "/sync/pull", now, "n1", bodyHash = signedHash),
+        )
+        assertEquals(AuthResult.Rejected("bad signature"), r)
+    }
+
+    @Test
+    fun tamperedQueryRejected() {
+        val v = verifier(registryWithPhone())
+        // signed for since=0, replayed with since=999
+        val r = v.verifyPull(
+            query = "since=999",
+            signature = sign("GET", "/sync/pull", now, "n1", query = "since=0"),
+        )
         assertEquals(AuthResult.Rejected("bad signature"), r)
     }
 
@@ -77,8 +120,8 @@ class AuthTest {
     fun replayedNonceRejected() {
         val v = verifier(registryWithPhone())
         val sig = sign("GET", "/sync/pull", now, "n1")
-        assertIs<AuthResult.Authorized>(v.verify("GET", "/sync/pull", "phone", now, "n1", sig, now))
-        assertEquals(AuthResult.Rejected("replayed nonce"), v.verify("GET", "/sync/pull", "phone", now, "n1", sig, now))
+        assertIs<AuthResult.Authorized>(v.verifyPull(signature = sig))
+        assertEquals(AuthResult.Rejected("replayed nonce"), v.verifyPull(signature = sig))
     }
 
     // --- SessionStore ---

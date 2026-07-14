@@ -36,49 +36,61 @@ class SyncService(
     private val onIngest: () -> Unit = {},
 ) {
     private val store = SqlDelightStateStore(db, json)
-    private val seq = SeqAllocator(initialHead = db.transportQueries.headSeq().executeAsOne())
 
     /** The merged state store — read surface for the server's content UI (M6). */
     val stateStore get() = store
 
+    /**
+     * The durable transport head: `MAX(seq)` read from the op_log itself. Seq allocation is
+     * database-owned — assigned from this inside the ingest transaction — so a rollback can
+     * never leave an in-memory counter ahead of the persisted log.
+     */
+    private fun headSeq(): Long = db.transportQueries.headSeq().executeAsOne()
+
     /** Ingest pending ops; dedupe by opId; ack everything the server now holds. */
     fun push(request: PushRequest): PushResponse {
         var ingested = false
+        var head = 0L
         db.transaction {
+            head = headSeq()
             for (op in request.ops) {
                 if (db.transportQueries.opExists(op.opId.toString()).executeAsOne() > 0L) continue
-                val assigned = op.withSeq(seq.next())
+                val assigned = op.withSeq(++head)
                 insertOpLog(assigned)
                 apply(assigned, store)
                 ingested = true
             }
         }
         if (ingested) onIngest()
-        return PushResponse(ackedOpIds = request.ops.map { it.opId }, serverHead = seq.head())
+        return PushResponse(ackedOpIds = request.ops.map { it.opId }, serverHead = head)
     }
 
     /**
      * Ingest a single server-authored op (from the browser content UI): assign seq,
      * persist to op_log, merge — so it converges and later syncs to replicas.
+     *
+     * Deliberately does NOT fire [onIngest]: the web mutation route notifies once per
+     * command after all its ops are applied, and a command can span several ops.
+     * [onIngest] belongs to the replica-push boundary ([push]).
      */
     fun ingestLocal(op: Op): Op {
         var assigned = op
         db.transaction {
             if (db.transportQueries.opExists(op.opId.toString()).executeAsOne() == 0L) {
-                assigned = op.withSeq(seq.next())
+                assigned = op.withSeq(headSeq() + 1)
                 insertOpLog(assigned)
                 apply(assigned, store)
             }
         }
-        onIngest()
         return assigned
     }
 
     /** Ops with `seq > since`, ordered and paged; plus the current head. */
     fun pull(since: Long, limit: Long = DEFAULT_PAGE): PullResponse {
-        val ops = db.transportQueries.selectSince(since, limit).executeAsList()
+        val capped = limit.coerceIn(1, MAX_PAGE)
+        val ops = db.transportQueries.selectSince(since, capped).executeAsList()
             .map { json.decodeFromString(Op.serializer(), it) }
-        return PullResponse(ops = ops, head = seq.head())
+        return PullResponse(ops = ops, head = headSeq())
     }
 
     /** Current projected state (for the debug UI). */
@@ -96,7 +108,7 @@ class SyncService(
         tombstones = store.allTombstones().map { (entityId, hlc) -> TombstoneEntry(entityId, hlc) },
         tags = store.allTags().map { (key, value) -> TagEntry(key.nodeId, key.contextId, value.present, value.hlc) },
         moves = store.moveLog(),
-        headSeq = seq.head(),
+        headSeq = headSeq(),
     )
 
     private fun insertOpLog(op: Op) {
@@ -118,5 +130,6 @@ class SyncService(
 
     companion object {
         const val DEFAULT_PAGE: Long = 500
+        const val MAX_PAGE: Long = 2000
     }
 }

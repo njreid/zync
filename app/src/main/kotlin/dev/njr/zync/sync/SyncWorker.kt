@@ -16,12 +16,21 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Syncs the phone's op log with the central server on a connectivity-gated schedule.
- * A no-op until the phone is paired. Failures retry with backoff (transient network).
+ * A no-op until the phone is paired. Transient failures (network, 5xx, rate limit)
+ * retry with backoff; permanent request failures (auth, malformed) fail the work item
+ * instead of retrying the same doomed request forever.
  */
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = try {
         (applicationContext as ZyncApp).syncOnce()
         Result.success()
+    } catch (e: dev.njr.zync.replica.SyncRequestException) {
+        if (e.permanent) {
+            Log.w("zync", "sync failed permanently (HTTP ${e.status}); not retrying", e)
+            Result.failure()
+        } else {
+            Result.retry()
+        }
     } catch (_: Exception) {
         Result.retry()
     }

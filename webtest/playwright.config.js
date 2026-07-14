@@ -1,6 +1,9 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
 
+const PORT = process.env.ZYNC_DEV_PORT || 8099;
+const BASE = process.env.ZYNC_BASE || `http://127.0.0.1:${PORT}`;
+
 module.exports = defineConfig({
   testDir: './tests',
   fullyParallel: false,
@@ -8,17 +11,17 @@ module.exports = defineConfig({
   retries: 0,
   reporter: [['list']],
   use: {
-    baseURL: 'http://127.0.0.1:8199',
+    baseURL: BASE,
     trace: 'retain-on-failure',
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {
-    command:
-      "ZYNC_DEV_SERVER=1 ../gradlew -p .. :app:testDebugUnitTest --tests dev.njr.zync.server.DevServer",
-    url: 'http://127.0.0.1:8199/?token=dev',
-    reuseExistingServer: true,
+    command: '../gradlew -p .. :server:webDevServer',
+    url: `${BASE}/`,
+    // In CI a stray process must fail the run, not silently mask a broken launcher.
+    reuseExistingServer: !process.env.CI,
     timeout: 180 * 1000,
     cwd: __dirname,
   },
