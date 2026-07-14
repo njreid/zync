@@ -96,6 +96,9 @@ fun Route.webRoutes(
         post("/node/{id}/complete") { call.nodeId()?.let { id -> call.applied { complete(id) } } }
         post("/node/{id}/reopen") { call.nodeId()?.let { id -> call.applied { reopen(id) } } }
         post("/node/{id}/trash") { call.nodeId()?.let { id -> call.applied { trash(id) } } }
+        // Agent-proposal review (spec §8): accept/reject are human ops.
+        post("/proposal/{id}/accept") { call.nodeId()?.let { id -> call.applied { acceptProposal(id) } } }
+        post("/proposal/{id}/reject") { call.nodeId()?.let { id -> call.applied { rejectProposal(id) } } }
         post("/node/{id}/defer") {
             val until = call.request.queryParameters["until"]?.toLongOrNull() ?: 0L
             call.nodeId()?.let { id -> call.applied { defer(id, until) } }

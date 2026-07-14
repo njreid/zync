@@ -33,6 +33,36 @@ fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long) {
     } else {
         ul { items.forEach { li { nodeRow(it) } } }
     }
+    proposalsSection(read)
+}
+
+/**
+ * Agent proposals awaiting human review (spec §8: agent output is never live until
+ * accepted). Rendered inside the inbox fragment so SSE updates keep it current.
+ * Empty until the M9 agent runtime lands; the accept/reject ops are real today.
+ */
+fun FlowContent.proposalsSection(read: ContentReadModel) {
+    val proposals = read.proposals()
+    if (proposals.isEmpty()) return
+    h2 { +"Proposals" }
+    ul {
+        proposals.forEach { node ->
+            li {
+                span("proposed") { +(node.title ?: "(untitled proposal)") }
+                node.kind?.let { span("status") { +" · $it" } }
+                button(classes = "action") {
+                    attributes["data-on:click"] = "@post('/proposal/${node.id}/accept')"
+                    attributes["title"] = "Accept"
+                    +"✔ Accept"
+                }
+                button(classes = "action") {
+                    attributes["data-on:click"] = "@post('/proposal/${node.id}/reject')"
+                    attributes["title"] = "Reject"
+                    +"✖ Reject"
+                }
+            }
+        }
+    }
 }
 
 /** A single node as a linked row with its status and inline actions. */
