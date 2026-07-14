@@ -19,20 +19,35 @@ Legend: **Setup** = one-time prep · each `- [ ]` is a check with its **Expect:*
 
 - Env the server reads (`grep System.getenv server/src/main/kotlin`):
   `ZYNC_DB_PATH`, `ZYNC_PORT` (default 8080), `ZYNC_SERVER_KEY_FILE`,
-  `ZYNC_BLOB_BUCKET` (+ AWS creds), `ZYNC_LITESTREAM_URL`, `ZYNC_PUBLIC_ADDR`,
-  and WebAuthn: `ZYNC_WEBAUTHN_RP_ID`, `ZYNC_WEBAUTHN_ORIGIN`,
-  `ZYNC_WEBAUTHN_RP_NAME`, `ZYNC_WEBAUTHN_REG_TOKEN`.
+  `ZYNC_BLOB_BUCKET` (+ AWS creds), `ZYNC_LITESTREAM_URL`, `ZYNC_PUBLIC_ADDR`;
+  WebAuthn: `ZYNC_WEBAUTHN_RP_ID`, `ZYNC_WEBAUTHN_ORIGIN`, `ZYNC_WEBAUTHN_RP_NAME`,
+  `ZYNC_WEBAUTHN_REG_TOKEN` (dev-only escape hatch: `ZYNC_ALLOW_UNAUTHENTICATED_WEB`);
+  ops: `ZYNC_OPLOG_RETAIN_OPS` / `ZYNC_OPLOG_RETAIN_DAYS`,
+  `ZYNC_COMPACT_INTERVAL_MINUTES`, `ZYNC_QUOTA_OPLOG_MB`;
+  operators (M8): `ANTHROPIC_API_KEY`, `ZYNC_LLM_MODEL`.
 - Deploy: `haloy deploy` (see `haloy.yaml` + `deploy/`), or locally
   `./gradlew :server:run` (mainClass `dev.njr.zync.server.MainKt`).
 
+> **Upgrading an existing deployment across schema v2 (2026-07-14):** the DB
+> migrates automatically on boot (`PRAGMA user_version` 1→2), but request
+> signatures now cover the query string + body hash and pushes require the
+> pairing→replica binding — **phones paired before this release must re-pair.**
+
 - [ ] **Server starts and is healthy.** `curl https://<host>/health` → `ok`.
+- [ ] **Fails closed without browser auth.** Start with content enabled but the
+  `ZYNC_WEBAUTHN_*` vars unset (and no `ZYNC_ALLOW_UNAUTHENTICATED_WEB=true`).
+  **Expect:** startup REFUSES with "refusing to serve :web without browser auth" —
+  a typo'd WebAuthn env can never silently ship an open UI.
+- [ ] **Old DB migrates.** Boot against a pre-2026-07-14 database file. **Expect:**
+  clean start; `sqlite3 <db> 'PRAGMA user_version'` → `2`; existing content intact.
 - [ ] **HTTPS/origin match.** `ZYNC_WEBAUTHN_ORIGIN` exactly matches the scheme+host
   the browser will use (e.g. `https://zync.example.com`), and `ZYNC_WEBAUTHN_RP_ID`
   is the registrable domain (`zync.example.com`). **Expect:** mismatches make WebAuthn
   silently fail later — verify now.
 - [ ] **Server identity persists.** Restart the server; the Ed25519 server key
-  (`ZYNC_SERVER_KEY_FILE`) is reused. **Expect:** already-paired phones keep working
-  (pinned key unchanged).
+  (`ZYNC_SERVER_KEY_FILE`) is reused. **Expect:** the pinned key is unchanged, so
+  phones paired *on this release* keep working (pre-v2 pairings still need the
+  one-time re-pair above).
 
 **Phone**: install the APK — `./gradlew :app:assembleDebug` →
 `app/build/outputs/apk/debug/app-debug.apk`, `adb install` (or `assembleRelease`
@@ -49,16 +64,23 @@ security key).
 (or the container's `server pair`) — it mints a one-time code and prints a QR.
 
 - [ ] **Phone pairs by scanning the QR.** In the phone app, start pairing and scan.
-  **Expect:** phone POSTs `/pair` with its Ed25519 device key + the one-time code;
-  the server registers the device and returns its identity; the phone pins the
-  server's key fingerprint.
-- [ ] **The device shows in the server allow-list.** (server `device` table / debug UI).
+  **Expect:** phone POSTs `/pair` with its Ed25519 device key, the one-time code,
+  and its op-authoring **replicaId**; the server registers the device, binds the
+  replica id, and returns its identity; the phone pins the server's key fingerprint.
+- [ ] **The device shows in the server allow-list with its binding.** (server
+  `device` table / debug UI — `replica_id` is non-NULL.)
+- [ ] **Pushes are bound to the pairing.** After pairing, captures sync normally.
+  **Expect:** a device row with a NULL `replica_id` (pre-v2 pairing) gets **403
+  "re-pair"** on push, and the binding is immutable — the same device key
+  re-pairing with a *different* replica id is rejected at `/pair`.
 - [ ] **One-time code is single-use + windowed.** Re-scanning the same QR after use,
   or after the window, fails. **Expect:** `/pair` rejects a spent/expired code.
 - [ ] **Unpaired phone can't sync.** Before pairing, a sync attempt is rejected.
   **Expect:** `syncOnce()` is a no-op / server returns 401 for an unknown device.
-- [ ] **Revocation is immediate.** Revoke the device on the server; the next phone
-  sync is rejected. **Expect:** signed requests from a revoked device → 401/403.
+- [ ] **Revocation is immediate and final.** Revoke the device on the server; the next
+  phone sync is rejected. **Expect:** signed requests from a revoked device → 401/403,
+  and `SyncWorker` records a permanent failure (no infinite retry loop in the
+  WorkManager inspector).
 
 ---
 
@@ -84,7 +106,11 @@ Each capture must create an **op-log inbox node** (+ a blob for attachments) via
 
 - [ ] **Push:** with the phone paired and online, `SyncWorker` (or a manual trigger)
   pushes queued ops. **Expect:** the items captured offline appear on the server
-  (check via a browser session, §4).
+  (check via a browser session, §4). Attachment blobs upload **before** their ops —
+  the server never holds metadata whose bytes only exist on the phone.
+- [ ] **Large backlog pages.** Capture a big offline backlog (dozens of items incl.
+  attachments), then sync. **Expect:** the push completes across multiple bounded
+  batches (server access log shows several `/sync/push` requests); everything lands.
 - [ ] **Pull:** create a task in the browser `:web`; the phone pulls it. **Expect:**
   it appears on the phone after a sync cycle.
 - [ ] **Bidirectional convergence:** create distinct items on phone (offline) and
@@ -159,9 +185,21 @@ Each capture must create an **op-log inbox node** (+ a blob for attachments) via
   client is connected. **Expect:** the swap completes without a visible outage; in-flight
   requests are not dropped.
 - [ ] **Hardening.** Hammer an endpoint past the rate limit → throttled (429/backoff).
-  `GET /metrics` reports counters.
+  `GET /metrics` reports counters (traffic, rejections, auth failures) and storage
+  gauges (op-log ops/bytes, compaction floor).
 - [ ] **Blob store.** Attachments are content-addressed in S3 (`ZYNC_BLOB_BUCKET`);
   re-uploading identical bytes doesn't duplicate.
+- [ ] **Restore drill (scheduled).** Run `systemctl start restore-drill` once (see
+  `deploy/restore-drill.sh`). **Expect:** "restore drill OK: ops=… head=… lag=…" —
+  the S3 replica is restorable and fresh, without touching the live DB.
+- [ ] **Compaction preserves state.** Set aggressive retention (e.g.
+  `ZYNC_OPLOG_RETAIN_OPS=100`, `ZYNC_OPLOG_RETAIN_DAYS=0`,
+  `ZYNC_COMPACT_INTERVAL_MINUTES=1`), write past it. **Expect:** `/metrics` shows
+  `compactionRuns`/`opsCompacted` advancing and the floor gauge rising; all content
+  still renders correctly in the `:web` UI; an in-sync phone keeps syncing normally.
+- [ ] **Quota guard.** Set a tiny `ZYNC_QUOTA_OPLOG_MB` (e.g. 1) and push past it.
+  **Expect:** `/sync/push` → **507**, `/metrics` `quotaRejected` increments; after
+  compaction frees space (or the quota is raised), pushes resume.
 
 ---
 
@@ -181,9 +219,33 @@ Run the same UI checks in **both** the browser (server-hosted) and the phone Web
 
 ---
 
+## 8. Operators (M8) & agent proposals
+
+- [ ] **Disabled gracefully.** Start the server WITHOUT `ANTHROPIC_API_KEY`.
+  **Expect:** log line "operators disabled: ANTHROPIC_API_KEY not set"; everything
+  else works normally.
+- [ ] **Auto-clarify fires.** With `ANTHROPIC_API_KEY` set, capture an inbox item.
+  **Expect:** the reference operator reacts to the ingest, emits provenance-tagged
+  ops (`actor=Operator("…")`, visible in the op log / debug UI), and never touches a
+  human-owned field. Re-syncing the same op does not re-fire it (idempotent by
+  input version — check the `operator_run` table).
+- [ ] **Proposals review panel.** A `proposed`-flagged node (agent-authored; until
+  the M9 runtime lands, seed one like the dev server's stub) appears under
+  "Proposals" in the `:web` inbox — on BOTH hosts — and never as a normal task/
+  comment. **Accept** clears the flag and it becomes ordinary content; **Reject**
+  removes it (reversible trash). Both actions stream via SSE without a refresh.
+
+---
+
 ## Known limitations to confirm, not fix
 
-- Rotation recreates the phone activity + WebView (no `configChanges`); acceptable for now.
+- **Compacted-away cursors aren't client-handled yet.** A phone whose pull cursor is
+  below the compaction floor gets **410 Gone** and its sync worker fails permanently —
+  the re-bootstrap flow (client-side `/sync/bootstrap` consumption) is not implemented.
+  With default 30-day/10k retention this cannot hit an actively syncing phone; confirm
+  the 410 behavior, don't expect recovery.
+- The M9 agent *runtime* is design-only (`2026-07-14-m9-agents.md`); the proposals
+  panel is exercised via the stub producer.
 - The `/login` page ceremony needs a real browser/virtual authenticator (unit tests use
   webauthn4j's emulator).
 - Emulator-based CI for the phone is not set up (no KVM locally); phone checks here are
