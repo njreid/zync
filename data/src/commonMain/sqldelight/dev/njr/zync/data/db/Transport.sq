@@ -63,3 +63,18 @@ CREATE TABLE operator_run (
   status TEXT NOT NULL,
   PRIMARY KEY (operator_id, entity_id, input_version)
 );
+
+-- Idempotency: has this operator already handled this entity at this input version?
+operatorRunExists:
+SELECT COUNT(*) FROM operator_run WHERE operator_id = ? AND entity_id = ? AND input_version = ?;
+
+-- Enters-scope gating: has this operator ever *successfully* handled this entity?
+operatorHandledCount:
+SELECT COUNT(*) FROM operator_run WHERE operator_id = ? AND entity_id = ? AND status = 'done';
+
+recordOperatorRun:
+INSERT OR REPLACE INTO operator_run(operator_id, entity_id, input_version, status) VALUES (?, ?, ?, ?);
+
+-- Audit surface: every recorded firing of one operator against one entity.
+operatorRuns:
+SELECT operator_id, entity_id, input_version, status FROM operator_run WHERE operator_id = ? AND entity_id = ?;

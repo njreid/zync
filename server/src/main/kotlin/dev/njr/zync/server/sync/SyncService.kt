@@ -34,6 +34,7 @@ class SyncService(
     private val db: ZyncDatabase,
     private val json: Json = Json,
     private val onIngest: () -> Unit = {},
+    private val hook: OpIngestHook = OpIngestHook {},
 ) {
     private val store = SqlDelightStateStore(db, json)
     private val seq = SeqAllocator(initialHead = db.transportQueries.headSeq().executeAsOne())
@@ -43,17 +44,20 @@ class SyncService(
 
     /** Ingest pending ops; dedupe by opId; ack everything the server now holds. */
     fun push(request: PushRequest): PushResponse {
-        var ingested = false
+        val accepted = mutableListOf<Op>()
         db.transaction {
             for (op in request.ops) {
                 if (db.transportQueries.opExists(op.opId.toString()).executeAsOne() > 0L) continue
                 val assigned = op.withSeq(seq.next())
                 insertOpLog(assigned)
                 apply(assigned, store)
-                ingested = true
+                accepted += assigned
             }
         }
-        if (ingested) onIngest()
+        if (accepted.isNotEmpty()) {
+            onIngest()
+            hook.onIngested(accepted)
+        }
         return PushResponse(ackedOpIds = request.ops.map { it.opId }, serverHead = seq.head())
     }
 
@@ -63,14 +67,17 @@ class SyncService(
      */
     fun ingestLocal(op: Op): Op {
         var assigned = op
+        var inserted = false
         db.transaction {
             if (db.transportQueries.opExists(op.opId.toString()).executeAsOne() == 0L) {
                 assigned = op.withSeq(seq.next())
                 insertOpLog(assigned)
                 apply(assigned, store)
+                inserted = true
             }
         }
         onIngest()
+        if (inserted) hook.onIngested(listOf(assigned))
         return assigned
     }
 
