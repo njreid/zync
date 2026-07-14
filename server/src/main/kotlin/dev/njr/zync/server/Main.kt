@@ -1,7 +1,13 @@
 package dev.njr.zync.server
 
 import dev.njr.zync.data.JvmZyncDatabase
+import dev.njr.zync.data.db.ZyncDatabase
 import dev.njr.zync.server.auth.SqlDeviceRegistry
+import dev.njr.zync.server.operator.AnthropicLlmClient
+import dev.njr.zync.server.operator.OperatorManifests
+import dev.njr.zync.server.operator.OperatorRuntime
+import dev.njr.zync.server.operator.ReadScopeResolver
+import dev.njr.zync.server.sync.SettableIngestHook
 import dev.njr.zync.server.blob.BlobService
 import dev.njr.zync.server.blob.S3BlobStore
 import dev.njr.zync.server.content.ServerContent
@@ -43,7 +49,9 @@ fun main(args: Array<String>) {
     val db = StartupSequence.open(dbPath, gateway)
 
     val changes = ChangeNotifier()
-    val service = SyncService(db, onIngest = { changes.notifyChanged() })
+    val ingestHook = SettableIngestHook()
+    val service = SyncService(db, onIngest = { changes.notifyChanged() }, hook = ingestHook)
+    wireOperators(db, service, ingestHook)
     val registry = SqlDeviceRegistry(db)
     val auth = ServerConfig.buildAuth(registry)
     val webauthn = auth.sessions?.let { ServerConfig.buildWebAuthn(db, it) }
@@ -66,4 +74,26 @@ fun main(args: Array<String>) {
             allowUnauthenticatedWeb = System.getenv("ZYNC_ALLOW_UNAUTHENTICATED_WEB") == "true",
         )
     }.start(wait = true)
+}
+
+/**
+ * Wire the M8 operator runtime onto the ingest hook — or degrade gracefully to
+ * disabled when no `ANTHROPIC_API_KEY` is configured.
+ */
+private fun wireOperators(db: ZyncDatabase, service: SyncService, hook: SettableIngestHook) {
+    val log = org.slf4j.LoggerFactory.getLogger("zync.operators")
+    val llm = AnthropicLlmClient.fromEnv()
+    if (llm == null) {
+        log.info("operators disabled: ANTHROPIC_API_KEY not set")
+        return
+    }
+    hook.delegate = OperatorRuntime(
+        db = db,
+        store = service.stateStore,
+        operators = OperatorManifests.fromEnv(),
+        scopes = ReadScopeResolver.default(),
+        llm = llm,
+        emit = service::ingestLocal,
+    )
+    log.info("operators enabled")
 }
