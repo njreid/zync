@@ -58,10 +58,13 @@ class RandomOps(seed: Int) {
     }
 
     private fun uniqueHlc(): Hlc {
-        while (true) {
+        // Space = 7 physicals × 3 counters × 3 devices = 63 unique HLCs; bail instead
+        // of spinning forever when a batch asks for more.
+        repeat(10_000) {
             val h = Hlc(rng.nextLong(1, 8), rng.nextInt(0, 3), listOf("A", "B", "C")[rng.nextInt(3)])
             if (used.add(h)) return h
         }
+        error("RandomOps HLC space exhausted (63 unique max) — request fewer ops per instance")
     }
 
     fun batch(count: Int): List<Op> = List(count) {

@@ -12,6 +12,10 @@ deployment spec (`docs/superpowers/specs/2026-07-08-deployment.md` §10).
 - **EBS** gp3 mounted at `/opt/zync/data` (the SQLite DB + server identity key live here).
 - **S3** buckets: `zync-blobs` (attachments) + `zync-litestream` (WAL replica).
 - **IAM instance role**: `s3:GetObject/PutObject/ListBucket` on the two buckets only.
+- **Storage caps:** the op-log is quota-guarded in-app (`ZYNC_QUOTA_OPLOG_MB`, default
+  1024; pushes 507 until compaction frees space). Blob spend is capped S3-side — set an
+  AWS Budget alarm on the account and (optionally) a lifecycle rule on `zync-blobs`;
+  the app deliberately has no blob-bytes quota (S3 can't fill the box's disk).
 
 ## 2. One-time host setup (user-data or manual)
 ```sh
@@ -46,9 +50,21 @@ haloy deploy                              # pre_deploy runs ./gradlew :server:in
 Edit `haloy.yaml` `server:` (the haloyd host) and `domains:` (your hostname) first; point a
 DNS A record at the Elastic IP. haloy provisions/renews the TLS cert automatically.
 
-## 4. Restore drill (do before trusting it)
-Stop the app, `rm /opt/zync/data/zync.db*`, `systemctl restart litestream-restore` → the DB
-restores from S3; redeploy/restart the app; verify state via `/sync/bootstrap`. (Property
+## 4. Restore drill
+**Scheduled (non-destructive):** install `restore-drill.sh` + its units and enable the
+weekly timer — it restores the replica to a temp path, integrity-checks it, and fails
+if the replica lags the live DB by more than `ZYNC_DRILL_MAX_LAG` (default 100) ops:
+
+```sh
+cp deploy/restore-drill.sh /opt/zync/restore-drill.sh && chmod +x /opt/zync/restore-drill.sh
+cp deploy/restore-drill.service deploy/restore-drill.timer /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now restore-drill.timer
+systemctl start restore-drill.service && journalctl -u restore-drill -n 3   # run one now
+```
+
+**Full drill (destructive; do once before trusting the box):** stop the app,
+`rm /opt/zync/data/zync.db*`, `systemctl restart litestream-restore` → the DB restores
+from S3; redeploy/restart the app; verify state via `/sync/bootstrap`. (Property
 covered by M4 Task 6's durability tests.)
 
 ## 5. Rollback

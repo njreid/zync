@@ -12,6 +12,7 @@ import dev.njr.zync.web.webRoutes
 import io.ktor.server.sse.SSE
 import dev.njr.zync.server.debug.debugRoutes
 import dev.njr.zync.server.hardening.Hardening
+import dev.njr.zync.server.hardening.StorageQuota
 import dev.njr.zync.server.hardening.UsageGauges
 import dev.njr.zync.server.hardening.installHardening
 import dev.njr.zync.server.pairing.PairingEndpoint
@@ -42,6 +43,8 @@ fun Application.zyncModule(
     webauthn: WebAuthnEndpoint? = null,
     json: Json = Json,
     usage: () -> UsageGauges = { UsageGauges() },
+    compactionFloor: () -> Long = { 0L },
+    quota: StorageQuota? = null,
 ) {
     install(ContentNegotiation) { json(json) }
     install(StatusPages) {
@@ -60,7 +63,7 @@ fun Application.zyncModule(
         log.warn("Serving :web WITHOUT browser auth — set ZYNC_WEBAUTHN_RP_ID/_ORIGIN to gate it")
     }
     routing {
-        syncRoutes(service, auth, metrics = hardening?.metrics)
+        syncRoutes(service, auth, metrics = hardening?.metrics, compactionFloor = compactionFloor, quota = quota)
         debugRoutes(service, auth)
         if (blobs != null) blobRoutes(blobs, auth, metrics = hardening?.metrics)
         if (pairing != null) pairingRoutes(pairing.manager, pairing.identity)
