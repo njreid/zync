@@ -38,6 +38,16 @@ systemctl enable --now litestream-restore.service litestream.service
 ```
 
 ## 3. Deploy (from a dev machine or CI)
+
+**CI (preferred):** `.github/workflows/deploy.yml` deploys on every published GitHub
+release (or manually via *Run workflow*, optionally overriding the target host).
+One-time repo setup — secrets `HALOY_API_TOKEN` (from the haloyd install output) +
+`ZYNC_WEBAUTHN_REG_TOKEN`; variables `HALOY_SERVER`, `ZYNC_DOMAIN`, `ZYNC_PUBLIC_ADDR`,
+`AWS_REGION`, `ZYNC_BLOB_BUCKET`, `ZYNC_WEBAUTHN_RP_ID`, `ZYNC_WEBAUTHN_ORIGIN`. The
+workflow substitutes the host/domain placeholders in `haloy.yaml`, runs
+`haloy validate-config && haloy deploy`, then gates on `/health`.
+
+**Manually:**
 ```sh
 export AWS_REGION=us-east-1 ZYNC_BLOB_BUCKET=zync-blobs
 export ZYNC_PUBLIC_ADDR=https://zync.example.com

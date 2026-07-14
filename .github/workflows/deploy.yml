@@ -1,0 +1,95 @@
+name: Deploy server
+
+# Deploys the server to the EC2 box via haloy (zero-downtime swap, auto-TLS).
+# Runs on every published release, or on demand. Requirements (repo settings):
+#   secrets: HALOY_API_TOKEN     — from the haloyd install output on the box
+#            ZYNC_WEBAUTHN_REG_TOKEN
+#   vars:    HALOY_SERVER        — the haloyd API host (e.g. haloy.zync.example.com)
+#            ZYNC_DOMAIN         — the app domain (e.g. zync.example.com)
+#            ZYNC_PUBLIC_ADDR    — https://<ZYNC_DOMAIN>
+#            AWS_REGION, ZYNC_BLOB_BUCKET
+#            ZYNC_WEBAUTHN_RP_ID, ZYNC_WEBAUTHN_ORIGIN
+# The box itself is prepared once per deploy/bootstrap.md (haloyd + litestream sidecar).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      haloy_server:
+        description: haloyd host to deploy to (defaults to the HALOY_SERVER repo variable)
+        required: false
+
+# One deploy at a time; a queued deploy of newer code should still run, not be cancelled.
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: haloy deploy (linux/arm64)
+    # arm64 runner: the image targets the t4g (linux/arm64), so the Docker build is
+    # native — no QEMU emulation of the JVM build.
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install haloy CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo haloydev/haloy --pattern 'haloy-linux-arm64' --output haloy-cli
+          chmod +x haloy-cli && sudo mv haloy-cli /usr/local/bin/haloy
+          haloy version || haloy --version
+
+      - name: Point config at the target host
+        env:
+          HALOY_SERVER: ${{ inputs.haloy_server || vars.HALOY_SERVER }}
+          HALOY_API_TOKEN: ${{ secrets.HALOY_API_TOKEN }}
+          ZYNC_DOMAIN: ${{ vars.ZYNC_DOMAIN }}
+        run: |
+          test -n "$HALOY_SERVER" || { echo "set the HALOY_SERVER repo variable (or dispatch input)"; exit 1; }
+          test -n "$HALOY_API_TOKEN" || { echo "set the HALOY_API_TOKEN repo secret"; exit 1; }
+          test -n "$ZYNC_DOMAIN" || { echo "set the ZYNC_DOMAIN repo variable"; exit 1; }
+          haloy server add "$HALOY_SERVER" "$HALOY_API_TOKEN"
+          # haloy.yaml ships with placeholders; substitute the real target for this run.
+          sed -i "s|^server: .*|server: \"$HALOY_SERVER\"|" haloy.yaml
+          sed -i "s|domain: \"zync.example.com\"|domain: \"$ZYNC_DOMAIN\"|" haloy.yaml
+          grep -E '^server:|domain:' haloy.yaml
+
+      # pre_deploy in haloy.yaml runs `./gradlew :server:installDist` on this runner,
+      # then haloy builds server/Dockerfile and uploads only changed layers.
+      - name: Validate and deploy
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ZYNC_BLOB_BUCKET: ${{ vars.ZYNC_BLOB_BUCKET }}
+          ZYNC_PUBLIC_ADDR: ${{ vars.ZYNC_PUBLIC_ADDR }}
+          ZYNC_WEBAUTHN_RP_ID: ${{ vars.ZYNC_WEBAUTHN_RP_ID }}
+          ZYNC_WEBAUTHN_ORIGIN: ${{ vars.ZYNC_WEBAUTHN_ORIGIN }}
+          ZYNC_WEBAUTHN_REG_TOKEN: ${{ secrets.ZYNC_WEBAUTHN_REG_TOKEN }}
+        run: |
+          haloy validate-config
+          haloy deploy
+
+      - name: Health check
+        env:
+          ZYNC_PUBLIC_ADDR: ${{ vars.ZYNC_PUBLIC_ADDR }}
+        run: |
+          for i in $(seq 1 12); do
+            body=$(curl -fsS --max-time 10 "$ZYNC_PUBLIC_ADDR/health" || true)
+            [ "$body" = "ok" ] && { echo "healthy"; exit 0; }
+            sleep 5
+          done
+          echo "server did not report healthy after deploy" >&2
+          exit 1

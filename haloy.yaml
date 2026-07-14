@@ -47,8 +47,9 @@ env:
   - name: "ZYNC_PUBLIC_ADDR"
     from:
       env: "ZYNC_PUBLIC_ADDR"
-  # Browser passkey auth. Without RP_ID + ORIGIN the :web UI ships UNGATED (the server
-  # warns on boot). ORIGIN must be the exact scheme+host; RP_ID the registrable domain.
+  # Browser passkey auth. Without RP_ID + ORIGIN the server REFUSES to start (fail
+  # closed; ZYNC_ALLOW_UNAUTHENTICATED_WEB=true is the dev-only override). ORIGIN must
+  # be the exact scheme+host; RP_ID the registrable domain.
   - name: "ZYNC_WEBAUTHN_RP_ID"
     from:
       env: "ZYNC_WEBAUTHN_RP_ID"
