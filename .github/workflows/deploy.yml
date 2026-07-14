@@ -28,6 +28,9 @@ concurrency:
 jobs:
   deploy:
     name: haloy deploy (linux/arm64)
+    # Skips (instead of failing every release) until the repo is configured with a
+    # deploy target — set the HALOY_SERVER variable (+ the rest above) to activate.
+    if: ${{ inputs.haloy_server != '' || vars.HALOY_SERVER != '' }}
     # arm64 runner: the image targets the t4g (linux/arm64), so the Docker build is
     # native — no QEMU emulation of the JVM build.
     runs-on: ubuntu-24.04-arm
