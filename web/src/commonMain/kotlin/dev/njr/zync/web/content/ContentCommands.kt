@@ -1,5 +1,6 @@
 package dev.njr.zync.web.content
 
+import dev.njr.zync.core.agent.AgentFlow
 import dev.njr.zync.core.id.Ulid
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -45,6 +46,22 @@ class ContentCommands(private val ops: OpEmitter) {
 
     fun addTag(node: Ulid, context: Ulid) = ops.addTag(node, context)
     fun removeTag(node: Ulid, context: Ulid) = ops.removeTag(node, context)
+
+    /**
+     * Accept an agent proposal: a human op clearing the `proposed` flag, so the node
+     * becomes ordinary content (spec §8 — acceptance is a human op, never implicit).
+     */
+    fun acceptProposal(node: Ulid) = ops.setField(node, AgentFlow.FIELD_PROPOSED, JsonPrimitive(false))
+
+    /**
+     * Reject an agent proposal: reversible [trash] plus clearing the flag, so it
+     * leaves the review panel without ever rendering as content ([purge] if truly
+     * unwanted).
+     */
+    fun rejectProposal(node: Ulid) {
+        trash(node)
+        ops.setField(node, AgentFlow.FIELD_PROPOSED, JsonPrimitive(false))
+    }
 
     /** Permanent purge (hard tombstone) — rare; most removal is reversible [trash]. */
     fun purge(node: Ulid) = ops.tombstone(node)

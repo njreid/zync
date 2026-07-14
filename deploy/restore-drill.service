@@ -1,0 +1,8 @@
+[Unit]
+Description=zync litestream restore drill (verify the S3 replica is restorable)
+After=litestream.service
+Wants=litestream.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/zync/restore-drill.sh

@@ -1,5 +1,6 @@
 package dev.njr.zync.web.content
 
+import dev.njr.zync.core.agent.AgentFlow
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.state.EntitySnapshot
@@ -18,6 +19,8 @@ data class NodeView(
     val parent: Ulid?,
     val tags: Set<Ulid>,
     val alive: Boolean,
+    /** Agent-authored, awaiting human review — surfaced only in the proposals panel. */
+    val proposed: Boolean = false,
 )
 
 /** A context/tag as the UI reads it. */
@@ -30,19 +33,32 @@ data class ContextView(val id: Ulid, val name: String?)
 class ContentReadModel(private val store: StateStore) {
     private fun snapshots() = store.project().values.filter { it.alive }
 
-    /** Live task/project children of [parent] (null = root), title-sorted (excludes comments). */
+    /**
+     * Live task/project children of [parent] (null = root), title-sorted. Excludes
+     * comments, agent-flow machinery kinds, and unreviewed proposals — those surface
+     * in [comments] / [proposals] instead.
+     */
     fun children(parent: Ulid?): List<NodeView> =
         snapshots()
-            .filter { it.kind() != "context" && it.kind() != "comment" && it.parent?.toString() == parent?.toString() }
+            .filter {
+                it.kind() != "context" && it.kind() != "comment" &&
+                    it.kind() !in AgentFlow.INTERNAL_KINDS && !it.proposed() &&
+                    it.parent?.toString() == parent?.toString()
+            }
             .map { it.toView() }
             .sortedBy { it.title ?: "" }
 
-    /** Comments/annotations under [node], oldest first (by id ≈ creation order). */
+    /** Comments/annotations under [node], oldest first (unreviewed proposals + trashed excluded). */
     fun comments(node: Ulid): List<NodeView> =
         snapshots()
-            .filter { it.kind() == "comment" && it.parent?.toString() == node.toString() }
+            .filter { it.kind() == "comment" && !it.proposed() && it.parent?.toString() == node.toString() }
             .map { it.toView() }
+            .filter { it.status != "DROPPED" }
             .sortedBy { it.id.toString() }
+
+    /** Agent-authored nodes awaiting human review (accept/reject), oldest first. */
+    fun proposals(): List<NodeView> =
+        snapshots().filter { it.proposed() }.map { it.toView() }.sortedBy { it.id.toString() }
 
     /** Inbox: live children of [inbox] that aren't completed/dropped/deferred-out. */
     fun inbox(inbox: Ulid?, now: Long = Long.MAX_VALUE): List<NodeView> =
@@ -63,6 +79,9 @@ class ContentReadModel(private val store: StateStore) {
 
     private fun EntitySnapshot.kind(): String? = fields["kind"].asString()
 
+    private fun EntitySnapshot.proposed(): Boolean =
+        (fields[AgentFlow.FIELD_PROPOSED] as? JsonPrimitive)?.content == "true"
+
     private fun EntitySnapshot.toView() = NodeView(
         id = entityId,
         kind = fields["kind"].asString(),
@@ -73,6 +92,7 @@ class ContentReadModel(private val store: StateStore) {
         parent = parent,
         tags = tags,
         alive = alive,
+        proposed = proposed(),
     )
 
     private fun JsonElement?.asString(): String? = (this as? JsonPrimitive)?.content

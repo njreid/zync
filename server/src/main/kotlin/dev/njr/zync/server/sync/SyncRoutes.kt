@@ -4,6 +4,8 @@ import dev.njr.zync.core.sync.PushRequest
 import dev.njr.zync.server.auth.ServerAuth
 import dev.njr.zync.server.auth.authorizedOrNull
 import dev.njr.zync.server.auth.requireAuth
+import dev.njr.zync.server.hardening.Metrics
+import dev.njr.zync.server.hardening.StorageQuota
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -15,10 +17,28 @@ import io.ktor.server.routing.post
 /**
  * The sync protocol routes (spec §6). The push/pull/bootstrap routes are guarded by
  * [ServerAuth]; `/health` is open. Browser session auth lives in `webauthn.webAuthnRoutes`.
+ * [metrics] (if provided) counts protocol traffic for `/metrics`. [compactionFloor]
+ * is the op-log compaction floor: pulls below it get **410 Gone** — the client's
+ * cursor predates retained history and it must re-bootstrap (snapshot + tail).
+ * [quota] (if provided) refuses pushes at 507 once the op-log byte cap is hit.
  */
-fun Route.syncRoutes(service: SyncService, auth: ServerAuth) {
+fun Route.syncRoutes(
+    service: SyncService,
+    auth: ServerAuth,
+    metrics: Metrics? = null,
+    compactionFloor: () -> Long = { 0L },
+    quota: StorageQuota? = null,
+) {
     post("/sync/push") {
         val who = call.authorizedOrNull(auth.authenticator) ?: return@post
+        if (quota != null && !quota.allowsPush()) {
+            metrics?.onQuotaRejected()
+            call.respondText(
+                "op-log quota exceeded; ingestion paused until compaction frees space",
+                status = HttpStatusCode.InsufficientStorage,
+            )
+            return@post
+        }
         val request = call.receive<PushRequest>()
         // Bind pushed ops to the signing device: every op's authoring replica id must
         // equal the id bound to this pairing. Browser sessions and the dev AllowAll
@@ -42,6 +62,7 @@ fun Route.syncRoutes(service: SyncService, auth: ServerAuth) {
                 return@post
             }
         }
+        metrics?.onPush(request.ops.size)
         call.respond(service.push(request))
     }
     get("/sync/pull") {
@@ -56,10 +77,17 @@ fun Route.syncRoutes(service: SyncService, auth: ServerAuth) {
             call.respondText("invalid 'limit': expected a positive integer", status = HttpStatusCode.BadRequest)
             return@get
         }
+        val floor = compactionFloor()
+        if ((since ?: 0L) < floor) {
+            call.respondText("op log compacted through seq $floor; re-bootstrap", status = HttpStatusCode.Gone)
+            return@get
+        }
+        metrics?.onPull()
         call.respond(service.pull(since ?: 0L, (limit ?: SyncService.DEFAULT_PAGE).coerceAtMost(SyncService.MAX_PAGE)))
     }
     get("/sync/bootstrap") {
         if (!call.requireAuth(auth.authenticator)) return@get
+        metrics?.onBootstrap()
         call.respond(service.bootstrap())
     }
     get("/health") {

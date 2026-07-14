@@ -16,15 +16,23 @@ import dev.njr.zync.server.durability.DbBackupGateway
 import dev.njr.zync.server.durability.LitestreamCli
 import dev.njr.zync.server.durability.StartupSequence
 import dev.njr.zync.server.hardening.Hardening
+import dev.njr.zync.server.hardening.StorageQuota
 import dev.njr.zync.server.hardening.TokenBucketRateLimiter
+import dev.njr.zync.server.hardening.UsageGauges
 import dev.njr.zync.server.pairing.PairCommand
 import dev.njr.zync.server.pairing.PairingEndpoint
 import dev.njr.zync.server.pairing.PairingManager
 import dev.njr.zync.server.pairing.ServerIdentity
+import dev.njr.zync.server.sync.CompactionPolicy
+import dev.njr.zync.server.sync.OplogCompactor
 import dev.njr.zync.server.sync.SyncService
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import software.amazon.awssdk.services.s3.S3Client
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Entry point. `server pair` mints a pairing code + prints a QR (operator command);
@@ -62,6 +70,24 @@ fun main(args: Array<String>) {
     val hardening = Hardening(TokenBucketRateLimiter(capacity = 240, refillPerSecond = 4.0))
     val content = ServerContent(service, changes)
 
+    // Op-log compaction: daily by default; 0 disables. Retention via ZYNC_OPLOG_RETAIN_*.
+    val compactor = OplogCompactor(db, CompactionPolicy.fromEnv(System::getenv), metrics = hardening.metrics)
+    val compactEveryMinutes = System.getenv("ZYNC_COMPACT_INTERVAL_MINUTES")?.toLong() ?: (24L * 60)
+    if (compactEveryMinutes > 0) {
+        compactor.start(CoroutineScope(SupervisorJob() + Dispatchers.Default), compactEveryMinutes.minutes)
+    }
+    val usage = {
+        UsageGauges(
+            opLogOps = db.transportQueries.countOps().executeAsOne(),
+            opLogBytes = db.transportQueries.oplogBytes().executeAsOne(),
+            compactionFloor = compactor.floor(),
+        )
+    }
+    // Op-log byte quota (ZYNC_QUOTA_OPLOG_MB, default 1024; 0 disables): pushes get
+    // 507 once hit, until compaction frees space. Blob spend is capped S3-side
+    // (bucket lifecycle + budget alarm), not here — see deploy/bootstrap.md.
+    val quota = StorageQuota.fromEnv(db, System::getenv)
+
     embeddedServer(Netty, port = port) {
         zyncModule(
             service,
@@ -72,6 +98,9 @@ fun main(args: Array<String>) {
             content = content,
             webauthn = webauthn,
             allowUnauthenticatedWeb = System.getenv("ZYNC_ALLOW_UNAUTHENTICATED_WEB") == "true",
+            usage = usage,
+            compactionFloor = compactor::floor,
+            quota = quota,
         )
     }.start(wait = true)
 }

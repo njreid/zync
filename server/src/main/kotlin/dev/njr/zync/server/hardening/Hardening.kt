@@ -27,7 +27,8 @@ private val PROTECTED_PREFIXES = listOf("/sync", "/blob", "/pair", "/auth", "/lo
 /**
  * Intercepts protected paths ([PROTECTED_PREFIXES]): rejects oversized requests (413),
  * rate-limits by client IP (429), logs one structured line per request, and counts
- * requests/rejections. `/health` and `/metrics` are exempt.
+ * requests/rejections. `/health` and `/metrics` are exempt. Auth failures (401/403)
+ * on protected paths are counted observation-only on the way out.
  *
  * The limiter key is the normalized remote address, never a client-supplied header:
  * this runs before authentication, and keying on `X-Device-Id` would let an attacker
@@ -45,19 +46,26 @@ fun Application.installHardening(hardening: Hardening) {
 
         val contentLength = call.request.header(HttpHeaders.ContentLength)?.toLongOrNull()
         if (contentLength != null && contentLength > hardening.maxRequestBytes) {
-            hardening.metrics.onRejected()
+            hardening.metrics.onOversized()
             log.warn("reject oversized method={} path={} principal={} bytes={}", call.request.local.method.value, path, principal, contentLength)
             call.respondText("payload too large", status = HttpStatusCode.PayloadTooLarge)
             return@intercept finish()
         }
 
         if (!hardening.rateLimiter.tryAcquire(principal)) {
-            hardening.metrics.onRejected()
+            hardening.metrics.onRateLimited()
             log.warn("rate limit method={} path={} principal={}", call.request.local.method.value, path, principal)
             call.respondText("rate limited", status = HttpStatusCode.TooManyRequests)
             return@intercept finish()
         }
 
         log.info("request method={} path={} principal={}", call.request.local.method.value, path, principal)
+
+        // Observation-only: count auth refusals (threat model T1) without changing behavior.
+        proceed()
+        val status = call.response.status()
+        if (status == HttpStatusCode.Unauthorized || status == HttpStatusCode.Forbidden) {
+            hardening.metrics.onAuthFailure()
+        }
     }
 }

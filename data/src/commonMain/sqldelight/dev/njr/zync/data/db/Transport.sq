@@ -47,6 +47,24 @@ SELECT payload FROM op_log WHERE synced = 0 ORDER BY rowid LIMIT ?;
 markSynced:
 UPDATE op_log SET synced = 1 WHERE op_id = ?;
 
+-- Compaction + quota (M9). Server-only: the materialized state tables hold the
+-- merged CRDT state, so op_log rows at or below the compaction floor are
+-- redundant transport/audit history once bootstrap (snapshot + tail) exists.
+
+countOps:
+SELECT COUNT(*) FROM op_log;
+
+-- Approximate op-log payload size (TEXT length; chars ≈ bytes for JSON payloads).
+oplogBytes:
+SELECT COALESCE(SUM(LENGTH(payload)), 0) FROM op_log;
+
+-- The first seq authored at/after :cutoff wall-clock; -1 when none is that recent.
+firstSeqAtOrAfterWallClock:
+SELECT COALESCE(MIN(seq), -1) FROM op_log WHERE wall_clock >= ? AND seq IS NOT NULL;
+
+deleteOpsThroughSeq:
+DELETE FROM op_log WHERE seq IS NOT NULL AND seq <= ?;
+
 -- Per-peer pull cursor (max seq seen).
 CREATE TABLE sync_state (
   peer TEXT NOT NULL PRIMARY KEY,
@@ -58,6 +76,10 @@ SELECT cursor FROM sync_state WHERE peer = ?;
 
 setCursor:
 INSERT OR REPLACE INTO sync_state(peer, cursor) VALUES (?, ?);
+
+-- The lowest real peer cursor (excluding the reserved compaction-floor row); -1 when none.
+minPeerCursor:
+SELECT COALESCE(MIN(cursor), -1) FROM sync_state WHERE peer != ?;
 
 -- Operator idempotency ledger (M8): a firing is keyed by (operator, entity, version).
 CREATE TABLE operator_run (
