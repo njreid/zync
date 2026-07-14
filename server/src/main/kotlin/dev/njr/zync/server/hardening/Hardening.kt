@@ -24,33 +24,45 @@ class Hardening(
 /**
  * Intercepts protected paths (`/sync`, `/blob`): rejects oversized requests (413),
  * rate-limits by device id or client IP (429), logs one structured line per request,
- * and counts requests/rejections. `/health` and `/metrics` are exempt.
+ * and counts requests/rejections. `/health` and `/metrics` are exempt. Auth failures
+ * (401/403) on protected + `/auth` paths are counted observation-only on the way out.
  */
 fun Application.installHardening(hardening: Hardening) {
     val log = LoggerFactory.getLogger("zync.access")
 
     intercept(ApplicationCallPipeline.Plugins) {
         val path = call.request.path()
-        if (!(path.startsWith("/sync") || path.startsWith("/blob"))) return@intercept
+        val protected = path.startsWith("/sync") || path.startsWith("/blob")
+        // /auth is observed (auth-failure counting below) but not limited.
+        if (!protected && !path.startsWith("/auth")) return@intercept
 
-        hardening.metrics.onRequest()
-        val principal = call.request.header("X-Device-Id") ?: call.request.origin.remoteHost
+        if (protected) {
+            hardening.metrics.onRequest()
+            val principal = call.request.header("X-Device-Id") ?: call.request.origin.remoteHost
 
-        val contentLength = call.request.header(HttpHeaders.ContentLength)?.toLongOrNull()
-        if (contentLength != null && contentLength > hardening.maxRequestBytes) {
-            hardening.metrics.onRejected()
-            log.warn("reject oversized method={} path={} principal={} bytes={}", call.request.local.method.value, path, principal, contentLength)
-            call.respondText("payload too large", status = HttpStatusCode.PayloadTooLarge)
-            return@intercept finish()
+            val contentLength = call.request.header(HttpHeaders.ContentLength)?.toLongOrNull()
+            if (contentLength != null && contentLength > hardening.maxRequestBytes) {
+                hardening.metrics.onOversized()
+                log.warn("reject oversized method={} path={} principal={} bytes={}", call.request.local.method.value, path, principal, contentLength)
+                call.respondText("payload too large", status = HttpStatusCode.PayloadTooLarge)
+                return@intercept finish()
+            }
+
+            if (!hardening.rateLimiter.tryAcquire(principal)) {
+                hardening.metrics.onRateLimited()
+                log.warn("rate limit method={} path={} principal={}", call.request.local.method.value, path, principal)
+                call.respondText("rate limited", status = HttpStatusCode.TooManyRequests)
+                return@intercept finish()
+            }
+
+            log.info("request method={} path={} principal={}", call.request.local.method.value, path, principal)
         }
 
-        if (!hardening.rateLimiter.tryAcquire(principal)) {
-            hardening.metrics.onRejected()
-            log.warn("rate limit method={} path={} principal={}", call.request.local.method.value, path, principal)
-            call.respondText("rate limited", status = HttpStatusCode.TooManyRequests)
-            return@intercept finish()
+        // Observation-only: count auth refusals (threat model T1) without changing behavior.
+        proceed()
+        val status = call.response.status()
+        if (status == HttpStatusCode.Unauthorized || status == HttpStatusCode.Forbidden) {
+            hardening.metrics.onAuthFailure()
         }
-
-        log.info("request method={} path={} principal={}", call.request.local.method.value, path, principal)
     }
 }

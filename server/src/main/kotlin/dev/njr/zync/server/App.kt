@@ -12,6 +12,7 @@ import dev.njr.zync.web.webRoutes
 import io.ktor.server.sse.SSE
 import dev.njr.zync.server.debug.debugRoutes
 import dev.njr.zync.server.hardening.Hardening
+import dev.njr.zync.server.hardening.UsageGauges
 import dev.njr.zync.server.hardening.installHardening
 import dev.njr.zync.server.pairing.PairingEndpoint
 import dev.njr.zync.server.pairing.pairingRoutes
@@ -40,6 +41,7 @@ fun Application.zyncModule(
     content: ServerContent? = null,
     webauthn: WebAuthnEndpoint? = null,
     json: Json = Json,
+    usage: () -> UsageGauges = { UsageGauges() },
 ) {
     install(ContentNegotiation) { json(json) }
     install(StatusPages) {
@@ -58,14 +60,14 @@ fun Application.zyncModule(
         log.warn("Serving :web WITHOUT browser auth — set ZYNC_WEBAUTHN_RP_ID/_ORIGIN to gate it")
     }
     routing {
-        syncRoutes(service, auth)
+        syncRoutes(service, auth, metrics = hardening?.metrics)
         debugRoutes(service, auth)
-        if (blobs != null) blobRoutes(blobs, auth)
+        if (blobs != null) blobRoutes(blobs, auth, metrics = hardening?.metrics)
         if (pairing != null) pairingRoutes(pairing.manager, pairing.identity)
         if (webauthn != null) webAuthnRoutes(webauthn)
         if (hardening != null) get("/metrics") {
             if (!call.requireAuth(auth.authenticator)) return@get
-            call.respond(hardening.metrics.snapshot())
+            call.respond(hardening.metrics.snapshot(usage()))
         }
         if (content != null) webRoutes(content.read, changes = content.changes, commands = content.commands)
     }
