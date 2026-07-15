@@ -27,9 +27,12 @@ fun loginPageHtml(): String = """
   <h1>zync</h1>
   <div class="row"><button id="signin">Sign in with a passkey</button></div>
   <div id="status" class="row" role="status"></div>
-  <details>
+  <details id="enrol">
     <summary>Enrol a new passkey</summary>
-    <div class="row"><input id="regtoken" type="password" placeholder="Registration token" autocomplete="off"></div>
+    <!-- A one-time enrolment token, not a password: type=text so browsers (Chrome on
+         Android especially) don't suppress paste the way they do for password fields. -->
+    <div class="row"><input id="regtoken" type="text" placeholder="Registration token"
+      autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
     <div class="row"><button id="register">Register passkey</button></div>
   </details>
   <script>
@@ -101,6 +104,15 @@ fun loginPageHtml(): String = """
 
     document.getElementById('signin').addEventListener('click', () => signIn().catch(e => setStatus(e.message)));
     document.getElementById('register').addEventListener('click', () => register().catch(e => setStatus(e.message)));
+
+    // Paste-free enrolment path: /login?reg=<token> prefills the field and opens the
+    // panel (the token is one-time and short-lived, so a URL is an acceptable carrier).
+    const reg = new URLSearchParams(location.search).get('reg');
+    if (reg) {
+      document.getElementById('regtoken').value = reg;
+      document.getElementById('enrol').open = true;
+      history.replaceState(null, '', '/login'); // keep it out of the visible URL/history
+    }
   </script>
 </body>
 </html>
