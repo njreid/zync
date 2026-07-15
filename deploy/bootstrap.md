@@ -4,6 +4,13 @@ Single EC2 (Graviton/arm64). **haloy** deploys the app (zero-downtime, auto-TLS,
 registry); **litestream** runs as a host sidecar replicating the SQLite DB to S3. Per the
 deployment spec (`docs/superpowers/specs/2026-07-08-deployment.md` §10).
 
+> **One-command provisioning:** `deploy/provision-ec2.sh` performs §§1–2 AND the CI
+> wiring end to end, idempotently (tags `app=zync-server` / `app=zync-data`; the /data
+> volume and Elastic IP survive instance replacement; sslip.io domains derived from the
+> Elastic IP until you have real DNS). The caller needs the permissions in
+> `deploy/provision-policy.json` plus an authenticated `gh` CLI for the repo
+> secrets/vars. The manual steps below remain as documentation of what it does.
+
 > **Not runtime-verified in this repo's sandbox** (no haloy/AWS). These are the
 > materialized artifacts + runbook; `haloy deploy` / the restore drill run when infra exists.
 
