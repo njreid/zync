@@ -53,6 +53,12 @@ Legend: **Setup** = one-time prep · each `- [ ]` is a check with its **Expect:*
 `app/build/outputs/apk/debug/app-debug.apk`, `adb install` (or `assembleRelease`
 with signing env for a signed build).
 
+- [ ] **Upgrade over v0.2 starts clean.** Install the new APK OVER a v0.2 install
+  (same appId/signing key — the Obtainium path). **Expect:** the app launches into a
+  fresh, working inbox — the leftover v0.2 Room `zync.db` is purged on first open
+  (v0.3.1 fix; no v0.2 data is imported by design). A white screen with
+  `{"error":"internal error"}` means a pre-oplog file survived — regression.
+
 **Browser**: any WebAuthn/passkey-capable browser (platform authenticator or a
 security key).
 
