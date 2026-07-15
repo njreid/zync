@@ -4,6 +4,7 @@ import dev.njr.zync.core.pairing.PairRequest
 import dev.njr.zync.core.pairing.PairResponse
 import dev.njr.zync.core.pairing.pairingConfirmationMessage
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.request.queryString
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
@@ -39,7 +40,24 @@ fun Route.pairingRoutes(
             val at = now()
             val code = manager.open(at)
             val uri = PairCommand.pairingUri(publicAddress, identity.publicKeyBase64, code, at + PairingManager.DEFAULT_TTL)
-            call.respondText(pairingPageHtml(uri), io.ktor.http.ContentType.Text.Html)
+            // The QR carries an https handoff URL, NOT the zync:// URI: camera apps
+            // only act on http(s) QR codes, so scanning opens /pair/open in the phone
+            // browser, whose button fires the custom scheme with a user gesture.
+            val openUrl = "$publicAddress/pair/open?${uri.substringAfter('?')}"
+            call.respondText(pairingPageHtml(uri, openUrl), io.ktor.http.ContentType.Text.Html)
+        }
+
+        // Camera-scan landing page (session-EXEMPT under /pair — the one-time code in
+        // the query IS the credential, exactly as in the QR; it is single-use and
+        // expires in 2 minutes). Renders the app-handoff button.
+        get("/pair/open") {
+            val qs = call.request.queryString()
+            val params = io.ktor.http.parseQueryString(qs)
+            if (listOf("h", "k", "c", "e").any { params[it].isNullOrBlank() }) {
+                call.respondText("missing pairing parameters", status = HttpStatusCode.BadRequest)
+                return@get
+            }
+            call.respondText(pairOpenPageHtml("zync://pair?$qs"), io.ktor.http.ContentType.Text.Html)
         }
     }
 
@@ -63,7 +81,7 @@ fun Route.pairingRoutes(
 }
 
 /** The session-gated pairing page: scan the QR with the phone camera, or tap the link on-device. */
-internal fun pairingPageHtml(pairingUri: String): String = """
+internal fun pairingPageHtml(pairingUri: String, openUrl: String): String = """
 <!doctype html>
 <html lang="en">
 <head>
@@ -79,11 +97,40 @@ internal fun pairingPageHtml(pairingUri: String): String = """
 </head>
 <body>
   <h1>Pair a phone</h1>
-  <p>Scan with the phone's camera, or open this page on the phone and tap the link.</p>
-  ${Qr.svg(pairingUri)}
-  <p><a href="$pairingUri">Pair this device</a></p>
-  <code>$pairingUri</code>
+  <p>Scan with the phone's camera — it opens a page with an "Open zync" button.
+     Already reading this on the phone? <a href="$pairingUri">Pair this device</a>.</p>
+  ${Qr.svg(openUrl)}
+  <code>$openUrl</code>
   <p class="muted">The code is single-use and expires in 2 minutes — reload for a fresh one.</p>
+</body>
+</html>
+""".trimIndent()
+
+/** The camera-scan landing page: hands the invite off to the app via the custom scheme. */
+internal fun pairOpenPageHtml(pairingUri: String): String = """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zync — open the app</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 26rem; margin: 4rem auto; padding: 0 1rem; text-align: center; }
+    a.button { display: inline-block; font-size: 1.2rem; padding: 1rem 2rem; background: #1a73e8; color: #fff;
+               border-radius: .5rem; text-decoration: none; margin: 1.5rem 0; }
+    .muted { color: #666; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <h1>zync</h1>
+  <p>Tap to pair this phone with the server.</p>
+  <a class="button" href="$pairingUri">Open zync</a>
+  <p class="muted">Nothing happens? Install the zync app first, then reload this page
+     (the code expires after 2 minutes — get a fresh QR from Settings → Pairing).</p>
+  <script>
+    // Best-effort auto-handoff; browsers may require the tap, which is the button above.
+    setTimeout(() => { location.href = ${'"'}$pairingUri${'"'}; }, 300);
+  </script>
 </body>
 </html>
 """.trimIndent()

@@ -138,8 +138,16 @@ class PairingRoutesTest {
         }
 
         val page = client.get("/settings/pairing").bodyAsText()
-        assertTrue("zync://pair?h=" in page, "page must carry the pairing URI")
+        assertTrue("zync://pair?h=" in page, "page must carry the direct pairing link for on-phone taps")
+        assertTrue("/pair/open?" in page, "the QR/handoff must be an https URL — cameras ignore custom schemes")
         assertTrue("<svg" in page, "page must render the QR as SVG")
+
+        // The camera-scan landing page hands the same invite to the app.
+        val query = Regex("/pair/open\\?([^\"< ]+)").find(page)!!.groupValues[1]
+        val open = client.get("/pair/open?$query")
+        assertEquals(HttpStatusCode.OK, open.status)
+        assertTrue("zync://pair?" in open.bodyAsText(), "landing page must link the custom scheme")
+        assertEquals(HttpStatusCode.BadRequest, client.get("/pair/open?h=only").status)
 
         // The minted code in the page is redeemable exactly once.
         val code = Regex("c=([A-Z2-9]+)&").find(page)!!.groupValues[1]
