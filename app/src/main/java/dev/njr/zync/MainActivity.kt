@@ -1,6 +1,7 @@
 package dev.njr.zync
 
 import android.Manifest
+import android.app.role.RoleManager
 import android.content.Intent
 import android.os.Bundle
 import android.webkit.WebView
@@ -47,9 +48,15 @@ class MainActivity : ComponentActivity() {
         setContent { ZyncShell(webView, onBarAction = ::handleBarAction) }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (webView.canGoBack()) webView.goBack() else { isEnabled = false; onBackPressedDispatcher.onBackPressed() }
+                when {
+                    webView.canGoBack() -> webView.goBack()
+                    // As the HOME app, back at the root is a no-op (launcher convention).
+                    isDefaultHome() -> Unit
+                    else -> { isEnabled = false; onBackPressedDispatcher.onBackPressed() }
+                }
             }
         })
+        maybePromptHomeRole()
         val app = application as ZyncApp
         lifecycleScope.launch(Dispatchers.IO) {
             val port = app.ensureServerStarted()
@@ -63,6 +70,25 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handlePairingIntent(intent)
+    }
+
+    private val homeRoleRequest =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { /* user decides */ }
+
+    private fun isDefaultHome(): Boolean =
+        getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_HOME) == true
+
+    /**
+     * Offer ROLE_HOME once (launcher spec L2). Declining is remembered; the role stays
+     * changeable any time under system Settings → Default apps → Home app.
+     */
+    private fun maybePromptHomeRole() {
+        val roles = getSystemService(RoleManager::class.java) ?: return
+        if (!roles.isRoleAvailable(RoleManager.ROLE_HOME) || roles.isRoleHeld(RoleManager.ROLE_HOME)) return
+        val prefs = getSharedPreferences("zync_launcher", MODE_PRIVATE)
+        if (prefs.getBoolean("home_role_prompted", false)) return
+        prefs.edit().putBoolean("home_role_prompted", true).apply()
+        runCatching { homeRoleRequest.launch(roles.createRequestRoleIntent(RoleManager.ROLE_HOME)) }
     }
 
     /** Launcher action bar taps (spec L1): app slots fire intents; capture reuses the flows. */

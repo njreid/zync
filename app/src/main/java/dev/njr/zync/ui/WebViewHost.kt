@@ -3,6 +3,7 @@ package dev.njr.zync.ui
 import android.annotation.SuppressLint
 import android.webkit.WebChromeClient
 import android.webkit.WebView
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebSettingsCompat
@@ -47,15 +52,20 @@ fun createZyncWebView(
 
 /**
  * The native Compose shell: the shared `:web` UI on top, the launcher action bar
- * (spec L1) pinned beneath it. The `factory` returns the pre-built [webView], so
+ * (spec L1) pinned beneath it, and the swipe-left/search overlay (spec L3) above
+ * everything when open. The `factory` returns the pre-built [webView], so
  * recomposition never rebuilds it.
  */
 @Composable
 fun ZyncShell(webView: WebView, onBarAction: (BarAction) -> Unit = {}) {
-    // safeDrawing keeps the :web UI clear of the status/nav bars, cutout, and IME under the
-    // enforced edge-to-edge display (see MainActivity.enableEdgeToEdge).
-    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-        AndroidView(factory = { webView }, modifier = Modifier.fillMaxWidth().weight(1f))
-        ZyncActionBar(onBarAction)
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize()) {
+        // safeDrawing keeps the :web UI clear of the status/nav bars, cutout, and IME under the
+        // enforced edge-to-edge display (see MainActivity.enableEdgeToEdge).
+        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+            AndroidView(factory = { webView }, modifier = Modifier.fillMaxWidth().weight(1f))
+            ZyncActionBar(onAction = onBarAction, onSearch = { searchOpen = true })
+        }
+        if (searchOpen) SearchOverlay(onDismiss = { searchOpen = false })
     }
 }

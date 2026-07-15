@@ -6,6 +6,18 @@
     <!-- Recording voice notes (double-Volume-Up capture gesture). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Package visibility for the launcher surfaces (spec L3): the swipe-left search
+         lists every launchable app; the web-search row hands off to the search agent. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.WEB_SEARCH" />
+        </intent>
+    </queries>
+
     <!--
       allowBackup is off: durability is the central server (op-log sync + litestream),
       not Android Auto Backup — which would otherwise upload the op-log DB AND the
@@ -35,6 +47,14 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- zync as the HOME app (launcher spec L2): pressing home surfaces the GTD
+                 home screen. Only takes effect when the user grants ROLE_HOME (prompted
+                 once; changeable any time in system settings). -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
             <!-- Server pairing deep link: the QR / link on /settings/pairing carries
                  zync://pair?h=&k=&c=&e= (see replica/Pairing.kt PairingUri). -->

@@ -179,6 +179,15 @@ Each capture must create an **op-log inbox node** (+ a blob for attachments) via
 - [ ] **Predictive back.** The back-gesture preview animation shows (Android 14+); a full
   swipe walks WebView history / exits (`enableOnBackInvokedCallback`).
 - [ ] **Back navigation** walks WebView history, then exits.
+- [ ] **Launcher bar (spec L1).** Messages/Calendar/Phone open the device defaults
+  (or toast when a role is unfilled); Capture expands to Text (focuses quick-add),
+  Voice, Scan, Upload — each lands an op-log capture.
+- [ ] **HOME role (spec L2).** First launch offers "set zync as home" ONCE; declining
+  is remembered. When granted: pressing home surfaces zync, back at the web root does
+  NOT exit, and the role is revocable under Settings → Default apps.
+- [ ] **Swipe-left search (spec L3).** Swiping left on the bar (or the Search slot)
+  opens the overlay: blank query lists every app (the drawer), typing filters, the
+  top row hands off to web search, tapping an app launches it, back dismisses.
 - [ ] **Capture bridge.** Trigger voice capture from the `:web` settings surface
   (`ZyncCapture` bridge) — records, saves, and the UI updates via a dispatched event.
 - [ ] **Permission flow.** First voice capture requests `RECORD_AUDIO`; granting proceeds,

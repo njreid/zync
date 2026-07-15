@@ -3,6 +3,7 @@ package dev.njr.zync.ui
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -36,17 +38,27 @@ private val BarBorder = Color(0xFF2A313C)
 private val BarMuted = Color(0xFF8A91A0)
 
 /**
- * The launcher action bar (spec L1): Messages · Calendar · Phone · Capture, where
- * Capture expands in place to the v0.2 capture modes (Text/Voice/Scan/Upload). The
- * context slot appears once context→app bindings exist (spec: hidden when unmapped).
+ * The launcher action bar (spec L1): Messages · Calendar · Phone · Search · Capture,
+ * where Capture expands in place to the v0.2 capture modes (Text/Voice/Scan/Upload).
+ * Swiping left across the bar (or the Search slot) opens the app+web search overlay
+ * (spec L3). The context slot appears once context→app bindings exist.
  */
 @Composable
-fun ZyncActionBar(onAction: (BarAction) -> Unit) {
+fun ZyncActionBar(onAction: (BarAction) -> Unit, onSearch: () -> Unit = {}) {
     var captureOpen by rememberSaveable { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxWidth()
-            .background(BarBackground),
+            .background(BarBackground)
+            .pointerInput(Unit) {
+                val threshold = 48.dp.toPx()
+                var total = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { total = 0f },
+                    onHorizontalDrag = { _, dx -> total += dx },
+                    onDragEnd = { if (total < -threshold) onSearch() },
+                )
+            },
     ) {
         Row(Modifier.fillMaxWidth().height(1.dp).background(BarBorder)) {}
         Row(
@@ -64,6 +76,7 @@ fun ZyncActionBar(onAction: (BarAction) -> Unit) {
                 barSlot(R.drawable.ic_messages, "Messages") { onAction(BarAction.Messages) }
                 barSlot(R.drawable.ic_calendar, "Calendar") { onAction(BarAction.Calendar) }
                 barSlot(R.drawable.ic_phone, "Phone") { onAction(BarAction.Phone) }
+                barSlot(R.drawable.ic_search, "Search") { onSearch() }
                 barSlot(R.drawable.ic_capture, "Capture") { captureOpen = true }
             }
         }
