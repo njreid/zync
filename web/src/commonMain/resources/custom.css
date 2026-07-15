@@ -1,0 +1,72 @@
+/* zync theme on top of Pico (dark, forced via <html data-theme="dark"> — the v0.2
+   look: near-black background, subtle light-gray text, Geist headings + Inter body).
+   Adapted from v0.2's custom.css to the rebuilt :web DOM. Served at
+   /assets/custom.css: the loopback CSP (default-src 'self') allows stylesheet FILES
+   but not inline <style>. Fonts self-hosted for the same reason (OFL-1.1; latin
+   woff2 subsets — see fonts/*-OFL.txt). */
+
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap; src: url("/assets/fonts/inter-400.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 500; font-display: swap; src: url("/assets/fonts/inter-500.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap; src: url("/assets/fonts/inter-600.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 700; font-display: swap; src: url("/assets/fonts/inter-700.woff2") format("woff2"); }
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 400; font-display: swap; src: url("/assets/fonts/geist-400.woff2") format("woff2"); }
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 500; font-display: swap; src: url("/assets/fonts/geist-500.woff2") format("woff2"); }
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 600; font-display: swap; src: url("/assets/fonts/geist-600.woff2") format("woff2"); }
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 700; font-display: swap; src: url("/assets/fonts/geist-700.woff2") format("woff2"); }
+
+/* Body text = Inter (override Pico's token); headings = Geist. */
+:root {
+  --pico-font-family-sans-serif: "Inter", system-ui, -apple-system, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+}
+h1, h2, h3, h4, h5, h6,
+hgroup > *:first-child {
+  --pico-font-family-sans-serif: "Geist", "Inter", system-ui, sans-serif;
+  font-family: "Geist", "Inter", system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+html { color-scheme: dark; }
+body { padding-top: max(.75rem, env(safe-area-inset-top)); }
+nav { padding: 0 1rem; }
+
+main h2 { margin-bottom: .6rem; font-size: 1.15rem; }
+
+.muted { color: var(--pico-muted-color); font-size: .85em; }
+.status { color: var(--pico-muted-color); font-size: .8em; }
+.proposed { font-style: italic; }
+
+/* List rows (inbox, proposals, tree nodes): flat rows with hairline separators. */
+main ul { list-style: none; padding-left: 0; margin: 0; }
+main li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem;
+  padding: .5rem .2rem;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+main li > a { flex: 1 1 auto; text-decoration: none; }
+main li > a:hover { text-decoration: underline; }
+
+/* Nested tree levels indent with a guide line. */
+main ul ul { margin-left: 1rem; padding-left: .6rem; border-left: 1px solid var(--pico-muted-border-color); width: 100%; }
+main ul ul li:last-child { border-bottom: none; }
+
+/* Inline row actions render outlined + compact (v0.2 chip pattern). */
+button.action {
+  width: auto;
+  margin: 0;
+  padding: .15rem .65rem;
+  font-size: .85rem;
+  background: transparent;
+  color: var(--pico-primary);
+  border: 1px solid var(--pico-primary);
+  border-radius: var(--pico-border-radius);
+}
+button.action:hover { background: var(--pico-primary); color: var(--pico-primary-inverse); }
+
+/* Quick add: input + button on one line. */
+.quick-add { display: flex; gap: .5rem; margin-bottom: .75rem; }
+.quick-add input { margin: 0; min-height: 2.6rem; }
+.quick-add button { width: auto; margin: 0; padding: .35rem 1rem; }

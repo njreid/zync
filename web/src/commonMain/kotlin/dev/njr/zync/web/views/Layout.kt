@@ -5,27 +5,41 @@ import kotlinx.html.HTML
 import kotlinx.html.a
 import kotlinx.html.body
 import kotlinx.html.head
-import kotlinx.html.header
+import kotlinx.html.li
+import kotlinx.html.link
 import kotlinx.html.main
+import kotlinx.html.meta
 import kotlinx.html.nav
 import kotlinx.html.script
+import kotlinx.html.strong
 import kotlinx.html.title
+import kotlinx.html.ul
 
-/** The shared page shell: header/nav + a `<main>` for the view content. */
+/**
+ * The shared page shell: Pico-styled nav + a `<main>` for the view content.
+ * Dark theme is forced (`data-theme="dark"`, the v0.2 look); styles come from
+ * vendored stylesheet FILES because the loopback CSP has no inline-style carve-out.
+ */
 fun HTML.page(pageTitle: String, content: FlowContent.() -> Unit) {
+    attributes["lang"] = "en"
+    attributes["data-theme"] = "dark"
     head {
+        meta(charset = "utf-8")
+        meta(name = "viewport", content = "width=device-width, initial-scale=1")
         title { +"zync — $pageTitle" }
+        link(rel = "stylesheet", href = "/assets/pico.min.css")
+        link(rel = "stylesheet", href = "/assets/custom.css")
         // Datastar runtime, vendored + served locally so the phone loopback works offline.
         script(type = "module", src = "/assets/datastar.js") {}
     }
     body {
-        header {
-            a(href = "/") { +"zync" }
-            nav {
-                a(href = "/") { +"Inbox" }
-                a(href = "/tree") { +"Tree" }
+        nav {
+            ul { li { strong { a(href = "/") { +"zync" } } } }
+            ul {
+                li { a(href = "/") { +"Inbox" } }
+                li { a(href = "/tree") { +"Tree" } }
             }
         }
-        main { content() }
+        main(classes = "container") { content() }
     }
 }

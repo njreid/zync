@@ -22,6 +22,11 @@ test('renders seeded inbox and Datastar drives live mutations', async ({ page })
     !!document.querySelector('script[src="/assets/datastar.js"]'));
   expect(hasDatastar).toBe(true);
 
+  // the dark theme is applied (Pico dark, from stylesheet FILES — the CSP has no inline-style carve-out)
+  const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const [r, g, b] = bg.match(/\d+/g).map(Number);
+  expect(r + g + b, `body background should be dark, got ${bg}`).toBeLessThan(150);
+
   // reactivity: complete "Buy milk" → Datastar @post returns an SSE patch → it drops out
   await page.locator('#inbox li', { hasText: 'Buy milk' }).getByTitle('Complete').click();
   await expect(page.locator('#inbox')).not.toContainText('Buy milk', { timeout: 5000 });

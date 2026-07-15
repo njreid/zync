@@ -16,6 +16,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.html.respondHtml
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
@@ -68,6 +69,18 @@ fun Route.webRoutes(
     }
     get("/assets/datastar.js") {
         call.respondText(WebPlatform.datastarRuntime(), ContentType("application", "javascript"))
+    }
+    get("/assets/pico.min.css") {
+        call.respondText(WebPlatform.asset("pico.min.css"), ContentType.Text.CSS)
+    }
+    get("/assets/custom.css") {
+        call.respondText(WebPlatform.asset("custom.css"), ContentType.Text.CSS)
+    }
+    get("/assets/fonts/{file}") {
+        // Allowlist the exact vendored names — the param is joined into a resource path.
+        val file = call.parameters["file"]?.takeIf { it.matches(Regex("(geist|inter)-[4-7]00\\.woff2")) }
+        if (file == null) call.respondText("not found", status = HttpStatusCode.NotFound)
+        else call.respondBytes(WebPlatform.assetBytes("fonts/$file"), ContentType("font", "woff2"))
     }
 
     if (changes != null) {

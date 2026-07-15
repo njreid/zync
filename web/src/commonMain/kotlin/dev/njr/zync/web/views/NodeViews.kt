@@ -7,6 +7,7 @@ import kotlinx.html.FlowContent
 import kotlinx.html.InputType
 import kotlinx.html.a
 import kotlinx.html.button
+import kotlinx.html.div
 import kotlinx.html.h2
 import kotlinx.html.h3
 import kotlinx.html.input
@@ -19,13 +20,15 @@ import kotlinx.html.ul
 fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long) {
     h2 { +"Inbox" }
     // Quick add: Datastar binds the input to a signal and posts it.
-    input(type = InputType.text) {
-        attributes["data-bind:title"] = ""
-        attributes["placeholder"] = "New task"
-    }
-    button {
-        attributes["data-on:click"] = "@post('/inbox?title=' + encodeURIComponent(\$title))"
-        +"Add"
+    div(classes = "quick-add") {
+        input(type = InputType.text) {
+            attributes["data-bind:title"] = ""
+            attributes["placeholder"] = "New task"
+        }
+        button {
+            attributes["data-on:click"] = "@post('/inbox?title=' + encodeURIComponent(\$title))"
+            +"Add"
+        }
     }
     val items = read.inbox(inbox, now)
     if (items.isEmpty()) {

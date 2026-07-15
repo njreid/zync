@@ -15,12 +15,16 @@ fun loginPageHtml(): String = """
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>zync — sign in</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 26rem; margin: 4rem auto; padding: 0 1rem; }
-    button { font-size: 1rem; padding: .6rem 1rem; cursor: pointer; }
+    :root { color-scheme: dark; }
+    body { font-family: system-ui, sans-serif; max-width: 26rem; margin: 4rem auto; padding: 0 1rem;
+           background: #13171f; color: #c2c7d0; }
+    button { font-size: 1rem; padding: .6rem 1rem; cursor: pointer; background: #0172ad; color: #fff;
+             border: none; border-radius: .4rem; }
     .row { margin: 1rem 0; }
-    input { font-size: 1rem; padding: .5rem; width: 100%; box-sizing: border-box; }
-    #status { color: #555; min-height: 1.4rem; }
-    details { margin-top: 2rem; color: #666; }
+    input { font-size: 1rem; padding: .5rem; width: 100%; box-sizing: border-box;
+            background: #1a212b; color: inherit; border: 1px solid #3c4653; border-radius: .4rem; }
+    #status { color: #8a91a0; min-height: 1.4rem; }
+    details { margin-top: 2rem; color: #8a91a0; }
   </style>
 </head>
 <body>

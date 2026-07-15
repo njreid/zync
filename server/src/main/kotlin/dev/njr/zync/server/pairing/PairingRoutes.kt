@@ -89,10 +89,13 @@ internal fun pairingPageHtml(pairingUri: String, openUrl: String): String = """
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>zync — pair a phone</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 26rem; margin: 3rem auto; padding: 0 1rem; }
-    svg { width: 100%; max-width: 20rem; display: block; margin: 1rem 0; }
-    code { word-break: break-all; font-size: .8rem; display: block; margin: 1rem 0; color: #555; }
-    .muted { color: #666; }
+    :root { color-scheme: dark; }
+    body { font-family: system-ui, sans-serif; max-width: 26rem; margin: 3rem auto; padding: 0 1rem;
+           background: #13171f; color: #c2c7d0; }
+    a { color: #79c0ff; }
+    svg { width: 100%; max-width: 20rem; display: block; margin: 1rem 0; border-radius: .4rem; }
+    code { word-break: break-all; font-size: .8rem; display: block; margin: 1rem 0; color: #8a91a0; }
+    .muted { color: #8a91a0; }
   </style>
 </head>
 <body>
@@ -115,10 +118,12 @@ internal fun pairOpenPageHtml(pairingUri: String): String = """
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>zync — open the app</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 26rem; margin: 4rem auto; padding: 0 1rem; text-align: center; }
-    a.button { display: inline-block; font-size: 1.2rem; padding: 1rem 2rem; background: #1a73e8; color: #fff;
+    :root { color-scheme: dark; }
+    body { font-family: system-ui, sans-serif; max-width: 26rem; margin: 4rem auto; padding: 0 1rem;
+           text-align: center; background: #13171f; color: #c2c7d0; }
+    a.button { display: inline-block; font-size: 1.2rem; padding: 1rem 2rem; background: #0172ad; color: #fff;
                border-radius: .5rem; text-decoration: none; margin: 1.5rem 0; }
-    .muted { color: #666; font-size: .9rem; }
+    .muted { color: #8a91a0; font-size: .9rem; }
   </style>
 </head>
 <body>
