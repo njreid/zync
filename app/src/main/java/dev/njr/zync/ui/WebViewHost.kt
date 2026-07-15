@@ -3,9 +3,10 @@ package dev.njr.zync.ui
 import android.annotation.SuppressLint
 import android.webkit.WebChromeClient
 import android.webkit.WebView
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
@@ -45,15 +46,16 @@ fun createZyncWebView(
 }
 
 /**
- * The native Compose shell: currently a full-screen host for the shared `:web` UI. Any future
- * native chrome (launcher affordances, settings entry points) hangs off this scaffold. The
- * `factory` returns the pre-built [webView], so recomposition never rebuilds it.
+ * The native Compose shell: the shared `:web` UI on top, the launcher action bar
+ * (spec L1) pinned beneath it. The `factory` returns the pre-built [webView], so
+ * recomposition never rebuilds it.
  */
 @Composable
-fun ZyncShell(webView: WebView) {
+fun ZyncShell(webView: WebView, onBarAction: (BarAction) -> Unit = {}) {
     // safeDrawing keeps the :web UI clear of the status/nav bars, cutout, and IME under the
     // enforced edge-to-edge display (see MainActivity.enableEdgeToEdge).
-    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-        AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        AndroidView(factory = { webView }, modifier = Modifier.fillMaxWidth().weight(1f))
+        ZyncActionBar(onBarAction)
     }
 }

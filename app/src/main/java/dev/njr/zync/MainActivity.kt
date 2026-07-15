@@ -11,7 +11,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
+import dev.njr.zync.capture.DocScanActivity
+import dev.njr.zync.capture.DocUploadActivity
+import dev.njr.zync.capture.VoiceCaptureActivity
+import dev.njr.zync.launcher.LauncherIntents
 import dev.njr.zync.replica.PairingOutcome
+import dev.njr.zync.ui.BarAction
 import dev.njr.zync.ui.ZyncShell
 import dev.njr.zync.ui.createZyncWebView
 import dev.njr.zync.ui.loopbackUrl
@@ -39,7 +44,7 @@ class MainActivity : ComponentActivity() {
             recordAudioResult = callback
             recordAudioPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
-        setContent { ZyncShell(webView) }
+        setContent { ZyncShell(webView, onBarAction = ::handleBarAction) }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (webView.canGoBack()) webView.goBack() else { isEnabled = false; onBackPressedDispatcher.onBackPressed() }
@@ -58,6 +63,25 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handlePairingIntent(intent)
+    }
+
+    /** Launcher action bar taps (spec L1): app slots fire intents; capture reuses the flows. */
+    private fun handleBarAction(action: BarAction) {
+        when (action) {
+            BarAction.Messages -> launch(LauncherIntents.messages(), "No messages app found")
+            BarAction.Calendar -> launch(LauncherIntents.calendar(), "No calendar app found")
+            BarAction.Phone -> launch(LauncherIntents.phone(), "No dialer found")
+            BarAction.CaptureText ->
+                webView.evaluateJavascript("document.querySelector('.quick-add input')?.focus()", null)
+            BarAction.CaptureVoice -> startActivity(Intent(this, VoiceCaptureActivity::class.java))
+            BarAction.CaptureScan -> startActivity(Intent(this, DocScanActivity::class.java))
+            BarAction.CaptureUpload -> startActivity(Intent(this, DocUploadActivity::class.java))
+        }
+    }
+
+    private fun launch(intent: Intent, missing: String) {
+        runCatching { startActivity(intent) }
+            .onFailure { Toast.makeText(this, missing, Toast.LENGTH_SHORT).show() }
     }
 
     /** A tapped/scanned `zync://pair` link (from the server's /settings/pairing page). */
