@@ -174,6 +174,20 @@ class WebAuthnTest {
     }
 
     @Test
+    fun optionsJsonCarriesEveryBrowserRequiredMember() = testApplication {
+        // navigator.credentials rejects options with absent members; kotlinx omits
+        // defaulted properties unless @EncodeDefault (regression: Chrome failed with
+        // "pubKeyCredParams ... 'type' ... Required member is undefined").
+        wire(JvmZyncDatabase.inMemory(), SessionStore(), regToken = "reg-secret")
+        val reg = client.get("/auth/webauthn/register/options") { header("X-Registration-Token", "reg-secret") }.bodyAsText()
+        for (member in listOf("\"type\":\"public-key\"", "\"attestation\"", "\"authenticatorSelection\"", "\"userVerification\"", "\"residentKey\"")) {
+            assertTrue(member in reg, "register options must serialize $member — got $reg")
+        }
+        val assertOpts = client.get("/auth/webauthn/assert/options").bodyAsText()
+        assertTrue("\"userVerification\"" in assertOpts, "assert options must serialize userVerification — got $assertOpts")
+    }
+
+    @Test
     fun assertionWithoutARegisteredCredentialFails() = testApplication {
         wire(JvmZyncDatabase.inMemory(), SessionStore(), regToken = "reg-secret")
         val platform = newClientPlatform()

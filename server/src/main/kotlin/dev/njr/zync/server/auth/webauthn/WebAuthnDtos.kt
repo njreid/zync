@@ -2,10 +2,18 @@ package dev.njr.zync.server.auth.webauthn
 
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 // --- Options the server issues (serialized to JSON for navigator.credentials) ---
+//
+// NOTE: these are a BROWSER contract — navigator.credentials requires members like
+// pubKeyCredParams[].type to be present. The server's ContentNegotiation Json does
+// not encode default values, so every defaulted property here must be @EncodeDefault
+// or Chrome fails with "Required member is undefined".
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class RegisterOptions(
     val challenge: String,               // base64url
@@ -13,25 +21,34 @@ data class RegisterOptions(
     val user: UserDto,
     val pubKeyCredParams: List<CredParam>,
     val timeout: Long,
-    val attestation: String = "none",
-    val authenticatorSelection: AuthSelection = AuthSelection(),
+    @EncodeDefault val attestation: String = "none",
+    @EncodeDefault val authenticatorSelection: AuthSelection = AuthSelection(),
 )
 
 @Serializable data class RpDto(val id: String, val name: String)
 @Serializable data class UserDto(val id: String, val name: String, val displayName: String)
-@Serializable data class CredParam(val alg: Int, val type: String = "public-key")
-@Serializable data class AuthSelection(val userVerification: String = "preferred", val residentKey: String = "preferred")
 
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable data class CredParam(val alg: Int, @EncodeDefault val type: String = "public-key")
+
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable data class AuthSelection(
+    @EncodeDefault val userVerification: String = "preferred",
+    @EncodeDefault val residentKey: String = "preferred",
+)
+
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class AssertOptions(
     val challenge: String,               // base64url
     val rpId: String,
     val timeout: Long,
     val allowCredentials: List<CredDescriptor>,
-    val userVerification: String = "preferred",
+    @EncodeDefault val userVerification: String = "preferred",
 )
 
-@Serializable data class CredDescriptor(val id: String, val type: String = "public-key")
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable data class CredDescriptor(val id: String, @EncodeDefault val type: String = "public-key")
 
 // --- Responses the browser sends back (navigator.credentials results, base64url'd) ---
 
