@@ -77,6 +77,17 @@ class ContentReadModel(private val store: StateStore) {
             .map { ContextView(it.entityId, it.fields["name"].asString()) }
             .sortedBy { it.name ?: "" }
 
+    /**
+     * The context view (launcher spec L4, v0.2 semantics): live, active, non-deferred
+     * TASKS across the whole tree tagged with [context] — a flat next-actions list.
+     */
+    fun contextTasks(context: Ulid, now: Long = Long.MAX_VALUE): List<NodeView> =
+        snapshots()
+            .filter { it.kind() == "task" && !it.proposed() && it.tags.any { t -> t.toString() == context.toString() } }
+            .map { it.toView() }
+            .filter { it.status != "DONE" && it.status != "DROPPED" && (it.deferUntil == null || it.deferUntil <= now) }
+            .sortedBy { it.title ?: "" }
+
     private fun EntitySnapshot.kind(): String? = fields["kind"].asString()
 
     private fun EntitySnapshot.proposed(): Boolean =

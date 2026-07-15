@@ -37,6 +37,17 @@ test('renders seeded inbox and Datastar drives live mutations', async ({ page })
   await page.locator('#inbox button', { hasText: 'Add' }).click();
   await expect(page.locator('#inbox')).toContainText('Water plants', { timeout: 5000 });
 
+  // context pill (launcher L4): selecting @errands filters to its tagged tasks
+  await page.locator('.context-pill summary').click();
+  await page.locator('.context-pill a', { hasText: '@errands' }).click();
+  await expect(page.locator('.context-pill summary')).toContainText('@errands');
+  await expect(page.locator('#inbox')).toContainText('Plan the offsite');
+  await expect(page.locator('#inbox')).not.toContainText('Water plants');
+  // and switching back to All contexts restores the plain inbox
+  await page.locator('.context-pill summary').click();
+  await page.locator('.context-pill a', { hasText: 'All contexts' }).click();
+  await expect(page.locator('#inbox')).toContainText('Water plants');
+
   // Datastar executed cleanly — no CSP 'unsafe-eval' violation or JS errors
   const csp = errors.filter((e) => /Content Security Policy|unsafe-eval|is not defined|SyntaxError/i.test(e));
   expect(csp, `page errors: ${errors.join(' | ')}`).toEqual([]);

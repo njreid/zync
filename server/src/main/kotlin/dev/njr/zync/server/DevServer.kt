@@ -29,7 +29,10 @@ fun main() {
     val content = ServerContent(service)
     content.commands.createTask("Buy milk")
     content.commands.createTask("Read a book")
-    seedStubProposal(service, content.commands.createTask("Plan the offsite"))
+    val offsite = content.commands.createTask("Plan the offsite")
+    seedStubProposal(service, offsite)
+    // A context with one tagged task, so the context-pill filter is drivable.
+    content.commands.addTag(offsite, content.commands.createContext("@errands"))
 
     embeddedServer(Netty, port = port) {
         // Optionally apply a CSP header to test the phone loopback's policy against Datastar.

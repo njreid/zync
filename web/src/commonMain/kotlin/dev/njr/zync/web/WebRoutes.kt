@@ -32,6 +32,13 @@ import kotlinx.html.id
  * filtering; [changes] (if provided) drives live Datastar SSE updates — the caller must
  * `install(SSE)` and call [ChangeNotifier.notifyChanged] after applying ops.
  */
+/** The context selected for this surface: `?context=` wins, else the cookie; blank/none = all. */
+private fun ApplicationCall.selectedContext(): Ulid? {
+    val raw = request.queryParameters["context"] ?: request.cookies["zync_context"]
+    if (raw.isNullOrBlank() || raw == "none") return null
+    return runCatching { Ulid.parse(raw) }.getOrNull()
+}
+
 fun Route.webRoutes(
     read: ContentReadModel,
     inbox: () -> Ulid? = { null },
@@ -40,13 +47,25 @@ fun Route.webRoutes(
     commands: ContentCommands? = null,
 ) {
     get("/") {
+        // ?context=<id> selects a context (persisted in a cookie so mutations and the
+        // SSE stream see it); ?context=none clears it. Switching is a navigation, so
+        // the SSE stream reopens already filtered.
+        call.request.queryParameters["context"]?.let { chosen ->
+            call.response.cookies.append(
+                "zync_context",
+                if (chosen == "none") "" else chosen,
+                path = "/",
+                maxAge = 365L * 24 * 60 * 60,
+            )
+        }
+        val context = call.selectedContext()
         call.respondHtml {
             page("Inbox") {
                 div {
                     id = "inbox"
                     // Datastar: open the SSE stream on load; the server patches #inbox on change.
                     attributes["data-on:load"] = "@get('/updates')"
-                    inboxSection(read, inbox(), now())
+                    inboxSection(read, inbox(), now(), context)
                 }
             }
         }
@@ -85,8 +104,11 @@ fun Route.webRoutes(
 
     if (changes != null) {
         sse("/updates") {
+            // The cookie at stream-open time pins the filter; a context switch is a
+            // page navigation, which reopens the stream.
+            val context = call.selectedContext()
             suspend fun pushInbox() = patch(
-                patchElementsEvent(WebPlatform.renderFragment("inbox") { inboxSection(read, inbox(), now()) }),
+                patchElementsEvent(WebPlatform.renderFragment("inbox") { inboxSection(read, inbox(), now(), context) }),
             )
             pushInbox()
             changes.changes.collect { pushInbox() }
@@ -97,7 +119,8 @@ fun Route.webRoutes(
         suspend fun ApplicationCall.applied(mutate: ContentCommands.() -> Unit) {
             commands.mutate()
             changes?.notifyChanged()
-            respondDatastar(patchElementsEvent(WebPlatform.renderFragment("inbox") { inboxSection(read, inbox(), now()) }))
+            val context = selectedContext()
+            respondDatastar(patchElementsEvent(WebPlatform.renderFragment("inbox") { inboxSection(read, inbox(), now(), context) }))
         }
         fun ApplicationCall.nodeId(): Ulid? = parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
 

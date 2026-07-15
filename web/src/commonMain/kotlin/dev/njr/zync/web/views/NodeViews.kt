@@ -7,7 +7,9 @@ import kotlinx.html.FlowContent
 import kotlinx.html.InputType
 import kotlinx.html.a
 import kotlinx.html.button
+import kotlinx.html.details
 import kotlinx.html.div
+import kotlinx.html.summary
 import kotlinx.html.h2
 import kotlinx.html.h3
 import kotlinx.html.input
@@ -16,8 +18,33 @@ import kotlinx.html.p
 import kotlinx.html.span
 import kotlinx.html.ul
 
-/** The inbox list — a quick-add form plus live, non-completed, non-deferred children. */
-fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long) {
+/**
+ * The current-context pill (launcher spec L4): pinned above the list, tap to drop
+ * down the other contexts. Selection navigates with `?context=` (the server persists
+ * it in a cookie), so the SSE stream reopens with the right filter. Pure
+ * details/summary — no JS, CSP-safe.
+ */
+fun FlowContent.contextBar(read: ContentReadModel, selected: Ulid?) {
+    val contexts = read.contexts()
+    if (contexts.isEmpty() && selected == null) return
+    val current = contexts.firstOrNull { it.id.toString() == selected?.toString() }
+    details(classes = "context-pill") {
+        summary { +(current?.name ?: "All contexts") }
+        ul {
+            li { a(href = "/?context=none") { +"All contexts" } }
+            contexts.forEach { c ->
+                li { a(href = "/?context=${c.id}") { +(c.name ?: "(unnamed context)") } }
+            }
+        }
+    }
+}
+
+/**
+ * The home list: the inbox, or — with a context selected — the flat next-actions
+ * view for that context across the whole tree. Quick-add always captures to the inbox.
+ */
+fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long, context: Ulid? = null) {
+    contextBar(read, context)
     h2 { +"Inbox" }
     // Quick add: Datastar binds the input to a signal and posts it.
     div(classes = "quick-add") {
@@ -30,9 +57,9 @@ fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long) {
             +"Add"
         }
     }
-    val items = read.inbox(inbox, now)
+    val items = if (context != null) read.contextTasks(context, now) else read.inbox(inbox, now)
     if (items.isEmpty()) {
-        p("muted") { +"Inbox zero." }
+        p("muted") { +(if (context != null) "No active tasks in this context." else "Inbox zero.") }
     } else {
         ul { items.forEach { li { nodeRow(it) } } }
     }
