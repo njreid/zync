@@ -52,7 +52,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download --repo haloydev/haloy --pattern 'haloy-linux-arm64' --output haloy-cli
+          # haloy publishes prereleases only, so resolve the newest tag explicitly —
+          # a bare `gh release download` requires a "latest" stable release and fails.
+          TAG=$(gh api repos/haloydev/haloy/releases --jq '.[0].tag_name')
+          gh release download "$TAG" --repo haloydev/haloy --pattern 'haloy-linux-arm64' --output haloy-cli
           chmod +x haloy-cli && sudo mv haloy-cli /usr/local/bin/haloy
           haloy version || haloy --version
 
