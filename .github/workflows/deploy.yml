@@ -74,8 +74,12 @@ jobs:
           sed -i "s|domain: \"zync.example.com\"|domain: \"$ZYNC_DOMAIN\"|" haloy.yaml
           grep -E '^server:|domain:' haloy.yaml
 
-      # pre_deploy in haloy.yaml runs `./gradlew :server:installDist` on this runner,
-      # then haloy builds server/Dockerfile and uploads only changed layers.
+      # Build the JVM dist the Dockerfile packages BEFORE haloy builds the image —
+      # explicit, rather than relying on haloy.yaml's pre_deploy hook (observed not
+      # to run before the image build in beta haloy versions).
+      - name: Build server distribution
+        run: ./gradlew :server:installDist
+
       - name: Validate and deploy
         env:
           AWS_REGION: ${{ vars.AWS_REGION }}
