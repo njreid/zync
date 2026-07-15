@@ -45,6 +45,27 @@ class PairingClientTest {
         })
 
     @Test
+    fun pairFromUriPairsAndPersists() = runBlocking {
+        val store = object : PairingStore {
+            var saved: PairedServer? = null
+            override fun save(server: PairedServer) { saved = server }
+            override fun load(): PairedServer? = saved
+        }
+        val k = URLEncoder.encode(Base64.encode(serverPub), Charsets.UTF_8)
+        val uri = "zync://pair?h=${URLEncoder.encode("https://srv", Charsets.UTF_8)}&k=$k&c=$validCode&e=9999999999"
+
+        val outcome = pairFromUri(fakeServer(), uri, replicaId = "replica-1", store = store)
+
+        assertTrue(outcome is PairingOutcome.Paired)
+        assertEquals("device-abc", store.saved?.deviceId)
+        assertEquals("https://srv", store.saved?.address)
+
+        // Not a pairing link → fails without touching the store or the network.
+        val bad = pairFromUri(fakeServer(), "https://phish.example/pair", replicaId = "replica-1", store = store)
+        assertTrue(bad is PairingOutcome.Failed)
+    }
+
+    @Test
     fun parsesPairingUri() {
         val k = URLEncoder.encode(Base64.encode(serverPub), Charsets.UTF_8)
         val uri = "zync://pair?h=${URLEncoder.encode("https://srv", Charsets.UTF_8)}&k=$k&c=ABC123&e=12345"

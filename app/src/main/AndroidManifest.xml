@@ -25,13 +25,24 @@
         android:theme="@style/Theme.Zync">
         <!-- configChanges: keep the single WebView (and its live loopback connection) across
              rotation/resize instead of recreating the activity, which would reload :web. -->
+        <!-- launchMode singleTask: a tapped zync://pair link re-enters the running
+             instance via onNewIntent instead of stacking a second WebView shell. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|density|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Server pairing deep link: the QR / link on /settings/pairing carries
+                 zync://pair?h=&k=&c=&e= (see replica/Pairing.kt PairingUri). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="zync" android:host="pair" />
             </intent-filter>
         </activity>
 

@@ -83,7 +83,7 @@ fun Application.zyncModule(
         syncRoutes(service, auth, metrics = hardening?.metrics, compactionFloor = compactionFloor, quota = quota)
         debugRoutes(service, auth)
         if (blobs != null) blobRoutes(blobs, auth, metrics = hardening?.metrics)
-        if (pairing != null) pairingRoutes(pairing.manager, pairing.identity)
+        if (pairing != null) pairingRoutes(pairing.manager, pairing.identity, publicAddress = pairing.publicAddress)
         if (webauthn != null) webAuthnRoutes(webauthn)
         if (hardening != null) get("/metrics") {
             if (!call.requireAuth(auth.authenticator)) return@get

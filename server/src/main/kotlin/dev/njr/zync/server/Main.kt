@@ -63,7 +63,7 @@ fun main(args: Array<String>) {
     val registry = SqlDeviceRegistry(db)
     val auth = ServerConfig.buildAuth(registry)
     val webauthn = auth.sessions?.let { ServerConfig.buildWebAuthn(db, it) }
-    val pairing = PairingEndpoint(PairingManager(db, registry), identity)
+    val pairing = PairingEndpoint(PairingManager(db, registry), identity, publicAddress = System.getenv("ZYNC_PUBLIC_ADDR"))
     val blobs = System.getenv("ZYNC_BLOB_BUCKET")?.let { bucket ->
         BlobService(S3BlobStore(S3Client.create(), bucket))
     }

@@ -127,6 +127,37 @@ class PairingRoutesTest {
     }
 
     @Test
+    fun pairingPageMintsACodeAndRendersTheQr() = testApplication {
+        val h = harness()
+        application {
+            zyncModule(
+                SyncService(h.db),
+                auth = h.auth(now),
+                pairing = PairingEndpoint(h.manager, h.identity, publicAddress = "https://zync.example"),
+            )
+        }
+
+        val page = client.get("/settings/pairing").bodyAsText()
+        assertTrue("zync://pair?h=" in page, "page must carry the pairing URI")
+        assertTrue("<svg" in page, "page must render the QR as SVG")
+
+        // The minted code in the page is redeemable exactly once.
+        val code = Regex("c=([A-Z2-9]+)&").find(page)!!.groupValues[1]
+        val paired = client.pair(code, "replica-A")
+        assertEquals(HttpStatusCode.OK, paired.status)
+        assertEquals(HttpStatusCode.Unauthorized, client.pair(code, "replica-A").status)
+    }
+
+    @Test
+    fun pairingPageAbsentWithoutAPublicAddress() = testApplication {
+        val h = harness()
+        application {
+            zyncModule(SyncService(h.db), auth = h.auth(now), pairing = PairingEndpoint(h.manager, h.identity))
+        }
+        assertEquals(HttpStatusCode.NotFound, client.get("/settings/pairing").status)
+    }
+
+    @Test
     fun invalidCodeIsRejectedAndDeviceStaysUnauthorized() = testApplication {
         val h = harness()
         application {

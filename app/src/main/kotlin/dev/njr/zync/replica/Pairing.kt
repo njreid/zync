@@ -52,6 +52,27 @@ object PairingUri {
 }
 
 /**
+ * One-shot pairing from a scanned/tapped `zync://pair` link: parse, mint a fresh
+ * device key, pair via [PairingClient], and persist the credentials on success.
+ * The entry point behind the app's deep-link intent filter.
+ */
+suspend fun pairFromUri(
+    http: HttpClient,
+    uri: String,
+    replicaId: String,
+    store: PairingStore,
+    json: Json = Json,
+): PairingOutcome {
+    val invite = runCatching { PairingUri.parse(uri) }.getOrElse {
+        return PairingOutcome.Failed("not a zync pairing link")
+    }
+    val outcome = runCatching { PairingClient(http, json).pair(invite, Ed25519DeviceSigner.generateSeed(), replicaId) }
+        .getOrElse { return PairingOutcome.Failed(it.message ?: "pairing request failed") }
+    if (outcome is PairingOutcome.Paired) store.save(outcome.server)
+    return outcome
+}
+
+/**
  * The phone half of pairing (spec `2026-07-10-device-pairing.md`): POST the device
  * public key + code, **pin** the server key (must match the QR), **verify** the
  * server-signed confirmation, and return credentials to persist. Only the device

@@ -66,13 +66,19 @@ security key).
 
 ## 1. Device pairing (phone → server)
 
-**Setup:** on the server host run `./gradlew :server:run --args=pair`
-(or the container's `server pair`) — it mints a one-time code and prints a QR.
+**Setup:** in an authenticated browser session open `/settings/pairing` — it mints a
+one-time code and renders the QR + a tappable `zync://pair` link. (CLI fallback: on
+the server host, `server pair` prints the same QR in the terminal.)
 
-- [ ] **Phone pairs by scanning the QR.** In the phone app, start pairing and scan.
-  **Expect:** phone POSTs `/pair` with its Ed25519 device key, the one-time code,
-  and its op-authoring **replicaId**; the server registers the device, binds the
-  replica id, and returns its identity; the phone pins the server's key fingerprint.
+- [ ] **Pairing page is session-gated.** `/settings/pairing` without a session → 401;
+  with a passkey session it renders the QR. **Expect:** only an authenticated browser
+  can mint pairing codes.
+- [ ] **Phone pairs via the QR / deep link.** Scan the QR with the phone camera (or
+  open the page on the phone and tap the link) — the `zync://pair` deep link opens the
+  app, which toasts the outcome. **Expect:** phone POSTs `/pair` with its Ed25519
+  device key, the one-time code, and its op-authoring **replicaId**; the server
+  registers the device, binds the replica id, and returns its identity; the phone pins
+  the server's key fingerprint and kicks a first sync.
 - [ ] **The device shows in the server allow-list with its binding.** (server
   `device` table / debug UI — `replica_id` is non-NULL.)
 - [ ] **Pushes are bound to the pairing.** After pairing, captures sync normally.

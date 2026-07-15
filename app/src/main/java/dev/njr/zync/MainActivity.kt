@@ -1,14 +1,17 @@
 package dev.njr.zync
 
 import android.Manifest
+import android.content.Intent
 import android.os.Bundle
 import android.webkit.WebView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
+import dev.njr.zync.replica.PairingOutcome
 import dev.njr.zync.ui.ZyncShell
 import dev.njr.zync.ui.createZyncWebView
 import dev.njr.zync.ui.loopbackUrl
@@ -48,6 +51,27 @@ class MainActivity : ComponentActivity() {
             withContext(Dispatchers.Main) {
                 webView.loadUrl(loopbackUrl(port, app.serverToken))
             }
+        }
+        handlePairingIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handlePairingIntent(intent)
+    }
+
+    /** A tapped/scanned `zync://pair` link (from the server's /settings/pairing page). */
+    private fun handlePairingIntent(intent: Intent?) {
+        val uri = intent?.dataString?.takeIf { it.startsWith("zync://pair") } ?: return
+        intent.data = null // consume: don't re-pair on config-change redelivery
+        Toast.makeText(this, "Pairing with server…", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val outcome = withContext(Dispatchers.IO) { (application as ZyncApp).pairFromUri(uri) }
+            val message = when (outcome) {
+                is PairingOutcome.Paired -> "Paired — syncing with ${outcome.server.address}"
+                is PairingOutcome.Failed -> "Pairing failed: ${outcome.reason}"
+            }
+            Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
         }
     }
 }

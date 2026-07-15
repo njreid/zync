@@ -71,6 +71,23 @@ class ZyncApp : Application() {
     }
 
     /**
+     * Pair with a central server from a tapped/scanned `zync://pair` link (deep link
+     * into [MainActivity]); persists the credentials and kicks a first sync.
+     */
+    suspend fun pairFromUri(uri: String): dev.njr.zync.replica.PairingOutcome {
+        val http = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO)
+        return try {
+            dev.njr.zync.replica.pairFromUri(http, uri, replicaId = deviceId, store = pairingStore).also {
+                if (it is dev.njr.zync.replica.PairingOutcome.Paired) {
+                    dev.njr.zync.sync.SyncScheduler.requestSync(this)
+                }
+            }
+        } finally {
+            http.close()
+        }
+    }
+
+    /**
      * Sync once with the paired central server: upload pending attachment blobs, then
      * push local ops and pull remote ([dev.njr.zync.replica.ReplicaSynchronizer]).
      * No-op if the phone isn't paired yet. Called by [dev.njr.zync.sync.SyncWorker].

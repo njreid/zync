@@ -37,4 +37,22 @@ object Qr {
         }
         return sb.toString()
     }
+
+    /** Renders a string as an inline SVG QR code (one rect per dark module). */
+    fun svg(text: String, quietZone: Int = 2): String {
+        val matrix = Encoder.encode(text, ErrorCorrectionLevel.M).matrix
+        val size = matrix.width
+        val total = size + quietZone * 2
+        val rects = StringBuilder()
+        for (y in 0 until size) {
+            for (x in 0 until size) {
+                if (matrix.get(x, y).toInt() == 1) {
+                    rects.append("""<rect x="${x + quietZone}" y="${y + quietZone}" width="1" height="1"/>""")
+                }
+            }
+        }
+        return """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $total $total" """ +
+            """shape-rendering="crispEdges" role="img" aria-label="pairing QR code">""" +
+            """<rect width="$total" height="$total" fill="#fff"/><g fill="#000">$rects</g></svg>"""
+    }
 }

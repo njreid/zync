@@ -164,6 +164,14 @@ class WebAuthnTest {
     }
 
     @Test
+    fun `the pairing page is behind the session gate`() = testApplication {
+        // /settings/* is NOT in SESSION_EXEMPT — minting pairing codes from a browser
+        // requires a WebAuthn session, unlike the device POST /pair (code-gated).
+        wire(JvmZyncDatabase.inMemory(), SessionStore(), regToken = "reg-secret")
+        assertEquals(HttpStatusCode.Unauthorized, client.get("/settings/pairing").status)
+    }
+
+    @Test
     fun registrationRequiresTheRegistrationToken() = testApplication {
         wire(JvmZyncDatabase.inMemory(), SessionStore(), regToken = "reg-secret")
         assertEquals(HttpStatusCode.Forbidden, client.get("/auth/webauthn/register/options").status)
