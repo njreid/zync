@@ -14,7 +14,7 @@
 | Work calendar | Full work profile; **work agenda is pushed via the backend server** (no cross-profile access). Personal calendars read locally via CalendarProvider |
 | Speech | `SpeechRecognizer` with `EXTRA_PREFER_OFFLINE` (on-device, streaming partials) |
 | Doc scan | Existing ML Kit document scanner (NOT Drive API — correction to earlier framing) |
-| Typography | **Geomini** (variable, Google Fonts) for everything; **Iosevka Charon Mono bold** for the clock, tags, and contexts. Vendored (OFL): latin woff2 subsets in `:web`, TTFs in `app/res/font` |
+| Typography | **Geomini** (variable) for body/general; **Iosevka Charon Mono bold** for tags/contexts at chip scale; **Big Shoulders Display Black (900)** for the hero clock + clock-scale context (chosen from an 8-font 900-weight comparison, `mocks/2026-07-16-clock-font-compare.html`). All Google Fonts, vendored OFL: woff2 in `:web` resources, TTFs in `app/res/font` |
 | Capture routing | Tasks with a tree-node ("in") chip **skip the Inbox** and file directly under that node |
 | People | Extracted names get a **best-effort match against phone contacts** (ContactsContract, READ_CONTACTS): chip shows the matched contact (avatar initials + display name); unmatched names stay as plain text chips. The op log stores the display name (syncs everywhere); the contact link stays device-local and re-resolves by name |
 
