@@ -5,6 +5,10 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Recording voice notes (double-Volume-Up capture gesture). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Native home agenda (personal calendars) + Open-Meteo weather (coarse only).
+         Both are requested in-context from tappable rows, never on startup. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!-- Package visibility for the launcher surfaces (spec L3): the swipe-left search
          lists every launchable app; the web-search row hands off to the search agent. -->

@@ -2,8 +2,11 @@ package dev.njr.zync
 
 import android.Manifest
 import android.app.role.RoleManager
+import android.content.Context
 import android.content.Intent
+import android.location.LocationManager
 import android.os.Bundle
+import android.text.format.DateFormat
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -11,19 +14,41 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import dev.njr.zync.capture.DocScanActivity
 import dev.njr.zync.capture.DocUploadActivity
 import dev.njr.zync.capture.VoiceCaptureActivity
+import dev.njr.zync.home.CalendarSource
+import dev.njr.zync.home.OpenMeteo
+import dev.njr.zync.home.WeatherNow
+import dev.njr.zync.home.buildAgenda
 import dev.njr.zync.launcher.LauncherIntents
 import dev.njr.zync.replica.PairingOutcome
 import dev.njr.zync.ui.BarAction
+import dev.njr.zync.ui.ZyncScreen
 import dev.njr.zync.ui.ZyncShell
 import dev.njr.zync.ui.createZyncWebView
+import dev.njr.zync.ui.home.HomeState
+import dev.njr.zync.ui.home.HomeTile
 import dev.njr.zync.ui.loopbackUrl
+import dev.njr.zync.web.content.DueDates
+import dev.njr.zync.core.id.Ulid
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
@@ -34,42 +59,133 @@ class MainActivity : ComponentActivity() {
             recordAudioResult = null
         }
 
+    private var screen by mutableStateOf(ZyncScreen.Home)
+    private var permissionTick by mutableIntStateOf(0)
+    private val calendarPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { permissionTick++ }
+    private val locationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { permissionTick++ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Edge-to-edge is enforced from Android 15 (targetSdk 36); the shell applies the
-        // safe-drawing insets so the :web UI isn't drawn under the status/navigation bars.
         enableEdgeToEdge()
-        // The single WebView is created once and hosted by the Compose shell; it must never be
-        // rebuilt, so the loopback server connection it holds survives for the process life.
         webView = createZyncWebView(this) { callback ->
             recordAudioResult = callback
             recordAudioPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
-        setContent { ZyncShell(webView, onBarAction = ::handleBarAction) }
+        val app = application as ZyncApp
+        setContent {
+            val homeState = rememberHomeState(app, permissionTick)
+            ZyncShell(
+                webView = webView,
+                screen = screen,
+                homeState = homeState,
+                onBarAction = ::handleBarAction,
+                onTileTap = { screen = ZyncScreen.Web },
+                onContextSelect = { ctx ->
+                    homeContextPrefs().edit()
+                        .putString("context_id", ctx?.id?.toString())
+                        .putString("context_name", ctx?.name?.removePrefix("@"))
+                        .apply()
+                    permissionTick++ // reuse the tick to recompute state
+                },
+                onCompleteTask = { task ->
+                    app.contentCommands.complete(task.id)
+                    app.contentChanges.notifyChanged()
+                },
+                onEnableWeather = { locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
+                onEnableCalendar = { calendarPermission.launch(Manifest.permission.READ_CALENDAR) },
+            )
+        }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
-                    webView.canGoBack() -> webView.goBack()
+                    screen == ZyncScreen.Web && webView.canGoBack() -> webView.goBack()
+                    screen == ZyncScreen.Web -> screen = ZyncScreen.Home
                     // As the HOME app, back at the root is a no-op (launcher convention).
                     isDefaultHome() -> Unit
                     else -> { isEnabled = false; onBackPressedDispatcher.onBackPressed() }
                 }
             }
         })
-        maybePromptHomeRole()
-        val app = application as ZyncApp
         lifecycleScope.launch(Dispatchers.IO) {
             val port = app.ensureServerStarted()
-            withContext(Dispatchers.Main) {
-                webView.loadUrl(loopbackUrl(port, app.serverToken))
-            }
+            withContext(Dispatchers.Main) { webView.loadUrl(loopbackUrl(port, app.serverToken)) }
         }
+        maybePromptHomeRole()
         handlePairingIntent(intent)
     }
 
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        handlePairingIntent(intent)
+    /** Assembles everything the native home surface renders, refreshing on op-log changes. */
+    @Composable
+    private fun rememberHomeState(app: ZyncApp, permissionTick: Int): HomeState {
+        var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+        var contentTick by remember { mutableIntStateOf(0) }
+        var weather by remember { mutableStateOf<WeatherNow?>(null) }
+
+        LaunchedEffect(Unit) { // minute clock
+            while (true) {
+                delay(60_000 - (System.currentTimeMillis() % 60_000))
+                nowMillis = System.currentTimeMillis()
+            }
+        }
+        LaunchedEffect(Unit) { app.contentChanges.changes.collect { contentTick++ } }
+        LaunchedEffect(permissionTick) { // weather: on grant + hourly
+            while (true) {
+                weather = fetchWeather()
+                delay(60L * 60_000)
+            }
+        }
+
+        val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
+        val dayStart = (cal.clone() as Calendar).apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val dayEnd = dayStart + 24L * 60 * 60_000
+
+        return remember(nowMillis, contentTick, permissionTick, weather) {
+            val read = app.contentRead
+            val prefs = homeContextPrefs()
+            val contextId = prefs.getString("context_id", null)?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+            val contextName = prefs.getString("context_name", null)
+            val suggestions = if (contextId != null) read.contextTasks(contextId, nowMillis) else read.activeTasks(nowMillis)
+            val events = CalendarSource.todaysEvents(this, dayStart, dayEnd)
+            val dueBy = DueDates.parse(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time))!!
+            HomeState(
+                clock = SimpleDateFormat(if (DateFormat.is24HourFormat(this)) "H:mm" else "h:mm", Locale.US).format(cal.time),
+                dateLine = SimpleDateFormat("EEEE, MMMM d", Locale.US).format(cal.time),
+                weatherLine = weather?.toString(),
+                contextName = contextName,
+                contexts = read.contexts(),
+                inboxCount = read.inbox(null, nowMillis).size,
+                todayCount = read.dueTasks(dueBy).size,
+                nextCount = suggestions.size,
+                waitingCount = read.waitingTasks(nowMillis).size,
+                agenda = buildAgenda(events, nowMillis, suggestions),
+                calendarPermission = CalendarSource.hasPermission(this),
+            )
+        }
+    }
+
+    private fun homeContextPrefs() = getSharedPreferences("zync_launcher", Context.MODE_PRIVATE)
+
+    private suspend fun fetchWeather(): WeatherNow? {
+        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!granted) return null
+        val lm = getSystemService(LocationManager::class.java) ?: return null
+        val location = runCatching {
+            LocationManager.NETWORK_PROVIDER.takeIf { lm.isProviderEnabled(it) }?.let { lm.getLastKnownLocation(it) }
+                ?: lm.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER)
+        }.getOrNull() ?: return null
+        return withContext(Dispatchers.IO) {
+            val http = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO)
+            try {
+                OpenMeteo(http).current(location.latitude, location.longitude)
+            } finally {
+                http.close()
+            }
+        }
     }
 
     private val homeRoleRequest =
@@ -97,8 +213,10 @@ class MainActivity : ComponentActivity() {
             BarAction.Messages -> launch(LauncherIntents.messages(), "No messages app found")
             BarAction.Calendar -> launch(LauncherIntents.calendar(), "No calendar app found")
             BarAction.Phone -> launch(LauncherIntents.phone(), "No dialer found")
-            BarAction.CaptureText ->
+            BarAction.CaptureText -> {
+                screen = ZyncScreen.Web
                 webView.evaluateJavascript("document.querySelector('.quick-add input')?.focus()", null)
+            }
             BarAction.CaptureVoice -> startActivity(Intent(this, VoiceCaptureActivity::class.java))
             BarAction.CaptureScan -> startActivity(Intent(this, DocScanActivity::class.java))
             BarAction.CaptureUpload -> startActivity(Intent(this, DocUploadActivity::class.java))
@@ -108,6 +226,11 @@ class MainActivity : ComponentActivity() {
     private fun launch(intent: Intent, missing: String) {
         runCatching { startActivity(intent) }
             .onFailure { Toast.makeText(this, missing, Toast.LENGTH_SHORT).show() }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handlePairingIntent(intent)
     }
 
     /** A tapped/scanned `zync://pair` link (from the server's /settings/pairing page). */

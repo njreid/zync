@@ -1,6 +1,7 @@
 package dev.njr.zync.ui
 
 import android.annotation.SuppressLint
+import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import androidx.compose.foundation.layout.Box
@@ -22,9 +23,17 @@ import androidx.webkit.WebViewClientCompat
 import androidx.webkit.WebViewFeature
 import dev.njr.zync.MainActivity
 import dev.njr.zync.capture.CaptureSettingsBridge
+import dev.njr.zync.ui.home.HomeScreen
+import dev.njr.zync.ui.home.HomeState
+import dev.njr.zync.ui.home.HomeTile
+import dev.njr.zync.web.content.ContextView
+import dev.njr.zync.web.content.NodeView
 
 /** The loopback URL the in-app WebView loads once at launch (per-boot token in the query). */
 fun loopbackUrl(port: Int, token: String): String = "http://127.0.0.1:$port/?token=$token"
+
+/** The two shell destinations: the native home surface, and the loopback :web content. */
+enum class ZyncScreen { Home, Web }
 
 /**
  * Builds THE single WebView the app hosts for its whole lifetime: JavaScript + DOM storage on,
@@ -51,19 +60,39 @@ fun createZyncWebView(
 }
 
 /**
- * The native Compose shell: the shared `:web` UI on top, the launcher action bar
- * (spec L1) pinned beneath it, and the swipe-left/search overlay (spec L3) above
- * everything when open. The `factory` returns the pre-built [webView], so
- * recomposition never rebuilds it.
+ * The native Compose shell (native-home spec 2026-07-16): the HOME surface is native
+ * (tiles · hero clock/context · agenda); the shared `:web` UI shows on [ZyncScreen.Web]
+ * (tile taps). The action bar (spec L1) is pinned beneath both; the swipe-left search
+ * overlay (L3) sits above everything. The WebView is the pre-built singleton — never
+ * rebuilt, only re-parented.
  */
 @Composable
-fun ZyncShell(webView: WebView, onBarAction: (BarAction) -> Unit = {}) {
+fun ZyncShell(
+    webView: WebView,
+    screen: ZyncScreen,
+    homeState: HomeState,
+    onBarAction: (BarAction) -> Unit,
+    onTileTap: (HomeTile) -> Unit,
+    onContextSelect: (ContextView?) -> Unit,
+    onCompleteTask: (NodeView) -> Unit,
+    onEnableWeather: () -> Unit,
+    onEnableCalendar: () -> Unit,
+) {
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
-        // safeDrawing keeps the :web UI clear of the status/nav bars, cutout, and IME under the
+        // safeDrawing keeps content clear of the status/nav bars, cutout, and IME under the
         // enforced edge-to-edge display (see MainActivity.enableEdgeToEdge).
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-            AndroidView(factory = { webView }, modifier = Modifier.fillMaxWidth().weight(1f))
+            Box(Modifier.fillMaxWidth().weight(1f)) {
+                if (screen == ZyncScreen.Web) {
+                    AndroidView(
+                        factory = { webView.also { v -> (v.parent as? ViewGroup)?.removeView(v) } },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    HomeScreen(homeState, onTileTap, onContextSelect, onCompleteTask, onEnableWeather, onEnableCalendar)
+                }
+            }
             ZyncActionBar(onAction = onBarAction, onSearch = { searchOpen = true })
         }
         if (searchOpen) SearchOverlay(onDismiss = { searchOpen = false })

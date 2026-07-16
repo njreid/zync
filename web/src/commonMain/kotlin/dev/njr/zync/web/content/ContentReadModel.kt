@@ -81,6 +81,18 @@ class ContentReadModel(private val store: StateStore) {
             .map { ContextView(it.entityId, it.fields["name"].asString()) }
             .sortedBy { it.name ?: "" }
 
+    /** All live, active, non-deferred tasks (any context) — the Next pool. */
+    fun activeTasks(now: Long = Long.MAX_VALUE): List<NodeView> =
+        snapshots()
+            .filter { it.kind() == "task" && !it.proposed() }
+            .map { it.toView() }
+            .filter { it.status != "DONE" && it.status != "DROPPED" && (it.deferUntil == null || it.deferUntil <= now) }
+            .sortedBy { it.title ?: "" }
+
+    /** Live active tasks waiting on a person (the Waiting tile). */
+    fun waitingTasks(now: Long = Long.MAX_VALUE): List<NodeView> =
+        activeTasks(now).filter { it.person != null }
+
     /** Live tasks due at/before [byMillis] (incl. overdue), soonest first — the Today view. */
     fun dueTasks(byMillis: Long): List<NodeView> =
         snapshots()
