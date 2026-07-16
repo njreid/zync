@@ -33,18 +33,9 @@ test('renders seeded inbox and Datastar drives live mutations', async ({ page })
   await expect(page.locator('#inbox')).toContainText('Read a book'); // others stay
 
   // the inbox is a triage surface: no entry field (creation belongs to capture)
+  // and NO context filter (clarify/file/subdivide only — contexts live on their own view)
   expect(await page.locator('#inbox input').count()).toBe(0);
-
-  // context pill (launcher L4): selecting @errands filters to its tagged tasks
-  await page.locator('.context-pill summary').click();
-  await page.locator('.context-pill a', { hasText: '@errands' }).click();
-  await expect(page.locator('.context-pill summary')).toContainText('@errands');
-  await expect(page.locator('#inbox')).toContainText('Plan the offsite');
-  await expect(page.locator('#inbox')).not.toContainText('Read a book');
-  // and switching back to All contexts restores the plain inbox
-  await page.locator('.context-pill summary').click();
-  await page.locator('.context-pill a', { hasText: 'All contexts' }).click();
-  await expect(page.locator('#inbox')).toContainText('Read a book');
+  expect(await page.locator('.context-pill').count()).toBe(0);
 
   // organize controls on the detail page: set a due date, tag a context
   await page.locator('#inbox a', { hasText: 'Read a book' }).click();
@@ -54,6 +45,19 @@ test('renders seeded inbox and Datastar drives live mutations', async ({ page })
   await expect(page.locator('main')).toContainText('due 2026-07-20', { timeout: 5000 });
   await page.locator('button', { hasText: '+ @errands' }).click();
   await expect(page.locator('button', { hasText: '@errands ✕' })).toBeVisible({ timeout: 5000 });
+
+  // context view (launcher L4, reached by URL / native selection): pill + tagged tasks
+  const untag = await page.locator('button', { hasText: '@errands ✕' }).getAttribute('data-on:click');
+  const contextId = untag.match(/context=([0-9A-Za-z]+)/)[1];
+  await page.goto(BASE + '/?context=' + contextId, { waitUntil: 'networkidle' });
+  await expect(page.locator('.context-pill summary')).toContainText('@errands');
+  await expect(page.locator('#inbox')).toContainText('Plan the offsite');
+  await expect(page.locator('#inbox')).toContainText('Read a book'); // just tagged above
+  // and the pill's Inbox link returns to the plain, pill-less inbox
+  await page.locator('.context-pill summary').click();
+  await page.locator('.context-pill a', { hasText: 'Inbox' }).click();
+  await expect(page.locator('#inbox')).toContainText('Read a book');
+  expect(await page.locator('.context-pill').count()).toBe(0);
 
   // Datastar executed cleanly — no CSP 'unsafe-eval' violation or JS errors
   const csp = errors.filter((e) => /Content Security Policy|unsafe-eval|is not defined|SyntaxError/i.test(e));

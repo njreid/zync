@@ -102,6 +102,9 @@ fun ZyncActionBar(
     }
 }
 
+/** Submenu row height — generous so drag-release lands the intended row (device feedback). */
+private const val MENU_ROW_DP = 56
+
 /** A slot with a user-configured app list: tap = primary; long-press+slide = submenu. */
 @Composable
 private fun configurableSlot(
@@ -116,7 +119,7 @@ private fun configurableSlot(
     var menuOpen by remember { mutableStateOf(false) }
     var hovered by remember { mutableIntStateOf(-1) }
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val itemHeightPx = with(density) { 44.dp.toPx() }
+    val itemHeightPx = with(density) { MENU_ROW_DP.dp.toPx() }
     val apps = barApps(role)
     val rows = apps.size + 1 // + the Edit… row (always on TOP)
 
@@ -158,7 +161,7 @@ private fun configurableSlot(
 
         if (menuOpen) {
             // Popup bottom flush with the slot top: offset up by exactly the menu height.
-            Popup(offset = IntOffset(0, -with(density) { (rows * 44).dp.roundToPx() })) {
+            Popup(offset = IntOffset(0, -with(density) { (rows * MENU_ROW_DP).dp.roundToPx() })) {
                 Column(
                     Modifier
                         .background(BarCard, RoundedCornerShape(12.dp))
@@ -191,16 +194,16 @@ private fun MenuRow(label: String, icon: BarApp?, hot: Boolean) {
     Row(
         Modifier
             .fillMaxWidth()
-            .height(44.dp)
+            .height(MENU_ROW_DP.dp)
             .background(if (hot) BarAccent.copy(alpha = .25f) else BarCard)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         bitmap?.let {
-            Image(bitmap = it, contentDescription = null, modifier = Modifier.size(26.dp))
+            Image(bitmap = it, contentDescription = null, modifier = Modifier.size(32.dp))
             androidx.compose.foundation.layout.Spacer(Modifier.width(12.dp))
         }
-        BasicText(label, style = TextStyle(color = if (hot) BarInk else BarMuted, fontSize = 14.sp, fontWeight = if (hot) FontWeight.SemiBold else FontWeight.Normal))
+        BasicText(label, style = TextStyle(color = if (hot) BarInk else BarMuted, fontSize = 15.sp, fontWeight = if (hot) FontWeight.SemiBold else FontWeight.Normal))
     }
 }
 

@@ -22,19 +22,18 @@ import kotlinx.html.span
 import kotlinx.html.ul
 
 /**
- * The current-context pill (launcher spec L4): pinned above the list, tap to drop
- * down the other contexts. Selection navigates with `?context=` (the server persists
- * it in a cookie), so the SSE stream reopens with the right filter. Pure
- * details/summary — no JS, CSP-safe.
+ * The current-context pill (launcher spec L4), shown only on the context view: tap
+ * to switch context or return to the Inbox. Selection navigates with `?context=`
+ * (the server persists it in a cookie), so the SSE stream reopens with the right
+ * filter. Pure details/summary — no JS, CSP-safe.
  */
-fun FlowContent.contextBar(read: ContentReadModel, selected: Ulid?) {
+fun FlowContent.contextBar(read: ContentReadModel, selected: Ulid) {
     val contexts = read.contexts()
-    if (contexts.isEmpty() && selected == null) return
-    val current = contexts.firstOrNull { it.id.toString() == selected?.toString() }
+    val current = contexts.firstOrNull { it.id.toString() == selected.toString() }
     details(classes = "context-pill") {
-        summary { +(current?.name ?: "All contexts") }
+        summary { +(current?.name ?: "(context)") }
         ul {
-            li { a(href = "/?context=none") { +"All contexts" } }
+            li { a(href = "/?context=none") { +"Inbox" } }
             contexts.forEach { c ->
                 li { a(href = "/?context=${c.id}") { +(c.name ?: "(unnamed context)") } }
             }
@@ -44,17 +43,27 @@ fun FlowContent.contextBar(read: ContentReadModel, selected: Ulid?) {
 
 /**
  * The home list: the inbox, or — with a context selected — the flat next-actions
- * view for that context across the whole tree. Deliberately NO entry field: the
- * inbox is a triage surface (sort, plan, clarify) — creation belongs to capture.
+ * view for that context across the whole tree. Deliberately NO entry field and NO
+ * context filter on the inbox: it is a pure triage surface (clarify, file into the
+ * tree, subdivide) — creation belongs to capture, doing belongs to context views.
  */
 fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long, context: Ulid? = null) {
-    contextBar(read, context)
-    h2 { +"Inbox" }
-    val items = if (context != null) read.contextTasks(context, now) else read.inbox(inbox, now)
-    if (items.isEmpty()) {
-        p("muted") { +(if (context != null) "No active tasks in this context." else "Inbox zero.") }
+    if (context == null) {
+        h2 { +"Inbox" }
+        val items = read.inbox(inbox, now)
+        if (items.isEmpty()) {
+            p("muted") { +"Inbox zero." }
+        } else {
+            ul { items.forEach { li { nodeRow(it) } } }
+        }
     } else {
-        ul { items.forEach { li { nodeRow(it) } } }
+        contextBar(read, context)
+        val items = read.contextTasks(context, now)
+        if (items.isEmpty()) {
+            p("muted") { +"No active tasks in this context." }
+        } else {
+            ul { items.forEach { li { nodeRow(it) } } }
+        }
     }
     proposalsSection(read)
 }
