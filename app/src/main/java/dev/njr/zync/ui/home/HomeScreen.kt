@@ -54,15 +54,15 @@ data class HomeState(
     val contexts: List<ContextView>,
     val inboxCount: Int,
     val todayCount: Int,
-    val nextCount: Int,
     val waitingCount: Int,
+    val sync: dev.njr.zync.sync.SyncState,
     val agenda: dev.njr.zync.home.AgendaView,
     val calendarPermission: Boolean,
     val notificationsEnabled: Boolean,
 )
 
 /** Which display box is selected (drives the WebView destination on tap). */
-enum class HomeTile { Inbox, Today, Next, Waiting }
+enum class HomeTile { Inbox, Today, Waiting, Sync }
 
 @Composable
 fun HomeScreen(
@@ -111,8 +111,8 @@ private fun TileRow(state: HomeState, onTap: (HomeTile) -> Unit) {
     ) {
         Tile(HomeTile.Inbox, state.inboxCount, "unsorted", Modifier.weight(1f)) { onTap(HomeTile.Inbox) }
         Tile(HomeTile.Today, state.todayCount, "due", Modifier.weight(1f)) { onTap(HomeTile.Today) }
-        Tile(HomeTile.Next, state.nextCount, "actions", Modifier.weight(1f)) { onTap(HomeTile.Next) }
         Tile(HomeTile.Waiting, state.waitingCount, "waiting", Modifier.weight(1f)) { onTap(HomeTile.Waiting) }
+        SyncTile(state.sync, Modifier.weight(1f)) { onTap(HomeTile.Sync) }
     }
 }
 
@@ -130,6 +130,32 @@ private fun Tile(tile: HomeTile, count: Int, hint: String, modifier: Modifier, o
             "$count",
             style = TextStyle(color = C.Ink, fontSize = 20.sp, fontFamily = Geomini, fontWeight = FontWeight.SemiBold),
         )
+        BasicText(hint, style = TextStyle(color = C.Ink3, fontSize = 10.sp, fontFamily = Geomini))
+    }
+}
+
+/**
+ * The sync-status box: a glyph per state. Tap routing lives in the host (pair /
+ * network settings / event log, by state).
+ */
+@Composable
+private fun SyncTile(state: dev.njr.zync.sync.SyncState, modifier: Modifier, onTap: () -> Unit) {
+    val (glyph, hint, tone) = when (state) {
+        dev.njr.zync.sync.SyncState.Connected -> Triple("\u2713", "ok", C.Ink)
+        dev.njr.zync.sync.SyncState.Syncing -> Triple("\u27F3", "syncing", C.Accent)
+        dev.njr.zync.sync.SyncState.ServerUnreachable -> Triple("\u26A0", "server?", C.Accent)
+        dev.njr.zync.sync.SyncState.NoNetwork -> Triple("\u2298", "offline", C.Ink2)
+        dev.njr.zync.sync.SyncState.Unpaired -> Triple("\u25CC", "unpaired", C.Accent)
+    }
+    Column(
+        modifier
+            .border(1.dp, if (state == dev.njr.zync.sync.SyncState.Connected) C.Border else C.Accent, RoundedCornerShape(10.dp))
+            .background(C.Card, RoundedCornerShape(10.dp))
+            .clickable(onClick = onTap)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    ) {
+        BasicText("Sync", style = TextStyle(color = C.Ink2, fontSize = 11.sp, fontFamily = Geomini))
+        BasicText(glyph, style = TextStyle(color = tone, fontSize = 20.sp, fontWeight = FontWeight.SemiBold))
         BasicText(hint, style = TextStyle(color = C.Ink3, fontSize = 10.sp, fontFamily = Geomini))
     }
 }

@@ -15,6 +15,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -66,6 +67,8 @@ class MainActivity : ComponentActivity() {
     private var searchOpen by mutableStateOf(false)
     private var captureOpen by mutableStateOf(false)
     private var settingsRole by mutableStateOf<BarRole?>(null)
+    private var syncLogOpen by mutableStateOf(false)
+    private var pairingOpen by mutableStateOf(false)
     private var barAppsTick by mutableIntStateOf(0)
     private var permissionTick by mutableIntStateOf(0)
     private var photoFile: java.io.File? = null
@@ -101,7 +104,9 @@ class MainActivity : ComponentActivity() {
                     screen = screen,
                     homeState = homeState,
                     onBarAction = ::handleBarAction,
-                    onTileTap = { screen = ZyncScreen.Web },
+                    onTileTap = { tile ->
+                        if (tile == HomeTile.Sync) handleSyncTap(homeState.sync) else screen = ZyncScreen.Web
+                    },
                     onContextSelect = { ctx ->
                         homeContextPrefs().edit()
                             .putString("context_id", ctx?.id?.toString())
@@ -141,6 +146,18 @@ class MainActivity : ComponentActivity() {
                         onDismiss = { settingsRole = null; barAppsTick++ },
                     )
                 }
+                if (syncLogOpen) {
+                    dev.njr.zync.ui.settings.SyncScreen(
+                        serverAddress = remember { app.pairingStore.load()?.address },
+                        onDismiss = { syncLogOpen = false },
+                    )
+                }
+                if (pairingOpen) {
+                    dev.njr.zync.ui.settings.PairingScreen(
+                        onPair = { uri -> pairWith(uri) { ok -> if (ok) pairingOpen = false } },
+                        onDismiss = { pairingOpen = false },
+                    )
+                }
                 if (captureOpen) {
                     CaptureScreen(
                         contexts = app.contentRead.contexts(),
@@ -167,7 +184,7 @@ class MainActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
-                    searchOpen || captureOpen || settingsRole != null -> Unit // their BackHandlers own it
+                    searchOpen || captureOpen || settingsRole != null || syncLogOpen || pairingOpen -> Unit // their BackHandlers own it
                     screen == ZyncScreen.Web && webView.canGoBack() -> webView.goBack()
                     screen == ZyncScreen.Web -> screen = ZyncScreen.Home
                     // On the home surface an edge swipe (the system back gesture) opens
@@ -192,6 +209,8 @@ class MainActivity : ComponentActivity() {
         var contentTick by remember { mutableIntStateOf(0) }
         var weather by remember { mutableStateOf<WeatherNow?>(null) }
         var notifEvents by remember { mutableStateOf<List<dev.njr.zync.home.CalEvent>>(emptyList()) }
+        val syncEvents by dev.njr.zync.sync.SyncMonitor.events.collectAsState()
+        val syncingNow by dev.njr.zync.sync.SyncMonitor.syncing.collectAsState()
 
         LaunchedEffect(Unit) { // minute clock
             while (true) {
@@ -214,7 +233,7 @@ class MainActivity : ComponentActivity() {
         }.timeInMillis
         val dayEnd = dayStart + 24L * 60 * 60_000
 
-        return remember(nowMillis, contentTick, permissionTick, weather, notifEvents) {
+        return remember(nowMillis, contentTick, permissionTick, weather, notifEvents, syncEvents, syncingNow) {
             val read = app.contentRead
             val prefs = homeContextPrefs()
             val contextId = prefs.getString("context_id", null)?.let { runCatching { Ulid.parse(it) }.getOrNull() }
@@ -234,8 +253,8 @@ class MainActivity : ComponentActivity() {
                 contexts = read.contexts(),
                 inboxCount = read.inbox(null, nowMillis).size,
                 todayCount = read.dueTasks(dueBy).size,
-                nextCount = suggestions.size,
                 waitingCount = read.waitingTasks(nowMillis).size,
+                sync = dev.njr.zync.sync.SyncMonitor.state(this, paired = app.pairingStore.load() != null),
                 agenda = buildAgenda(events, nowMillis, suggestions),
                 calendarPermission = CalendarSource.hasPermission(this),
                 notificationsEnabled = NotificationEvents.listenerEnabled(this),
@@ -366,10 +385,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** The sync tile routes by state: pair, fix the network, or show the log. */
+    private fun handleSyncTap(state: dev.njr.zync.sync.SyncState) {
+        when (state) {
+            dev.njr.zync.sync.SyncState.Unpaired -> pairingOpen = true
+            dev.njr.zync.sync.SyncState.NoNetwork -> runCatching {
+                startActivity(Intent(android.provider.Settings.Panel.ACTION_INTERNET_CONNECTIVITY))
+            }
+            else -> syncLogOpen = true
+        }
+    }
+
     /** A tapped/scanned `zync://pair` link (from the server's /settings/pairing page). */
     private fun handlePairingIntent(intent: Intent?) {
         val uri = intent?.dataString?.takeIf { it.startsWith("zync://pair") } ?: return
         intent.data = null // consume: don't re-pair on config-change redelivery
+        pairWith(uri)
+    }
+
+    /** Pair with a server (deep link or pasted invite); toasts the outcome. */
+    private fun pairWith(uri: String, onDone: (Boolean) -> Unit = {}) {
         Toast.makeText(this, "Pairing with server…", Toast.LENGTH_SHORT).show()
         lifecycleScope.launch {
             val outcome = withContext(Dispatchers.IO) { (application as ZyncApp).pairFromUri(uri) }
@@ -378,6 +413,7 @@ class MainActivity : ComponentActivity() {
                 is PairingOutcome.Failed -> "Pairing failed: ${outcome.reason}"
             }
             Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+            onDone(outcome is PairingOutcome.Paired)
         }
     }
 

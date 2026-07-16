@@ -79,6 +79,7 @@ class ZyncApp : Application() {
         return try {
             dev.njr.zync.replica.pairFromUri(http, uri, replicaId = deviceId, store = pairingStore).also {
                 if (it is dev.njr.zync.replica.PairingOutcome.Paired) {
+                    dev.njr.zync.sync.SyncMonitor.record(this, "paired with ${it.server.address}", ok = true)
                     dev.njr.zync.sync.SyncScheduler.requestSync(this)
                 }
             }
@@ -94,6 +95,7 @@ class ZyncApp : Application() {
      */
     suspend fun syncOnce() {
         val paired = pairingStore.load() ?: return
+        dev.njr.zync.sync.SyncMonitor.begin()
         val http = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO)
         try {
             val signer = dev.njr.zync.replica.Ed25519DeviceSigner(paired.deviceId, paired.deviceSeed)
@@ -112,8 +114,19 @@ class ZyncApp : Application() {
                 ),
                 blobs = dev.njr.zync.replica.BlobUploader(http, paired.address, localBlobs, signer, now, nonce),
                 db = opDatabase,
-                warn = { Log.w(TAG, it) },
+                warn = {
+                    Log.w(TAG, it)
+                    dev.njr.zync.sync.SyncMonitor.record(this, it, ok = false)
+                },
             ).syncOnce()
+            dev.njr.zync.sync.SyncMonitor.success(this)
+        } catch (e: Exception) {
+            val reason = when (e) {
+                is dev.njr.zync.replica.SyncRequestException -> "HTTP ${e.status}"
+                else -> e.message?.take(80) ?: e::class.simpleName ?: "error"
+            }
+            dev.njr.zync.sync.SyncMonitor.failure(this, reason)
+            throw e
         } finally {
             http.close()
         }
@@ -166,6 +179,7 @@ class ZyncApp : Application() {
         // Launcher niceties: warm the app-search cache so the overlay opens instantly,
         // and seed the standard GTD contexts on a fresh install.
         dev.njr.zync.launcher.AppSearch.warm(this)
+        dev.njr.zync.sync.SyncMonitor.load(this)
         seedStandardContexts()
     }
 
