@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zync — capture mock (2026-07-16)</title>
+<style>
+  :root {
+    --surface: #13171f; --card: #1a212b; --border: #2a313c;
+    --ink: #c2c7d0; --ink2: #8a91a0; --ink3: #5c6470; --accent: #4a90c2;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; }
+  body {
+    margin: 0 auto; max-width: 412px; height: 100dvh; display: flex; flex-direction: column;
+    background: var(--surface); color: var(--ink);
+    font-family: "Geist", "Inter", system-ui, sans-serif;
+  }
+
+  /* header */
+  .head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 6px; }
+  .head .title { font-size: 17px; font-weight: 600; }
+  .head .close { color: var(--ink3); font-size: 22px; line-height: 1; padding: 4px 8px; }
+
+  /* mode switcher */
+  .modes { display: flex; gap: 8px; padding: 10px 18px; }
+  .mode { font-size: 13px; color: var(--ink2); border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px; }
+  .mode.active { color: var(--surface); background: var(--ink); border-color: var(--ink); font-weight: 600; }
+
+  /* live capture area */
+  .live { padding: 18px; }
+  .micline { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .pulse { width: 46px; height: 46px; border-radius: 50%; background: var(--card); border: 1px solid var(--accent);
+           display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 6px rgba(74,144,194,.12); }
+  .pulse svg { width: 22px; height: 22px; fill: var(--accent); }
+  .micline .state { font-size: 13px; color: var(--ink2); }
+  .micline .state b { color: var(--ink); font-weight: 500; }
+  .transcript { font-size: 21px; line-height: 1.45; min-height: 4.2em; }
+  .transcript .heard { color: var(--ink); }
+  .transcript .interim { color: var(--ink3); }
+
+  /* on-device suggestion card */
+  .suggest { margin: 4px 18px; padding: 14px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 14px; }
+  .suggest .src { font-size: 11px; color: var(--ink3); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 8px; }
+  .suggest .improved { font-size: 17px; font-weight: 600; line-height: 1.35; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink);
+          border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; background: var(--surface); }
+  .chip .k { color: var(--ink3); font-size: 11px; }
+  .chip .x { color: var(--ink3); margin-left: 2px; }
+  .chip.add { color: var(--ink3); border-style: dashed; }
+
+  /* actions */
+  .actions { display: flex; gap: 10px; padding: 16px 18px; margin-top: auto; }
+  .btn { flex: 1; text-align: center; padding: 14px 0; border-radius: 12px; font-size: 15px; font-weight: 600; }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.ghost { border: 1px solid var(--border); color: var(--ink2); font-weight: 400; }
+  .footnote { text-align: center; font-size: 11px; color: var(--ink3); padding-bottom: 14px; }
+</style>
+</head>
+<body>
+
+  <div class="head"><span class="title">Capture</span><span class="close">✕</span></div>
+
+  <div class="modes">
+    <span class="mode active">Voice</span>
+    <span class="mode">Type</span>
+    <span class="mode">Photo</span>
+    <span class="mode">Scan</span>
+  </div>
+
+  <div class="live">
+    <div class="micline">
+      <span class="pulse"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg></span>
+      <span class="state"><b>Listening…</b> on-device transcription · tap to stop</span>
+    </div>
+    <div class="transcript">
+      <span class="heard">Remind Dana about the contract review, needs to be signed before Friday</span>
+      <span class="interim"> and check the…</span>
+    </div>
+  </div>
+
+  <div class="suggest">
+    <div class="src">Suggested — on-device model</div>
+    <div class="improved">Get contract review signed by Dana</div>
+    <div class="chips">
+      <span class="chip"><span class="k">context</span>@work<span class="x">✕</span></span>
+      <span class="chip"><span class="k">due</span>Fri, Jul 18<span class="x">✕</span></span>
+      <span class="chip"><span class="k">person</span>Dana<span class="x">✕</span></span>
+      <span class="chip add">+ add</span>
+    </div>
+  </div>
+
+  <div class="actions">
+    <div class="btn ghost">Save raw</div>
+    <div class="btn primary">Save to Inbox</div>
+  </div>
+  <div class="footnote">Voice note + transcript are both kept · nothing leaves the phone until sync</div>
+
+</body>
+</html>
