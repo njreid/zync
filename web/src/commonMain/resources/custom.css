@@ -22,6 +22,8 @@
 }
 
 html { color-scheme: dark; }
+/* Pure black surface for AMOLED (cards/inputs keep pico's elevated tones). */
+:root:not([data-theme=light]) { --pico-background-color: #000; }
 body { padding-top: max(.75rem, env(safe-area-inset-top)); }
 nav { padding: 0 1rem; }
 

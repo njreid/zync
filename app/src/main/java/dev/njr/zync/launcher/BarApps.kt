@@ -5,10 +5,16 @@ import android.content.Intent
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** One app pinned to a bar slot's submenu. */
+/** One app pinned to a bar slot's submenu (work-profile apps carry their user serial). */
 @Serializable
-data class BarApp(val label: String, val packageName: String, val activityName: String) {
-    fun launchIntent(): Intent = AppEntry(label, packageName, activityName).launchIntent()
+data class BarApp(
+    val label: String,
+    val packageName: String,
+    val activityName: String,
+    val userSerial: Long? = null,
+) {
+    fun toEntry(): AppEntry = AppEntry(label, packageName, activityName, userSerial)
+    fun launchIntent(): Intent = toEntry().launchIntent()
 }
 
 /** The two configurable bar slots (native settings screen). */

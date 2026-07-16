@@ -83,8 +83,11 @@ fun ZyncShell(
     barApps: (dev.njr.zync.launcher.BarRole) -> List<dev.njr.zync.launcher.BarApp> = { emptyList() },
     onLaunchApp: (dev.njr.zync.launcher.BarApp) -> Unit = {},
     onEditRole: (dev.njr.zync.launcher.BarRole) -> Unit = {},
+    onOpenEvent: (dev.njr.zync.home.CalEvent) -> Unit = {},
+    onEnableNotifications: () -> Unit = {},
+    searchOpen: Boolean = false,
+    onSearchOpenChange: (Boolean) -> Unit = {},
 ) {
-    var searchOpen by rememberSaveable { mutableStateOf(false) }
     // The dark surface paints edge-to-edge FIRST; insets are then applied per-region
     // (home draws into the status-bar strip around the camera; the bar owns the
     // nav-bar strip) — full safeDrawing padding here was the white-bars bug.
@@ -101,18 +104,20 @@ fun ZyncShell(
                 } else {
                     HomeScreen(
                         homeState, onTileTap, onContextSelect, onCompleteTask, onEnableWeather, onEnableCalendar,
-                        onOpenSearch = { searchOpen = true },
+                        onOpenSearch = { onSearchOpenChange(true) },
+                        onOpenEvent = onOpenEvent,
+                        onEnableNotifications = onEnableNotifications,
                     )
                 }
             }
             ZyncActionBar(
                 onAction = onBarAction,
-                onSearch = { searchOpen = true },
+                onSearch = { onSearchOpenChange(true) },
                 barApps = barApps,
                 onLaunchApp = onLaunchApp,
                 onEditRole = onEditRole,
             )
         }
-        if (searchOpen) SearchOverlay(onDismiss = { searchOpen = false })
+        if (searchOpen) SearchOverlay(onDismiss = { onSearchOpenChange(false) })
     }
 }

@@ -144,7 +144,7 @@ private fun RowButton(glyph: String, onTap: () -> Unit) {
 @Composable
 private fun AppPicker(exclude: Set<String>, onPick: (BarApp) -> Unit) {
     val context = LocalContext.current
-    val all = remember { AppSearch.launchableApps(context.packageManager) }
+    val all = remember { AppSearch.launchableApps(context) }
     var query by remember { mutableStateOf("") }
     BasicTextField(
         value = query,
@@ -168,7 +168,7 @@ private fun AppPicker(exclude: Set<String>, onPick: (BarApp) -> Unit) {
                 style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onPick(BarApp(app.label, app.packageName, app.activityName)) }
+                    .clickable { onPick(BarApp(app.label, app.packageName, app.activityName, app.userSerial)) }
                     .padding(vertical = 10.dp),
             )
         }

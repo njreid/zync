@@ -31,13 +31,13 @@ object CalendarSource {
             CalendarContract.Instances.END,
             CalendarContract.Instances.CALENDAR_DISPLAY_NAME,
             CalendarContract.Instances.ALL_DAY,
+            CalendarContract.Instances.EVENT_ID,
         )
         val events = mutableListOf<CalEvent>()
         runCatching {
             context.contentResolver.query(uri, projection, null, null, "${CalendarContract.Instances.BEGIN} ASC")
                 ?.use { c ->
                     while (c.moveToNext()) {
-                        if (c.getInt(4) == 1) continue // all-day events don't belong on the timeline
                         val name = c.getString(3) ?: ""
                         events += CalEvent(
                             title = c.getString(0) ?: "(untitled)",
@@ -49,11 +49,25 @@ object CalendarSource {
                                 CalEvent.Profile.HOME
                             },
                             calendarName = name,
+                            allDay = c.getInt(4) == 1,
+                            eventId = c.getLong(5),
                         )
                     }
                 }
         }
         return events
+    }
+
+    /** Deep link into the source calendar's event detail. */
+    fun viewIntent(event: CalEvent): android.content.Intent? {
+        if (event.eventId == 0L) return null
+        return android.content.Intent(
+            android.content.Intent.ACTION_VIEW,
+            ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, event.eventId),
+        )
+            .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, event.beginMillis)
+            .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, event.endMillis)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
     private val WORK_HINTS = listOf("work", "office", "corp")

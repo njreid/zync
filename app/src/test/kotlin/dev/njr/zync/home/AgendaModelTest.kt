@@ -4,46 +4,51 @@ import dev.njr.zync.web.content.NodeView
 import dev.njr.zync.core.clock.Clock
 import dev.njr.zync.core.id.Ulid
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.random.Random
 
-/** The agenda builder: ordering, the NOW marker, and gap-fill suggestion rules. */
+/** The agenda builder: all-day split, free countdown, soon-highlight, NOW marker. */
 class AgendaModelTest {
     private fun task(title: String): NodeView {
         val id = Ulid.generate(Clock { 1L }, Random(title.hashCode()))
         return NodeView(id, "task", title, null, "ACTIVE", null, null, null, null, emptySet(), true)
     }
 
-    private fun event(title: String, begin: Long, end: Long, work: Boolean = false) =
-        CalEvent(title, begin, end, if (work) CalEvent.Profile.WORK else CalEvent.Profile.HOME, "cal")
+    private fun event(title: String, begin: Long, end: Long, allDay: Boolean = false) =
+        CalEvent(title, begin, end, CalEvent.Profile.HOME, "cal", allDay = allDay)
 
     private val m = 60_000L
     private val tasks = listOf(task("a"), task("b"), task("c"), task("d"))
 
     @Test
-    fun ordersEventsInsertsNowAndFillsTheGap() {
-        val rows = buildAgenda(
+    fun splitsAllDayCountsFreeTimeAndFlagsSoonStarts() {
+        val view = buildAgenda(
             events = listOf(
-                event("Lunch", begin = 200 * m, end = 260 * m),
+                event("Holiday", 0, 24 * 60 * m, allDay = true),
                 event("Gym", begin = 10 * m, end = 60 * m),
-                event("Review", begin = 120 * m, end = 150 * m, work = true),
+                event("Soon", begin = 103 * m, end = 130 * m),
+                event("Later", begin = 200 * m, end = 260 * m),
             ),
             now = 100 * m,
             suggestions = tasks,
         )
-        val kinds = rows.map { it::class.simpleName }
-        assertEquals(listOf("Event", "Now", "Gap", "Event", "Event"), kinds)
-        val gap = rows[2] as AgendaRow.Gap
-        assertEquals(20, gap.minutes)
-        assertEquals("Review", gap.nextTitle)
-        assertEquals("at most three suggestions", 3, gap.tasks.size)
-        assertTrue((rows[0] as AgendaRow.Event).past)
+        assertEquals(listOf("Holiday"), view.allDay.map { it.title })
+        assertTrue(view.free)
+        assertEquals(3, view.freeMinutes)
+        assertEquals(3, view.suggestions.size)
+        val soon = view.rows.filterIsInstance<AgendaRow.Event>().first { it.event.title == "Soon" }
+        assertTrue("starting within 5 min → inverted highlight", soon.startingSoon)
+        val later = view.rows.filterIsInstance<AgendaRow.Event>().first { it.event.title == "Later" }
+        assertTrue(!later.startingSoon)
+        // Gym is past; NOW sits before Soon: [Event(Gym), Now, Event(Soon), Event(Later)]
+        assertEquals(listOf("Event", "Now", "Event", "Event"), view.rows.map { it::class.simpleName })
     }
 
     @Test
-    fun noGapSuggestionsWhileAnEventIsInProgress() {
-        val rows = buildAgenda(
+    fun busyNowMeansNoFreeHeaderAndNoSuggestions() {
+        val view = buildAgenda(
             events = listOf(
                 event("Standup", begin = 90 * m, end = 110 * m), // in progress at now=100
                 event("Review", begin = 130 * m, end = 160 * m),
@@ -51,23 +56,25 @@ class AgendaModelTest {
             now = 100 * m,
             suggestions = tasks,
         )
-        assertTrue("mid-meeting is not free time", rows.none { it is AgendaRow.Gap })
-        assertTrue(rows.any { it is AgendaRow.Now })
+        assertTrue(!view.free)
+        assertNull(view.freeMinutes)
+        assertTrue(view.suggestions.isEmpty())
     }
 
     @Test
-    fun tinyGapsAndEmptySuggestionsProduceNoBlock() {
-        val short = buildAgenda(listOf(event("Soon", 105 * m, 130 * m)), now = 100 * m, suggestions = tasks)
-        assertTrue(short.none { it is AgendaRow.Gap })
-
-        val none = buildAgenda(listOf(event("Later", 200 * m, 230 * m)), now = 100 * m, suggestions = emptyList())
-        assertTrue(none.none { it is AgendaRow.Gap })
+    fun emptyDayIsFreeWithoutCountdown() {
+        val view = buildAgenda(emptyList(), 100 * m, tasks)
+        assertTrue(view.free)
+        assertNull(view.freeMinutes)
+        assertEquals(3, view.suggestions.size)
+        assertEquals(listOf("Now"), view.rows.map { it::class.simpleName })
     }
 
     @Test
-    fun emptyOrFinishedDayEndsWithNow() {
-        assertEquals(listOf("Now"), buildAgenda(emptyList(), 100 * m, tasks).map { it::class.simpleName })
-        val evening = buildAgenda(listOf(event("Gym", 10 * m, 60 * m)), now = 100 * m, suggestions = tasks)
-        assertEquals(listOf("Event", "Now"), evening.map { it::class.simpleName })
+    fun duplicateNotificationEventsAreDeduped() {
+        val fromCal = event("1:1 with Priya", 200 * m, 230 * m)
+        val fromNotif = fromCal.copy(fromNotification = true, calendarName = "com.example.app")
+        val view = buildAgenda(listOf(fromCal, fromNotif), 100 * m, emptyList())
+        assertEquals(1, view.rows.count { it is AgendaRow.Event })
     }
 }

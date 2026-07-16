@@ -29,7 +29,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -113,8 +115,10 @@ private fun configurableSlot(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var hovered by remember { mutableIntStateOf(-1) }
-    val itemHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { 44.dp.toPx() }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val itemHeightPx = with(density) { 44.dp.toPx() }
     val apps = barApps(role)
+    val rows = apps.size + 1 // + the Edit… row (always on TOP)
 
     Column(
         modifier
@@ -123,17 +127,16 @@ private fun configurableSlot(
                     onDragStart = { menuOpen = true; hovered = -1 },
                     onDrag = { change, _ ->
                         change.consume()
-                        // Items stack upward from the slot: row 0 sits just above the bar.
+                        // Rows stack upward from the slot top: 0 = nearest the finger.
                         val dy = change.position.y
-                        hovered = if (dy < 0) ((-dy) / itemHeightPx).toInt() else -1
+                        hovered = if (dy < 0) ((-dy) / itemHeightPx).toInt().coerceAtMost(rows - 1) else -1
                     },
                     onDragEnd = {
-                        val rows = apps.size + 1 // +1 = Edit… row
                         if (hovered in 0 until rows) {
-                            // Rows render top-down: apps first, Edit… last; hovered counts
-                            // from the BOTTOM (closest to the finger) — invert.
+                            // Render order is top-down [Edit, app0, app1…]; hovered counts
+                            // from the BOTTOM (nearest the finger) — invert.
                             val index = rows - 1 - hovered
-                            if (index < apps.size) onLaunchApp(apps[index]) else onEditRole(role)
+                            if (index == 0) onEditRole(role) else onLaunchApp(apps[index - 1])
                         }
                         menuOpen = false
                         hovered = -1
@@ -154,18 +157,22 @@ private fun configurableSlot(
         BasicText(role.title, style = TextStyle(color = BarMuted, fontSize = 11.sp))
 
         if (menuOpen) {
-            val rows = apps.size + 1
-            Popup(offset = IntOffset(0, (-(rows * 44 + 56) * androidx.compose.ui.platform.LocalDensity.current.density).toInt())) {
+            // Popup bottom flush with the slot top: offset up by exactly the menu height.
+            Popup(offset = IntOffset(0, -with(density) { (rows * 44).dp.roundToPx() })) {
                 Column(
                     Modifier
                         .background(BarCard, RoundedCornerShape(12.dp))
                         .border(1.dp, BarBorder, RoundedCornerShape(12.dp))
-                        .width(200.dp),
+                        .width(220.dp),
                 ) {
+                    MenuRow("Edit…", icon = null, hot = hovered == rows - 1)
                     apps.forEachIndexed { i, app ->
-                        MenuRow(if (i == 0) "${app.label} ●" else app.label, hot = hovered == rows - 1 - i)
+                        MenuRow(
+                            if (i == 0) "${app.label} ●" else app.label,
+                            icon = app,
+                            hot = hovered == rows - 2 - i,
+                        )
                     }
-                    MenuRow("Edit…", hot = hovered == 0) // bottom row, nearest the finger
                 }
             }
         }
@@ -173,7 +180,14 @@ private fun configurableSlot(
 }
 
 @Composable
-private fun MenuRow(label: String, hot: Boolean) {
+private fun MenuRow(label: String, icon: BarApp?, hot: Boolean) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val bitmap = remember(icon) {
+        icon?.let {
+            dev.njr.zync.launcher.AppLaunch.icon(context, it.packageName, it.activityName, it.userSerial)
+                ?.toBitmap(72, 72)?.asImageBitmap()
+        }
+    }
     Row(
         Modifier
             .fillMaxWidth()
@@ -182,6 +196,10 @@ private fun MenuRow(label: String, hot: Boolean) {
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        bitmap?.let {
+            Image(bitmap = it, contentDescription = null, modifier = Modifier.size(26.dp))
+            androidx.compose.foundation.layout.Spacer(Modifier.width(12.dp))
+        }
         BasicText(label, style = TextStyle(color = if (hot) BarInk else BarMuted, fontSize = 14.sp, fontWeight = if (hot) FontWeight.SemiBold else FontWeight.Normal))
     }
 }

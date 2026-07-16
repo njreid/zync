@@ -27,6 +27,7 @@ import androidx.lifecycle.lifecycleScope
 import dev.njr.zync.capture.ContactMatcher
 import dev.njr.zync.capture.DocScanActivity
 import dev.njr.zync.home.CalendarSource
+import dev.njr.zync.home.NotificationEvents
 import dev.njr.zync.home.OpenMeteo
 import dev.njr.zync.home.WeatherNow
 import dev.njr.zync.home.buildAgenda
@@ -62,6 +63,7 @@ class MainActivity : ComponentActivity() {
         }
 
     private var screen by mutableStateOf(ZyncScreen.Home)
+    private var searchOpen by mutableStateOf(false)
     private var captureOpen by mutableStateOf(false)
     private var settingsRole by mutableStateOf<BarRole?>(null)
     private var barAppsTick by mutableIntStateOf(0)
@@ -113,13 +115,25 @@ class MainActivity : ComponentActivity() {
                     },
                     onEnableWeather = { locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
                     onEnableCalendar = { calendarPermission.launch(Manifest.permission.READ_CALENDAR) },
+                    onOpenEvent = { event ->
+                        CalendarSource.viewIntent(event)?.let { intent ->
+                            runCatching { startActivity(intent) }
+                        } ?: Toast.makeText(this@MainActivity, "No calendar entry for this item", Toast.LENGTH_SHORT).show()
+                    },
+                    onEnableNotifications = {
+                        runCatching {
+                            startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                        }
+                    },
                     barApps = { role -> barAppsTick; BarApps.load(this@MainActivity, role) },
                     onLaunchApp = { app ->
-                        runCatching { startActivity(app.launchIntent()) }.onFailure {
+                        if (!dev.njr.zync.launcher.AppLaunch.launch(this@MainActivity, app.toEntry())) {
                             Toast.makeText(this@MainActivity, "${app.label} is not available", Toast.LENGTH_SHORT).show()
                         }
                     },
                     onEditRole = { role -> settingsRole = role },
+                    searchOpen = searchOpen,
+                    onSearchOpenChange = { searchOpen = it },
                 )
                 settingsRole?.let { role ->
                     dev.njr.zync.ui.settings.BarSettingsScreen(
@@ -153,11 +167,12 @@ class MainActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
+                    searchOpen || captureOpen || settingsRole != null -> Unit // their BackHandlers own it
                     screen == ZyncScreen.Web && webView.canGoBack() -> webView.goBack()
                     screen == ZyncScreen.Web -> screen = ZyncScreen.Home
-                    // As the HOME app, back at the root is a no-op (launcher convention).
-                    isDefaultHome() -> Unit
-                    else -> { isEnabled = false; onBackPressedDispatcher.onBackPressed() }
+                    // On the home surface an edge swipe (the system back gesture) opens
+                    // search (device feedback) — there's nothing to go "back" to.
+                    else -> searchOpen = true
                 }
             }
         })
@@ -175,6 +190,7 @@ class MainActivity : ComponentActivity() {
         var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
         var contentTick by remember { mutableIntStateOf(0) }
         var weather by remember { mutableStateOf<WeatherNow?>(null) }
+        var notifEvents by remember { mutableStateOf<List<dev.njr.zync.home.CalEvent>>(emptyList()) }
 
         LaunchedEffect(Unit) { // minute clock
             while (true) {
@@ -183,6 +199,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         LaunchedEffect(Unit) { app.contentChanges.changes.collect { contentTick++ } }
+        LaunchedEffect(Unit) { NotificationEvents.events.collect { notifEvents = it } }
         LaunchedEffect(permissionTick) { // weather: on grant + hourly
             while (true) {
                 weather = fetchWeather()
@@ -196,19 +213,22 @@ class MainActivity : ComponentActivity() {
         }.timeInMillis
         val dayEnd = dayStart + 24L * 60 * 60_000
 
-        return remember(nowMillis, contentTick, permissionTick, weather) {
+        return remember(nowMillis, contentTick, permissionTick, weather, notifEvents) {
             val read = app.contentRead
             val prefs = homeContextPrefs()
             val contextId = prefs.getString("context_id", null)?.let { runCatching { Ulid.parse(it) }.getOrNull() }
             val contextName = prefs.getString("context_name", null)
             val suggestions = if (contextId != null) read.contextTasks(contextId, nowMillis) else read.activeTasks(nowMillis)
-            val events = CalendarSource.todaysEvents(this, dayStart, dayEnd)
+            val events = CalendarSource.todaysEvents(this, dayStart, dayEnd) +
+                notifEvents.filter { it.beginMillis in dayStart until dayEnd }
             val dueBy = DueDates.parse(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time))!!
+            val locationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
             HomeState(
                 clockHours = SimpleDateFormat("HH", Locale.US).format(cal.time),
                 clockMinutes = SimpleDateFormat("mm", Locale.US).format(cal.time),
                 dateLine = SimpleDateFormat("EEEE, MMMM d", Locale.US).format(cal.time),
-                weatherLine = weather?.toString(),
+                weatherLine = weather?.toString() ?: if (locationGranted) "retry weather ↻" else null,
                 contextName = contextName,
                 contexts = read.contexts(),
                 inboxCount = read.inbox(null, nowMillis).size,
@@ -217,6 +237,7 @@ class MainActivity : ComponentActivity() {
                 waitingCount = read.waitingTasks(nowMillis).size,
                 agenda = buildAgenda(events, nowMillis, suggestions),
                 calendarPermission = CalendarSource.hasPermission(this),
+                notificationsEnabled = NotificationEvents.listenerEnabled(this),
             )
         }
     }

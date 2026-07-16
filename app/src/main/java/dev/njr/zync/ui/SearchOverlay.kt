@@ -37,27 +37,44 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import dev.njr.zync.launcher.AppEntry
+import dev.njr.zync.launcher.AppLaunch
 import dev.njr.zync.launcher.AppSearch
+import dev.njr.zync.launcher.RecentItem
+import dev.njr.zync.launcher.SearchHistory
 
-private val OverlayBackground = Color(0xF213171F) // near-opaque pico dark
+private val OverlayBackground = Color(0xF2000000) // near-opaque pure black (AMOLED)
 private val TextPrimary = Color(0xFFC2C7D0)
 private val TextMuted = Color(0xFF8A91A0)
+private val TextFaint = Color(0xFF5C6470)
 private val FieldBackground = Color(0xFF1A212B)
 
 /**
- * The swipe-left surface (launcher spec L3): one field searching installed apps
- * (blank = the full app drawer) with a web-search handoff row. The escape hatch that
- * makes zync livable as HOME.
+ * The search surface (launcher spec L3 + device feedback): apps across ALL profiles,
+ * settings pages, web handoff (≤5 local matches), the five most recent selections at
+ * the top of the blank list, and the five most recent query texts under the field.
  */
 @Composable
 fun SearchOverlay(onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val apps = remember { AppSearch.launchableApps(context.packageManager) }
+    val apps = remember { AppSearch.launchableApps(context) }
     var query by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
 
     BackHandler(onBack = onDismiss)
     LaunchedEffect(Unit) { focus.requestFocus() }
+
+    fun launchRecent(item: RecentItem) {
+        when (item.kind) {
+            RecentItem.Kind.App ->
+                AppLaunch.launch(context, AppEntry(item.label, item.packageName!!, item.activityName!!, item.userSerial))
+            RecentItem.Kind.Setting ->
+                runCatching { context.startActivity(android.content.Intent(item.settingsAction!!).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            RecentItem.Kind.Web ->
+                runCatching { context.startActivity(AppSearch.webSearch(item.webQuery ?: item.label)) }
+        }
+        SearchHistory.recordItem(context, item)
+        onDismiss()
+    }
 
     Column(
         Modifier
@@ -89,33 +106,73 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                 modifier = Modifier.clickable(onClick = onDismiss).padding(6.dp),
             )
         }
-        val appMatches = AppSearch.filter(apps, query)
-        val settingsMatches = AppSearch.settingsMatches(query)
-        LazyColumn(Modifier.weight(1f)) {
-            if (AppSearch.showWebSearch(query, appMatches.size + settingsMatches.size)) {
-                item(key = "web-search") {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                runCatching { context.startActivity(AppSearch.webSearch(query)) }
-                                onDismiss()
-                            }
-                            .padding(vertical = 12.dp),
-                    ) {
+
+        // recent query texts, shown while the field is empty (tap to re-run)
+        if (query.isBlank()) {
+            val recentQueries = remember { SearchHistory.recentQueries(context) }
+            if (recentQueries.isNotEmpty()) {
+                Row(Modifier.padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    recentQueries.forEach { q ->
                         BasicText(
-                            "Search the web for “$query”",
-                            style = TextStyle(color = TextPrimary, fontSize = 15.sp),
+                            q,
+                            style = TextStyle(color = TextMuted, fontSize = 13.sp),
+                            modifier = Modifier
+                                .background(FieldBackground, androidx.compose.foundation.shape.RoundedCornerShape(999.dp))
+                                .clickable { query = q }
+                                .padding(horizontal = 12.dp, vertical = 5.dp),
                         )
                     }
                 }
             }
+        }
+
+        val appMatches = AppSearch.filter(apps, query)
+        val settingsMatches = AppSearch.settingsMatches(query)
+        LazyColumn(Modifier.weight(1f)) {
+            // 1. five most recent selections head the blank-query list
+            if (query.isBlank()) {
+                val recents = SearchHistory.recentItems(context)
+                if (recents.isNotEmpty()) {
+                    items(recents, key = { "r:" + it.label + it.kind }) { item ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable { launchRecent(item) }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            when (item.kind) {
+                                RecentItem.Kind.App -> AppIcon(item.packageName!!, item.activityName!!, item.userSerial)
+                                RecentItem.Kind.Setting -> BasicText("⚙", style = TextStyle(color = TextMuted, fontSize = 20.sp))
+                                RecentItem.Kind.Web -> BasicText("🔎", style = TextStyle(color = TextMuted, fontSize = 17.sp))
+                            }
+                            BasicText(item.label, style = TextStyle(color = TextPrimary, fontSize = 15.sp))
+                            BasicText("recent", style = TextStyle(color = TextFaint, fontSize = 11.sp))
+                        }
+                    }
+                }
+            }
+            // 2. web handoff when few local results match
+            if (AppSearch.showWebSearch(query, appMatches.size + settingsMatches.size)) {
+                items(listOf("web-search")) { _ ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                SearchHistory.recordQuery(context, query)
+                                launchRecent(RecentItem(RecentItem.Kind.Web, "Web: $query", webQuery = query))
+                            }
+                            .padding(vertical = 12.dp),
+                    ) {
+                        BasicText("Search the web for “$query”", style = TextStyle(color = TextPrimary, fontSize = 15.sp))
+                    }
+                }
+            }
+            // 3. settings matches
             items(settingsMatches, key = { "s:" + it.action }) { setting ->
                 Row(
                     Modifier.fillMaxWidth()
                         .clickable {
-                            runCatching { context.startActivity(setting.launchIntent()) }
-                            onDismiss()
+                            SearchHistory.recordQuery(context, query)
+                            launchRecent(RecentItem(RecentItem.Kind.Setting, setting.label, settingsAction = setting.action))
                         }
                         .padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -125,10 +182,22 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                     BasicText(setting.label, style = TextStyle(color = TextPrimary, fontSize = 15.sp))
                 }
             }
-            items(appMatches, key = { it.packageName + it.activityName }) { app ->
-                AppRow(app) {
-                    runCatching { context.startActivity(app.launchIntent()) }
-                    onDismiss()
+            // 4. apps (all profiles; work apps carry badged icons)
+            items(appMatches, key = { it.packageName + it.activityName + (it.userSerial ?: 0) }) { app ->
+                Row(
+                    Modifier.fillMaxWidth()
+                        .clickable {
+                            if (query.isNotBlank()) SearchHistory.recordQuery(context, query)
+                            launchRecent(
+                                RecentItem(RecentItem.Kind.App, app.label, app.packageName, app.activityName, app.userSerial),
+                            )
+                        }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    AppIcon(app.packageName, app.activityName, app.userSerial)
+                    BasicText(app.label, style = TextStyle(color = TextPrimary, fontSize = 15.sp))
                 }
             }
         }
@@ -136,21 +205,10 @@ fun SearchOverlay(onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun AppRow(app: AppEntry, onTap: () -> Unit) {
+private fun AppIcon(packageName: String, activityName: String, userSerial: Long?) {
     val context = LocalContext.current
-    val icon = remember(app.packageName, app.activityName) {
-        runCatching {
-            context.packageManager
-                .getActivityIcon(app.launchIntent().component!!)
-                .toBitmap(96, 96).asImageBitmap()
-        }.getOrNull()
+    val icon = remember(packageName, activityName, userSerial) {
+        AppLaunch.icon(context, packageName, activityName, userSerial)?.toBitmap(96, 96)?.asImageBitmap()
     }
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onTap).padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        icon?.let { Image(bitmap = it, contentDescription = null, modifier = Modifier.size(34.dp)) }
-        BasicText(app.label, style = TextStyle(color = TextPrimary, fontSize = 15.sp))
-    }
+    icon?.let { Image(bitmap = it, contentDescription = null, modifier = Modifier.size(34.dp)) }
 }

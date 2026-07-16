@@ -165,7 +165,7 @@ class ZyncApp : Application() {
         dev.njr.zync.sync.SyncScheduler.schedulePeriodic(this)
         // Launcher niceties: warm the app-search cache so the overlay opens instantly,
         // and seed the standard GTD contexts on a fresh install.
-        dev.njr.zync.launcher.AppSearch.warm(packageManager)
+        dev.njr.zync.launcher.AppSearch.warm(this)
         seedStandardContexts()
     }
 

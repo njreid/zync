@@ -56,8 +56,9 @@ data class HomeState(
     val todayCount: Int,
     val nextCount: Int,
     val waitingCount: Int,
-    val agenda: List<AgendaRow>,
+    val agenda: dev.njr.zync.home.AgendaView,
     val calendarPermission: Boolean,
+    val notificationsEnabled: Boolean,
 )
 
 /** Which display box is selected (drives the WebView destination on tap). */
@@ -72,6 +73,8 @@ fun HomeScreen(
     onEnableWeather: () -> Unit,
     onEnableCalendar: () -> Unit,
     onOpenSearch: () -> Unit = {},
+    onOpenEvent: (dev.njr.zync.home.CalEvent) -> Unit = {},
+    onEnableNotifications: () -> Unit = {},
 ) {
     Column(
         Modifier
@@ -90,7 +93,7 @@ fun HomeScreen(
     ) {
         TileRow(state, onTap = onTileTap)
         Hero(state, onContextSelect, onEnableWeather)
-        Agenda(state, onCompleteTask, onEnableCalendar)
+        Agenda(state, onCompleteTask, onEnableCalendar, onOpenEvent, onEnableNotifications)
     }
 }
 
@@ -137,7 +140,7 @@ private fun Tile(tile: HomeTile, count: Int, hint: String, modifier: Modifier, o
 private fun Hero(state: HomeState, onContextSelect: (ContextView?) -> Unit, onEnableWeather: () -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Row(verticalAlignment = Alignment.Bottom) {
                 // 24h, no colon: solid hours, outlined minutes (device feedback 2026-07-16).
                 BasicText(
@@ -185,15 +188,16 @@ private fun Hero(state: HomeState, onContextSelect: (ContextView?) -> Unit, onEn
         }
         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             BasicText(state.dateLine, style = TextStyle(color = C.Ink2, fontSize = 16.sp, fontFamily = Geomini))
+            // Always tappable: enables permission the first time, retries the fetch after.
             BasicText(
                 state.weatherLine ?: "enable weather",
                 style = TextStyle(
-                    color = if (state.weatherLine == null) C.Ink3 else C.Ink2,
+                    color = if (state.weatherLine == null || state.weatherLine.startsWith("retry")) C.Ink3 else C.Ink2,
                     fontSize = 16.sp,
                     fontFamily = Geomini,
                     textDecoration = if (state.weatherLine == null) TextDecoration.Underline else null,
                 ),
-                modifier = if (state.weatherLine == null) Modifier.clickable(onClick = onEnableWeather) else Modifier,
+                modifier = Modifier.clickable(onClick = onEnableWeather),
             )
         }
     }
@@ -220,13 +224,10 @@ private fun Agenda(
     state: HomeState,
     onCompleteTask: (dev.njr.zync.web.content.NodeView) -> Unit,
     onEnableCalendar: () -> Unit,
+    onOpenEvent: (dev.njr.zync.home.CalEvent) -> Unit,
+    onEnableNotifications: () -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
-        BasicText(
-            "TODAY",
-            style = TextStyle(color = C.Ink2, fontSize = 12.sp, fontFamily = Geomini, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp),
-        )
-    }
+    val agenda = state.agenda
     if (!state.calendarPermission) {
         BasicText(
             "Grant calendar access to see your agenda",
@@ -235,42 +236,110 @@ private fun Agenda(
         )
     }
     LazyColumn(Modifier.fillMaxWidth().padding(horizontal = 18.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 8.dp)) {
-        items(state.agenda.size) { i ->
-            when (val row = state.agenda[i]) {
-                is AgendaRow.Event -> EventRow(row)
+        // 1. all-day events: their own discrete section on top
+        if (agenda.allDay.isNotEmpty()) {
+            items(agenda.allDay.size) { i ->
+                val e = agenda.allDay[i]
+                Row(Modifier.fillMaxWidth().clickable { onOpenEvent(e) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    BasicText("all day", style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini), modifier = Modifier.width(58.dp))
+                    ProfileBar(e, 1f)
+                    BasicText(e.title, style = TextStyle(color = C.Ink2, fontSize = 14.sp, fontFamily = Geomini), modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
+                }
+            }
+            item(key = "allday-divider") {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(C.Border))
+            }
+        }
+
+        // 2. free-time header + doable tasks (only when not inside an event)
+        if (agenda.free) {
+            item(key = "free-header") {
+                BasicText(
+                    agenda.freeMinutes?.let { "free for $it min" } ?: "free",
+                    style = TextStyle(color = C.Accent, fontSize = 13.sp, fontFamily = CharonMono, fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+                )
+            }
+            items(agenda.suggestions.size) { i ->
+                val task = agenda.suggestions[i]
+                Row(
+                    Modifier.fillMaxWidth().clickable { onCompleteTask(task) }.padding(vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Box(Modifier.size(16.dp).border(1.5.dp, C.Ink3, RoundedCornerShape(5.dp)))
+                    BasicText(task.title ?: "(untitled)", style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini))
+                }
+            }
+        }
+
+        // 3. the timed events with the NOW divider
+        items(agenda.rows.size) { i ->
+            when (val row = agenda.rows[i]) {
+                is AgendaRow.Event -> EventRow(row, onOpenEvent)
                 is AgendaRow.Now -> NowRow()
-                is AgendaRow.Gap -> GapRow(row, onCompleteTask)
+            }
+        }
+
+        if (!state.notificationsEnabled) {
+            item(key = "notif-enable") {
+                BasicText(
+                    "Enable notification access for non-calendar reminders",
+                    style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini, textDecoration = TextDecoration.Underline),
+                    modifier = Modifier.clickable(onClick = onEnableNotifications).padding(vertical = 10.dp),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun EventRow(row: AgendaRow.Event) {
+private fun ProfileBar(event: dev.njr.zync.home.CalEvent, alpha: Float) {
+    Box(
+        Modifier
+            .width(7.dp)
+            .height(20.dp)
+            .background(
+                (if (event.profile == dev.njr.zync.home.CalEvent.Profile.WORK) C.Work else C.Home).copy(alpha = alpha),
+                RoundedCornerShape(2.dp),
+            ),
+    )
+}
+
+@Composable
+private fun EventRow(row: AgendaRow.Event, onOpenEvent: (dev.njr.zync.home.CalEvent) -> Unit) {
     val alpha = if (row.past) 0.45f else 1f
-    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Starting within five minutes: inverted (light background, dark text).
+    val inverted = row.startingSoon
+    val bg = if (inverted) C.Ink else androidx.compose.ui.graphics.Color.Transparent
+    val fg = if (inverted) C.Surface else C.Ink.copy(alpha = alpha)
+    val fg2 = if (inverted) C.Surface.copy(alpha = .7f) else C.Ink2.copy(alpha = alpha)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(bg, RoundedCornerShape(8.dp))
+            .clickable { onOpenEvent(row.event) }
+            .padding(vertical = 8.dp, horizontal = if (inverted) 6.dp else 0.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         BasicText(
             formatTime(row.event.beginMillis),
-            style = TextStyle(color = C.Ink2.copy(alpha = alpha), fontSize = 14.sp, fontFamily = Geomini),
+            style = TextStyle(color = fg2, fontSize = 14.sp, fontFamily = Geomini),
             modifier = Modifier.width(58.dp),
         )
-        Box(
-            Modifier
-                .width(7.dp)
-                .height(20.dp)
-                .background(
-                    (if (row.event.profile == dev.njr.zync.home.CalEvent.Profile.WORK) C.Work else C.Home).copy(alpha = alpha),
-                    RoundedCornerShape(2.dp),
-                ),
-        )
+        ProfileBar(row.event, alpha)
         BasicText(
             row.event.title,
-            style = TextStyle(color = C.Ink.copy(alpha = alpha), fontSize = 15.sp, fontFamily = Geomini),
+            style = TextStyle(color = fg, fontSize = 15.sp, fontFamily = Geomini, fontWeight = if (inverted) FontWeight.SemiBold else FontWeight.Normal),
             modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
         )
         BasicText(
-            if (row.event.profile == dev.njr.zync.home.CalEvent.Profile.WORK) "Work" else "Home",
-            style = TextStyle(color = C.Ink2.copy(alpha = alpha), fontSize = 11.sp, fontFamily = CharonMono, fontWeight = FontWeight.Bold),
+            when {
+                row.event.fromNotification -> "Notif"
+                row.event.profile == dev.njr.zync.home.CalEvent.Profile.WORK -> "Work"
+                else -> "Home"
+            },
+            style = TextStyle(color = fg2, fontSize = 11.sp, fontFamily = CharonMono, fontWeight = FontWeight.Bold),
         )
     }
 }
@@ -281,32 +350,6 @@ private fun NowRow() {
         Box(Modifier.weight(1f).height(1.dp).background(C.Accent.copy(alpha = .5f)))
         BasicText("now", style = TextStyle(color = C.Accent, fontSize = 11.sp, fontFamily = Geomini), modifier = Modifier.padding(horizontal = 8.dp))
         Box(Modifier.weight(1f).height(1.dp).background(C.Accent.copy(alpha = .5f)))
-    }
-}
-
-@Composable
-private fun GapRow(row: AgendaRow.Gap, onComplete: (dev.njr.zync.web.content.NodeView) -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = 66.dp, top = 6.dp, bottom = 6.dp)
-            .border(1.dp, C.Border, RoundedCornerShape(10.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-    ) {
-        BasicText(
-            "${row.minutes} min until ${row.nextTitle}:",
-            style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini),
-        )
-        row.tasks.forEach { task ->
-            Row(
-                Modifier.fillMaxWidth().clickable { onComplete(task) }.padding(vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Box(Modifier.size(16.dp).border(1.5.dp, C.Ink3, RoundedCornerShape(5.dp)))
-                BasicText(task.title ?: "(untitled)", style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini))
-            }
-        }
     }
 }
 

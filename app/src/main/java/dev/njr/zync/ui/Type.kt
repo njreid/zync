@@ -24,7 +24,8 @@ val Geomini = FontFamily(
 
 /** The shared dark palette (pico tokens + the validated calendar pair). */
 object ZyncColors {
-    val Surface = Color(0xFF13171F)
+    /** Pure black: AMOLED power (device feedback 2026-07-16). Cards stay elevated. */
+    val Surface = Color(0xFF000000)
     val Card = Color(0xFF1A212B)
     val Border = Color(0xFF2A313C)
     val Ink = Color(0xFFC2C7D0)
