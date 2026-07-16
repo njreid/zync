@@ -1,7 +1,9 @@
 package dev.njr.zync.web.content
 
 import dev.njr.zync.core.agent.AgentFlow
+import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.id.Ulid
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
@@ -39,7 +41,15 @@ class ContentCommands(private val ops: OpEmitter) {
     fun reopen(node: Ulid) = setStatus(node, "ACTIVE")
     fun trash(node: Ulid) = setStatus(node, "DROPPED")
 
-    fun defer(node: Ulid, untilMillis: Long) = ops.setField(node, "deferUntil", JsonPrimitive(untilMillis))
+    fun defer(node: Ulid, untilMillis: Long) = ops.setField(node, Fields.DEFER_UNTIL, JsonPrimitive(untilMillis))
+
+    /** Hard due date (epoch millis, UTC-noon convention — see DueDates); null clears. */
+    fun setDueDate(node: Ulid, millis: Long?) =
+        ops.setField(node, Fields.DUE_DATE, millis?.let(::JsonPrimitive) ?: JsonNull)
+
+    /** The responsible/waiting-on person's display name; null/blank clears. */
+    fun setPerson(node: Ulid, name: String?) =
+        ops.setField(node, Fields.PERSON, name?.trim()?.takeIf { it.isNotEmpty() }?.let(::JsonPrimitive) ?: JsonNull)
     fun move(node: Ulid, newParent: Ulid) = ops.move(node, newParent)
     fun convertToProject(node: Ulid) = ops.setField(node, "kind", JsonPrimitive("project"))
     fun convertToTask(node: Ulid) = ops.setField(node, "kind", JsonPrimitive("task"))

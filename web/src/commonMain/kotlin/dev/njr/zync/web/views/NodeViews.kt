@@ -2,6 +2,7 @@ package dev.njr.zync.web.views
 
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.web.content.ContentReadModel
+import dev.njr.zync.web.content.DueDates
 import dev.njr.zync.web.content.NodeView
 import kotlinx.html.FlowContent
 import kotlinx.html.InputType
@@ -14,7 +15,9 @@ import kotlinx.html.h2
 import kotlinx.html.h3
 import kotlinx.html.input
 import kotlinx.html.li
+import kotlinx.html.option
 import kotlinx.html.p
+import kotlinx.html.select
 import kotlinx.html.span
 import kotlinx.html.ul
 
@@ -125,12 +128,18 @@ fun FlowContent.treeSection(read: ContentReadModel, parent: Ulid?) {
     }
 }
 
-/** A node's detail: title, kind/status, notes, subtasks (decompose), and comments. */
+/** A node's detail: title, kind/status, notes, organize controls, subtasks, comments. */
 fun FlowContent.nodeDetail(read: ContentReadModel, node: NodeView) {
     h2 { +(node.title ?: "(untitled)") }
-    p("muted") { +"${node.kind ?: "node"} · ${node.status ?: ""}" }
+    p("muted") {
+        +"${node.kind ?: "node"} · ${node.status ?: ""}"
+        node.dueDate?.let { +" · due ${DueDates.format(it)}" }
+        node.person?.let { +" · @$it" }
+    }
     node.notes?.let { p { +it } }
     a(href = "/node/${node.id}/read") { +"Read" }
+
+    organizeSection(read, node)
 
     h3 { +"Subtasks" }
     val subs = read.children(node.id)
@@ -141,6 +150,81 @@ fun FlowContent.nodeDetail(read: ContentReadModel, node: NodeView) {
     val comments = read.comments(node.id)
     if (comments.isNotEmpty()) ul { comments.forEach { c -> li { +(c.title ?: "") } } }
     quickAdd(bind = "comment", param = "text", action = "/node/${node.id}/comment", label = "Comment")
+}
+
+/**
+ * Organize controls (the previously missing GTD surface): file into the tree,
+ * tag with contexts, set/clear a due date, name a person. All patch #node-detail.
+ */
+private fun FlowContent.organizeSection(read: ContentReadModel, node: NodeView) {
+    h3 { +"Organize" }
+    div(classes = "organize") {
+        // Move into the tree (projects are the targets; conversion buttons cover the rest).
+        val targets = read.projects().filter { it.id.toString() != node.id.toString() }
+        if (targets.isNotEmpty()) {
+            div(classes = "org-row") {
+                select {
+                    attributes["data-bind:dest"] = ""
+                    option { value = ""; +"Move to project…" }
+                    targets.forEach { p -> option { value = p.id.toString(); +(p.title ?: "(untitled)") } }
+                }
+                button(classes = "action") {
+                    attributes["data-on:click"] = "\$dest && @post('/node/${node.id}/move-detail?parent=' + \$dest)"
+                    +"Move"
+                }
+            }
+        }
+
+        // Context tags: current as removable chips + the rest addable.
+        val contexts = read.contexts()
+        if (contexts.isNotEmpty()) {
+            div(classes = "org-row chips-row") {
+                val tagged = contexts.filter { c -> node.tags.any { it.toString() == c.id.toString() } }
+                tagged.forEach { c ->
+                    button(classes = "action chip-on") {
+                        attributes["data-on:click"] = "@post('/node/${node.id}/tag?context=${c.id}&on=false')"
+                        +"${c.name ?: "(context)"} ✕"
+                    }
+                }
+                contexts.filter { it !in tagged }.forEach { c ->
+                    button(classes = "action") {
+                        attributes["data-on:click"] = "@post('/node/${node.id}/tag?context=${c.id}&on=true')"
+                        +"+ ${c.name ?: "(context)"}"
+                    }
+                }
+            }
+        }
+
+        // Due date: native date input; empty submit clears.
+        div(classes = "org-row") {
+            input(type = InputType.date) {
+                attributes["data-bind:due"] = ""
+                node.dueDate?.let { attributes["value"] = DueDates.format(it) }
+            }
+            button(classes = "action") {
+                attributes["data-on:click"] = "@post('/node/${node.id}/due?date=' + encodeURIComponent(\$due))"
+                +"Set due"
+            }
+            if (node.dueDate != null) {
+                button(classes = "action") {
+                    attributes["data-on:click"] = "@post('/node/${node.id}/due?date=')"
+                    +"Clear"
+                }
+            }
+        }
+
+        // Person (display name; blank clears).
+        div(classes = "org-row") {
+            input(type = InputType.text) {
+                attributes["data-bind:person"] = ""
+                attributes["placeholder"] = node.person ?: "Person"
+            }
+            button(classes = "action") {
+                attributes["data-on:click"] = "@post('/node/${node.id}/person?name=' + encodeURIComponent(\$person))"
+                +"Set person"
+            }
+        }
+    }
 }
 
 /** A long-form reading view: title + notes as prose. */

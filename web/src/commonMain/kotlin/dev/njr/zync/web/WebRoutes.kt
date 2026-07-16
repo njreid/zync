@@ -3,6 +3,7 @@ package dev.njr.zync.web
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.web.content.ContentCommands
 import dev.njr.zync.web.content.ContentReadModel
+import dev.njr.zync.web.content.DueDates
 import dev.njr.zync.web.sse.ChangeNotifier
 import dev.njr.zync.web.sse.patch
 import dev.njr.zync.web.sse.patchElementsEvent
@@ -161,6 +162,39 @@ fun Route.webRoutes(
             val text = call.request.queryParameters["text"]?.trim().orEmpty()
             val id = call.nodeId()
             if (id != null && text.isNotEmpty()) call.appliedDetail(id) { addComment(id, text) }
+            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
+
+        // --- Organize controls (detail page): tree filing, tags, due date, person ---
+        post("/node/{id}/move-detail") {
+            val parent = call.request.queryParameters["parent"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+            val id = call.nodeId()
+            if (id != null && parent != null) call.appliedDetail(id) { move(id, parent) }
+            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
+        post("/node/{id}/tag") {
+            val context = call.request.queryParameters["context"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+            val on = call.request.queryParameters["on"] == "true"
+            val id = call.nodeId()
+            if (id != null && context != null) {
+                call.appliedDetail(id) { if (on) addTag(id, context) else removeTag(id, context) }
+            } else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
+        post("/node/{id}/due") {
+            val raw = call.request.queryParameters["date"].orEmpty().trim()
+            val millis = if (raw.isEmpty()) null else DueDates.parse(raw)
+            val id = call.nodeId()
+            when {
+                id == null -> call.respondText("bad request", status = HttpStatusCode.BadRequest)
+                raw.isNotEmpty() && millis == null ->
+                    call.respondText("invalid date: expected YYYY-MM-DD", status = HttpStatusCode.BadRequest)
+                else -> call.appliedDetail(id) { setDueDate(id, millis) }
+            }
+        }
+        post("/node/{id}/person") {
+            val name = call.request.queryParameters["name"]
+            val id = call.nodeId()
+            if (id != null) call.appliedDetail(id) { setPerson(id, name) }
             else call.respondText("bad request", status = HttpStatusCode.BadRequest)
         }
     }

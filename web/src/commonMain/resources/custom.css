@@ -71,6 +71,14 @@ button.action:hover { background: var(--pico-primary); color: var(--pico-primary
 .quick-add input { margin: 0; min-height: 2.6rem; }
 .quick-add button { width: auto; margin: 0; padding: .35rem 1rem; }
 
+/* Organize controls (detail page): compact rows of select/date/text + chip actions. */
+.organize { margin-bottom: 1rem; }
+.org-row { display: flex; align-items: center; gap: .5rem; margin: .5rem 0; flex-wrap: wrap; }
+.org-row select, .org-row input { margin: 0; width: auto; flex: 1 1 12rem; min-height: 2.4rem; }
+.org-row button.action { flex: 0 0 auto; }
+.chips-row { gap: .4rem; }
+button.action.chip-on { background: var(--pico-primary); color: var(--pico-primary-inverse); }
+
 /* Current-context pill (launcher L4): chip at the top; open = dropdown of contexts. */
 .context-pill { position: relative; margin-bottom: .6rem; }
 .context-pill summary {

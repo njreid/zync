@@ -1,12 +1,14 @@
 package dev.njr.zync.web.content
 
 import dev.njr.zync.core.agent.AgentFlow
+import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.state.EntitySnapshot
 import dev.njr.zync.core.state.StateStore
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 
 /** A node as the shared UI reads it — folded from the op-log projection. */
 data class NodeView(
@@ -16,6 +18,8 @@ data class NodeView(
     val notes: String?,
     val status: String?,
     val deferUntil: Long?,
+    val dueDate: Long?,
+    val person: String?,
     val parent: Ulid?,
     val tags: Set<Ulid>,
     val alive: Boolean,
@@ -77,6 +81,21 @@ class ContentReadModel(private val store: StateStore) {
             .map { ContextView(it.entityId, it.fields["name"].asString()) }
             .sortedBy { it.name ?: "" }
 
+    /** Live tasks due at/before [byMillis] (incl. overdue), soonest first — the Today view. */
+    fun dueTasks(byMillis: Long): List<NodeView> =
+        snapshots()
+            .filter { it.kind() == "task" && !it.proposed() }
+            .map { it.toView() }
+            .filter { it.status != "DONE" && it.status != "DROPPED" && it.dueDate != null && it.dueDate <= byMillis }
+            .sortedBy { it.dueDate }
+
+    /** Live projects — the move targets for organizing tasks into the tree. */
+    fun projects(): List<NodeView> =
+        snapshots().filter { it.kind() == "project" && !it.proposed() }
+            .map { it.toView() }
+            .filter { it.status != "DROPPED" }
+            .sortedBy { it.title ?: "" }
+
     /**
      * The context view (launcher spec L4, v0.2 semantics): live, active, non-deferred
      * TASKS across the whole tree tagged with [context] — a flat next-actions list.
@@ -95,16 +114,20 @@ class ContentReadModel(private val store: StateStore) {
 
     private fun EntitySnapshot.toView() = NodeView(
         id = entityId,
-        kind = fields["kind"].asString(),
-        title = fields["title"].asString(),
-        notes = fields["notes"].asString(),
-        status = fields["status"].asString(),
-        deferUntil = (fields["deferUntil"] as? JsonPrimitive)?.content?.toLongOrNull(),
+        kind = fields[Fields.KIND].asString(),
+        title = fields[Fields.TITLE].asString(),
+        notes = fields[Fields.NOTES].asString(),
+        status = fields[Fields.STATUS].asString(),
+        deferUntil = (fields[Fields.DEFER_UNTIL] as? JsonPrimitive)?.content?.toLongOrNull(),
+        dueDate = (fields[Fields.DUE_DATE] as? JsonPrimitive)?.content?.toLongOrNull(),
+        person = fields[Fields.PERSON].asString(),
         parent = parent,
         tags = tags,
         alive = alive,
         proposed = proposed(),
     )
 
-    private fun JsonElement?.asString(): String? = (this as? JsonPrimitive)?.content
+    // JsonNull IS a JsonPrimitive (content "null") — cleared fields must read as absent.
+    private fun JsonElement?.asString(): String? =
+        (this as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content
 }
