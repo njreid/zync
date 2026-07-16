@@ -24,9 +24,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import dev.njr.zync.capture.ContactMatcher
 import dev.njr.zync.capture.DocScanActivity
-import dev.njr.zync.capture.DocUploadActivity
-import dev.njr.zync.capture.VoiceCaptureActivity
 import dev.njr.zync.home.CalendarSource
 import dev.njr.zync.home.OpenMeteo
 import dev.njr.zync.home.WeatherNow
@@ -34,8 +33,8 @@ import dev.njr.zync.home.buildAgenda
 import dev.njr.zync.launcher.LauncherIntents
 import dev.njr.zync.replica.PairingOutcome
 import dev.njr.zync.ui.BarAction
-import dev.njr.zync.ui.TextCaptureDialog
 import dev.njr.zync.ui.ZyncScreen
+import dev.njr.zync.ui.capture.CaptureScreen
 import dev.njr.zync.ui.ZyncShell
 import dev.njr.zync.ui.createZyncWebView
 import dev.njr.zync.ui.home.HomeState
@@ -61,8 +60,20 @@ class MainActivity : ComponentActivity() {
         }
 
     private var screen by mutableStateOf(ZyncScreen.Home)
-    private var textCaptureOpen by mutableStateOf(false)
+    private var captureOpen by mutableStateOf(false)
     private var permissionTick by mutableIntStateOf(0)
+    private var photoFile: java.io.File? = null
+    private val takePicture =
+        registerForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+            val file = photoFile
+            if (ok && file != null && file.exists()) {
+                val app = application as ZyncApp
+                app.captureToInbox("Photo", dev.njr.zync.data.AttachmentType.PDF, file.readBytes(), "jpg")
+                Toast.makeText(this, "Photo captured to Inbox", Toast.LENGTH_SHORT).show()
+            }
+            file?.delete()
+            photoFile = null
+        }
     private val calendarPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { permissionTick++ }
     private val locationPermission =
@@ -99,14 +110,25 @@ class MainActivity : ComponentActivity() {
                     onEnableWeather = { locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
                     onEnableCalendar = { calendarPermission.launch(Manifest.permission.READ_CALENDAR) },
                 )
-                if (textCaptureOpen) {
-                    TextCaptureDialog(
-                        onSave = { title ->
-                            app.replicaCapture.captureNote(title)
-                            app.contentChanges.notifyChanged()
-                            dev.njr.zync.sync.SyncScheduler.requestSync(this@MainActivity)
+                if (captureOpen) {
+                    CaptureScreen(
+                        contexts = app.contentRead.contexts(),
+                        projects = app.contentRead.projects(),
+                        contactMatch = { name -> ContactMatcher.match(this@MainActivity, name) },
+                        requestRecordAudio = { callback ->
+                            if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) ==
+                                android.content.pm.PackageManager.PERMISSION_GRANTED
+                            ) {
+                                callback(true)
+                            } else {
+                                recordAudioResult = callback
+                                recordAudioPermission.launch(Manifest.permission.RECORD_AUDIO)
+                            }
                         },
-                        onDismiss = { textCaptureOpen = false },
+                        onPhoto = { captureOpen = false; takePhoto() },
+                        onScan = { captureOpen = false; startActivity(Intent(this@MainActivity, DocScanActivity::class.java)) },
+                        onSave = ::performCapture,
+                        onDismiss = { captureOpen = false },
                     )
                 }
             }
@@ -237,17 +259,41 @@ class MainActivity : ComponentActivity() {
         runCatching { homeRoleRequest.launch(roles.createRequestRoleIntent(RoleManager.ROLE_HOME)) }
     }
 
-    /** Launcher action bar taps (spec L1): app slots fire intents; capture reuses the flows. */
+    /** Launcher action bar taps (spec L1): app slots fire intents; Capture opens the screen. */
     private fun handleBarAction(action: BarAction) {
         when (action) {
             BarAction.Messages -> launch(LauncherIntents.messages(), "No messages app found")
             BarAction.Calendar -> launch(LauncherIntents.calendar(), "No calendar app found")
             BarAction.Phone -> launch(LauncherIntents.phone(), "No dialer found")
-            BarAction.CaptureText -> textCaptureOpen = true
-            BarAction.CaptureVoice -> startActivity(Intent(this, VoiceCaptureActivity::class.java))
-            BarAction.CaptureScan -> startActivity(Intent(this, DocScanActivity::class.java))
-            BarAction.CaptureUpload -> startActivity(Intent(this, DocUploadActivity::class.java))
+            BarAction.Capture -> captureOpen = true
         }
+    }
+
+    /** Camera capture → attachment into the inbox (capture-screen Photo mode). */
+    private fun takePhoto() {
+        val dir = java.io.File(cacheDir, "capture").apply { mkdirs() }
+        val file = java.io.File(dir, "photo-${System.currentTimeMillis()}.jpg")
+        photoFile = file
+        val uri = androidx.core.content.FileProvider.getUriForFile(this, "dev.njr.zync.fileprovider", file)
+        runCatching { takePicture.launch(uri) }
+            .onFailure { Toast.makeText(this, "No camera available", Toast.LENGTH_SHORT).show() }
+    }
+
+    /** Build the ops for a capture-screen save (native-capture spec routing rules). */
+    private fun performCapture(result: dev.njr.zync.ui.capture.CaptureResult) {
+        val app = application as ZyncApp
+        val id = app.contentCommands.createTask(result.title, parent = result.parentId)
+        result.contextId?.let { app.contentCommands.addTag(id, it) }
+        result.dueMillis?.let { app.contentCommands.setDueDate(id, it) }
+        result.person?.let { app.contentCommands.setPerson(id, it) }
+        result.notes?.takeIf { it != result.title }?.let { app.contentCommands.setNotes(id, it) }
+        app.contentChanges.notifyChanged()
+        dev.njr.zync.sync.SyncScheduler.requestSync(this)
+        Toast.makeText(
+            this,
+            result.parentId?.let { "Saved — filed under a project" } ?: "Saved to Inbox",
+            Toast.LENGTH_SHORT,
+        ).show()
     }
 
     private fun launch(intent: Intent, missing: String) {

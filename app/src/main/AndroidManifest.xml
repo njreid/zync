@@ -126,6 +126,17 @@
                 android:resource="@xml/capture_accessibility_service" />
         </service>
 
+        <!-- Camera handoff for the capture screen's Photo mode. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="dev.njr.zync.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <receiver
             android:name=".widget.QuickCaptureWidgetReceiver"
             android:exported="true">
