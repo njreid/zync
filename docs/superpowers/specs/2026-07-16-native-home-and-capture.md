@@ -15,6 +15,7 @@
 | Speech | `SpeechRecognizer` with `EXTRA_PREFER_OFFLINE` (on-device, streaming partials) |
 | Doc scan | Existing ML Kit document scanner (NOT Drive API — correction to earlier framing) |
 | Capture routing | Tasks with a tree-node ("in") chip **skip the Inbox** and file directly under that node |
+| People | Extracted names get a **best-effort match against phone contacts** (ContactsContract, READ_CONTACTS): chip shows the matched contact (avatar initials + display name); unmatched names stay as plain text chips. The op log stores the display name (syncs everywhere); the contact link stays device-local and re-resolves by name |
 
 ## Home screen (all native; the WebView appears on tile tap)
 
@@ -55,4 +56,6 @@ ingestion path (events as synced entities) — spec that with the backend piece.
 - Server work-agenda ingestion (source on the work side + event entity/kind).
 - Nano prompt + JSON contract for extraction; person/due-date fields in core
   vocabulary; tree/tag/due-date editing in :web detail view.
+- Contact-matched people unlock later actions (tap → contact card; "call/message
+  Dana" from a task; agenda 1:1 linking).
 - Duration-aware gap suggestions (post-L5/operators).

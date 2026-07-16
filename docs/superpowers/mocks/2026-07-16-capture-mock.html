@@ -50,6 +50,8 @@
   .chip .x { color: var(--ink3); margin-left: 2px; }
   .chip.add { color: var(--ink3); border-style: dashed; }
   .chip.parent { background: var(--card); border-color: var(--ink3); }
+  .chip .avatar { width: 18px; height: 18px; border-radius: 50%; background: var(--border); color: var(--ink);
+                  font-size: 10px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
   .chip.parent .k { color: var(--ink3); }
 
   /* actions */
@@ -88,7 +90,7 @@
     <div class="chips">
       <span class="chip"><span class="k">context</span>@work<span class="x">✕</span></span>
       <span class="chip"><span class="k">due</span>Fri, Jul 18<span class="x">✕</span></span>
-      <span class="chip"><span class="k">person</span>Dana<span class="x">✕</span></span>
+      <span class="chip"><span class="avatar">DK</span>Dana Kim<span class="x">✕</span></span>
       <span class="chip parent"><span class="k">in</span>Legal ▸ Contracts<span class="x">✕</span></span>
       <span class="chip add">+ add</span>
     </div>
