@@ -1,29 +1,24 @@
 /* zync theme on top of Pico (dark, forced via <html data-theme="dark"> — the v0.2
-   look: near-black background, subtle light-gray text, Geist headings + Inter body).
+   look: near-black background, subtle light-gray text, Geomini everywhere, Iosevka Charon Mono for tags/contexts/clock).
    Adapted from v0.2's custom.css to the rebuilt :web DOM. Served at
    /assets/custom.css: the loopback CSP (default-src 'self') allows stylesheet FILES
    but not inline <style>. Fonts self-hosted for the same reason (OFL-1.1; latin
    woff2 subsets — see fonts/*-OFL.txt). */
 
-@font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap; src: url("/assets/fonts/inter-400.woff2") format("woff2"); }
-@font-face { font-family: "Inter"; font-style: normal; font-weight: 500; font-display: swap; src: url("/assets/fonts/inter-500.woff2") format("woff2"); }
-@font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap; src: url("/assets/fonts/inter-600.woff2") format("woff2"); }
-@font-face { font-family: "Inter"; font-style: normal; font-weight: 700; font-display: swap; src: url("/assets/fonts/inter-700.woff2") format("woff2"); }
-@font-face { font-family: "Geist"; font-style: normal; font-weight: 400; font-display: swap; src: url("/assets/fonts/geist-400.woff2") format("woff2"); }
-@font-face { font-family: "Geist"; font-style: normal; font-weight: 500; font-display: swap; src: url("/assets/fonts/geist-500.woff2") format("woff2"); }
-@font-face { font-family: "Geist"; font-style: normal; font-weight: 600; font-display: swap; src: url("/assets/fonts/geist-600.woff2") format("woff2"); }
-@font-face { font-family: "Geist"; font-style: normal; font-weight: 700; font-display: swap; src: url("/assets/fonts/geist-700.woff2") format("woff2"); }
+@font-face { font-family: "Geomini"; font-style: normal; font-weight: 200 800; font-display: swap; src: url("/assets/fonts/geomini-var.woff2") format("woff2"); }
+@font-face { font-family: "Iosevka Charon Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/assets/fonts/iosevkacharonmono-400.woff2") format("woff2"); }
+@font-face { font-family: "Iosevka Charon Mono"; font-style: normal; font-weight: 700; font-display: swap; src: url("/assets/fonts/iosevkacharonmono-700.woff2") format("woff2"); }
 
-/* Body text = Inter (override Pico's token); headings = Geist. */
+/* Everything = Geomini (variable, 200–800); tags/contexts (and the native clock) =
+   Iosevka Charon Mono bold — the "machine" voice against Geomini's prose. */
 :root {
-  --pico-font-family-sans-serif: "Inter", system-ui, -apple-system, "Segoe UI",
+  --pico-font-family-sans-serif: "Geomini", system-ui, -apple-system, "Segoe UI",
     Roboto, Helvetica, Arial, sans-serif;
 }
-h1, h2, h3, h4, h5, h6,
-hgroup > *:first-child {
-  --pico-font-family-sans-serif: "Geist", "Inter", system-ui, sans-serif;
-  font-family: "Geist", "Inter", system-ui, sans-serif;
-  letter-spacing: -0.01em;
+.context-pill summary, .context-pill ul a,
+.chips-row button.action, span.status {
+  font-family: "Iosevka Charon Mono", ui-monospace, monospace;
+  font-weight: 700;
 }
 
 html { color-scheme: dark; }

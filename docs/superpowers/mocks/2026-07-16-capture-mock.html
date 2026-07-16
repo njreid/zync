@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>zync — capture mock v3 (2026-07-16)</title>
 <style>
+  @font-face { font-family: "Geomini"; font-weight: 200 800; src: url("../../../web/src/commonMain/resources/fonts/geomini-var.woff2") format("woff2"); }
+  @font-face { font-family: "Iosevka Charon Mono"; font-weight: 700; src: url("../../../web/src/commonMain/resources/fonts/iosevkacharonmono-700.woff2") format("woff2"); }
+</style>
+<style>
   :root {
     --surface: #13171f; --card: #1a212b; --border: #2a313c;
     --ink: #c2c7d0; --ink2: #8a91a0; --ink3: #5c6470; --accent: #4a90c2;
@@ -12,13 +16,13 @@
   * { box-sizing: border-box; }
   html { color-scheme: dark; }
   body { margin: 0 auto; max-width: 412px; min-height: 100dvh; display: flex; flex-direction: column;
-         background: var(--surface); color: var(--ink); font-family: "Geist", "Inter", system-ui, sans-serif; }
+         background: var(--surface); color: var(--ink); font-family: "Geomini", system-ui, sans-serif; }
 
   .head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 6px; }
   .head .title { font-size: 17px; font-weight: 600; }
   .head .close { color: var(--ink3); font-size: 22px; }
   .modes { display: flex; gap: 8px; padding: 8px 18px; }
-  .mode { font-size: 13px; color: var(--ink2); border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px; }
+  .mode { font-family: "Iosevka Charon Mono", ui-monospace, monospace; font-weight: 700; font-size: 12px; color: var(--ink2); border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px; }
   .mode.active { color: var(--surface); background: var(--ink); border-color: var(--ink); font-weight: 600; }
 
   .live { padding: 12px 18px 6px; }
@@ -35,7 +39,7 @@
   .fields input.title { width: 100%; margin: 4px 0 10px; font-size: 17px; font-weight: 600; color: var(--ink);
                         background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink);
+  .chip { font-family: "Iosevka Charon Mono", ui-monospace, monospace; font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink);
           border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; background: var(--card); }
   .chip .k { color: var(--ink3); font-size: 11px; }
   .chip .x { color: var(--ink3); }

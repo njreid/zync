@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>zync — home screen mock v2 (2026-07-16)</title>
 <style>
+  @font-face { font-family: "Geomini"; font-weight: 200 800; src: url("../../../web/src/commonMain/resources/fonts/geomini-var.woff2") format("woff2"); }
+  @font-face { font-family: "Iosevka Charon Mono"; font-weight: 700; src: url("../../../web/src/commonMain/resources/fonts/iosevkacharonmono-700.woff2") format("woff2"); }
+</style>
+<style>
   /* Monochrome pico-dark + the validated categorical pair for calendar identity:
      Work #3987e5 (blue), Home #199e70 (aqua) — CVD-checked on #13171f, and every
      event also carries a text chip (identity never color-alone). */
@@ -18,7 +22,7 @@
   body {
     margin: 0 auto; max-width: 412px; height: 100dvh; display: flex; flex-direction: column;
     background: var(--surface); color: var(--ink);
-    font-family: "Geist", "Inter", system-ui, sans-serif;
+    font-family: "Geomini", system-ui, sans-serif;
   }
 
   /* ---- 1. display boxes ---- */
@@ -27,13 +31,13 @@
   .tile .label { font-size: 12px; color: var(--ink2); letter-spacing: .02em; }
   .tile .value { font-size: 24px; font-weight: 600; margin-top: 2px; }
   .tile.selected { border-color: var(--accent); }
-  .tile.context .value { font-size: 17px; font-weight: 500; padding-top: 6px; color: var(--ink); }
+  .tile.context .value { font-family: "Iosevka Charon Mono", ui-monospace, monospace; font-weight: 700; font-size: 15px; padding-top: 6px; color: var(--ink); }
   .tile.context .value::after { content: " ▾"; color: var(--ink3); }
   .tile .hint { font-size: 11px; color: var(--ink3); }
 
   /* ---- 2. hero ---- */
   .hero { padding: 12px 18px 14px; }
-  .hero .time { font-size: 72px; font-weight: 600; line-height: 1; letter-spacing: -0.02em; }
+  .hero .time { font-family: "Iosevka Charon Mono", ui-monospace, monospace; font-weight: 700; font-size: 64px; line-height: 1; letter-spacing: -0.02em; }
   .hero .meta { margin-top: 6px; font-size: 16px; color: var(--ink2); display: flex; gap: 16px; }
 
   /* ---- 3. agenda (the main surface): events + doable tasks in the gap ---- */
@@ -44,7 +48,7 @@
   .evt .bar { align-self: stretch; border-radius: 2px; }
   .evt.work .bar { background: var(--work); }
   .evt.home .bar { background: var(--home); }
-  .evt .cal { font-size: 11px; color: var(--ink2); border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; }
+  .evt .cal { font-family: "Iosevka Charon Mono", ui-monospace, monospace; font-weight: 700; font-size: 10px; color: var(--ink2); border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; }
   .evt.past { opacity: .45; }
   .now { display: flex; align-items: center; gap: 8px; color: var(--accent); font-size: 11px; margin: 2px 0; }
   .now::before, .now::after { content: ""; flex: 1; border-top: 1px solid var(--accent); opacity: .5; }

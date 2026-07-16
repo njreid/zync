@@ -98,7 +98,7 @@ fun Route.webRoutes(
     }
     get("/assets/fonts/{file}") {
         // Allowlist the exact vendored names — the param is joined into a resource path.
-        val file = call.parameters["file"]?.takeIf { it.matches(Regex("(geist|inter)-[4-7]00\\.woff2")) }
+        val file = call.parameters["file"]?.takeIf { it.matches(Regex("(geomini-var|iosevkacharonmono-[47]00)\\.woff2")) }
         if (file == null) call.respondText("not found", status = HttpStatusCode.NotFound)
         else call.respondBytes(WebPlatform.assetBytes("fonts/$file"), ContentType("font", "woff2"))
     }
