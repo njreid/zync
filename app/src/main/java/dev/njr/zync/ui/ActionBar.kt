@@ -7,10 +7,13 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,49 +53,52 @@ fun ZyncActionBar(onAction: (BarAction) -> Unit, onSearch: () -> Unit = {}) {
         Modifier
             .fillMaxWidth()
             .background(BarBackground)
+            // Any decisive horizontal swipe on the bar opens search (either direction —
+            // device feedback: "from the left" reads as a rightward drag).
             .pointerInput(Unit) {
                 val threshold = 48.dp.toPx()
                 var total = 0f
                 detectHorizontalDragGestures(
                     onDragStart = { total = 0f },
                     onHorizontalDrag = { _, dx -> total += dx },
-                    onDragEnd = { if (total < -threshold) onSearch() },
+                    onDragEnd = { if (kotlin.math.abs(total) > threshold) onSearch() },
                 )
-            },
+            }
+            // The bar owns the nav-bar strip: background extends behind it, icons above it.
+            .windowInsetsPadding(WindowInsets.navigationBars),
     ) {
         Row(Modifier.fillMaxWidth().height(1.dp).background(BarBorder)) {}
         Row(
             Modifier.fillMaxWidth().padding(vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (captureOpen) {
-                barSlot(R.drawable.ic_text, "Text") { captureOpen = false; onAction(BarAction.CaptureText) }
-                barSlot(R.drawable.ic_voice, "Voice") { captureOpen = false; onAction(BarAction.CaptureVoice) }
-                barSlot(R.drawable.ic_scan, "Scan") { captureOpen = false; onAction(BarAction.CaptureScan) }
-                barSlot(R.drawable.ic_upload, "Upload") { captureOpen = false; onAction(BarAction.CaptureUpload) }
-                barSlot(R.drawable.ic_close, "Back") { captureOpen = false }
+                barSlot(R.drawable.ic_text, "Text", Modifier.weight(1f)) { captureOpen = false; onAction(BarAction.CaptureText) }
+                barSlot(R.drawable.ic_voice, "Voice", Modifier.weight(1f)) { captureOpen = false; onAction(BarAction.CaptureVoice) }
+                barSlot(R.drawable.ic_scan, "Scan", Modifier.weight(1f)) { captureOpen = false; onAction(BarAction.CaptureScan) }
+                barSlot(R.drawable.ic_upload, "Upload", Modifier.weight(1f)) { captureOpen = false; onAction(BarAction.CaptureUpload) }
+                barSlot(R.drawable.ic_close, "Back", Modifier.weight(1f)) { captureOpen = false }
             } else {
-                barSlot(R.drawable.ic_messages, "Messages") { onAction(BarAction.Messages) }
-                barSlot(R.drawable.ic_calendar, "Calendar") { onAction(BarAction.Calendar) }
-                barSlot(R.drawable.ic_phone, "Phone") { onAction(BarAction.Phone) }
-                barSlot(R.drawable.ic_search, "Search") { onSearch() }
-                barSlot(R.drawable.ic_capture, "Capture") { captureOpen = true }
+                barSlot(R.drawable.ic_messages, "Messages", Modifier.weight(1f)) { onAction(BarAction.Messages) }
+                barSlot(R.drawable.ic_calendar, "Calendar", Modifier.weight(1f)) { onAction(BarAction.Calendar) }
+                barSlot(R.drawable.ic_phone, "Phone", Modifier.weight(1f)) { onAction(BarAction.Phone) }
+                barSlot(R.drawable.ic_search, "Search", Modifier.weight(1f)) { onSearch() }
+                barSlot(R.drawable.ic_capture, "Capture", Modifier.weight(1f)) { captureOpen = true }
             }
         }
     }
 }
 
 @Composable
-private fun barSlot(@DrawableRes icon: Int, label: String, onTap: () -> Unit) {
+private fun barSlot(@DrawableRes icon: Int, label: String, modifier: Modifier, onTap: () -> Unit) {
     Column(
-        Modifier.clickable(onClick = onTap).padding(horizontal = 10.dp, vertical = 4.dp),
+        modifier.clickable(onClick = onTap).padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Image(
             painter = painterResource(icon),
             contentDescription = label,
-            modifier = Modifier.size(22.dp),
+            modifier = Modifier.size(30.dp),
             colorFilter = ColorFilter.tint(BarMuted),
         )
         BasicText(label, style = TextStyle(color = BarMuted, fontSize = 11.sp))

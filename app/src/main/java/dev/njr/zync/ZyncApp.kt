@@ -163,5 +163,25 @@ class ZyncApp : Application() {
         // Activate background sync: a connectivity-gated periodic sweep (prompt pushes come
         // from captures + local :web mutations via SyncScheduler.requestSync). No-op unpaired.
         dev.njr.zync.sync.SyncScheduler.schedulePeriodic(this)
+        // Launcher niceties: warm the app-search cache so the overlay opens instantly,
+        // and seed the standard GTD contexts on a fresh install.
+        dev.njr.zync.launcher.AppSearch.warm(packageManager)
+        seedStandardContexts()
+    }
+
+    /** One-time seed of the standard GTD contexts (skipped if any context exists). */
+    private fun seedStandardContexts() {
+        val prefs = getSharedPreferences("zync_launcher", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("contexts_seeded", false)) return
+        Thread {
+            runCatching {
+                if (contentRead.contexts().isEmpty()) {
+                    listOf("@home", "@work", "@errands", "@calls", "@computer")
+                        .forEach { contentCommands.createContext(it) }
+                    contentChanges.notifyChanged()
+                }
+                prefs.edit().putBoolean("contexts_seeded", true).apply()
+            }.onFailure { Log.w(TAG, "context seeding failed", it) }
+        }.apply { name = "zync-seed-contexts"; start() }
     }
 }

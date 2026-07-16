@@ -8,9 +8,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/** The hero line's weather: current temperature + a short condition word. */
-data class WeatherNow(val temperatureC: Int, val condition: String) {
-    override fun toString(): String = "$temperatureC° $condition"
+/** The hero line's weather: summary icon + temperature + a short condition word. */
+data class WeatherNow(val temperatureC: Int, val condition: String, val icon: String) {
+    override fun toString(): String = "$icon $temperatureC° $condition"
 }
 
 /**
@@ -25,9 +25,11 @@ class OpenMeteo(private val http: HttpClient, private val baseUrl: String = "htt
         if (!response.status.isSuccess()) return null
         return runCatching {
             val current = Json.parseToJsonElement(response.bodyAsText()).jsonObject["current"]!!.jsonObject
+            val code = current["weather_code"]!!.jsonPrimitive.content.toInt()
             WeatherNow(
                 temperatureC = current["temperature_2m"]!!.jsonPrimitive.content.toDouble().toInt(),
-                condition = wmoCondition(current["weather_code"]!!.jsonPrimitive.content.toInt()),
+                condition = wmoCondition(code),
+                icon = wmoIcon(code),
             )
         }.getOrNull()
     }
@@ -44,6 +46,19 @@ class OpenMeteo(private val http: HttpClient, private val baseUrl: String = "htt
             in 71..77, 85, 86 -> "Snow"
             95, 96, 99 -> "Thunderstorm"
             else -> "—"
+        }
+
+        /** WMO code → a summary glyph for the hero line. */
+        fun wmoIcon(code: Int): String = when (code) {
+            0 -> "☀"
+            1, 2 -> "⛅"
+            3 -> "☁"
+            45, 48 -> "🌫"
+            in 51..57 -> "🌦"
+            in 61..67, in 80..82 -> "🌧"
+            in 71..77, 85, 86 -> "🌨"
+            95, 96, 99 -> "⛈"
+            else -> "·"
         }
     }
 }

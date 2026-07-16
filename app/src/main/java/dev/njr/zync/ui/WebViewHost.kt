@@ -4,11 +4,14 @@ import android.annotation.SuppressLint
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebView
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
@@ -79,18 +82,24 @@ fun ZyncShell(
     onEnableCalendar: () -> Unit,
 ) {
     var searchOpen by rememberSaveable { mutableStateOf(false) }
-    Box(Modifier.fillMaxSize()) {
-        // safeDrawing keeps content clear of the status/nav bars, cutout, and IME under the
-        // enforced edge-to-edge display (see MainActivity.enableEdgeToEdge).
-        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+    // The dark surface paints edge-to-edge FIRST; insets are then applied per-region
+    // (home draws into the status-bar strip around the camera; the bar owns the
+    // nav-bar strip) — full safeDrawing padding here was the white-bars bug.
+    Box(Modifier.fillMaxSize().background(dev.njr.zync.ui.ZyncColors.Surface)) {
+        Column(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 if (screen == ZyncScreen.Web) {
                     AndroidView(
                         factory = { webView.also { v -> (v.parent as? ViewGroup)?.removeView(v) } },
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
                     )
                 } else {
-                    HomeScreen(homeState, onTileTap, onContextSelect, onCompleteTask, onEnableWeather, onEnableCalendar)
+                    HomeScreen(
+                        homeState, onTileTap, onContextSelect, onCompleteTask, onEnableWeather, onEnableCalendar,
+                        onOpenSearch = { searchOpen = true },
+                    )
                 }
             }
             ZyncActionBar(onAction = onBarAction, onSearch = { searchOpen = true })

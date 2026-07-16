@@ -14,9 +14,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -27,6 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -42,7 +43,8 @@ import dev.njr.zync.web.content.ContextView
 
 /** Everything the home screen renders; assembled by the host (MainActivity). */
 data class HomeState(
-    val clock: String,
+    val clockHours: String,
+    val clockMinutes: String,
     val dateLine: String,
     val weatherLine: String?, // null = tappable "enable weather"
     val contextName: String?, // null = all contexts
@@ -66,45 +68,62 @@ fun HomeScreen(
     onCompleteTask: (dev.njr.zync.web.content.NodeView) -> Unit,
     onEnableWeather: () -> Unit,
     onEnableCalendar: () -> Unit,
+    onOpenSearch: () -> Unit = {},
 ) {
-    Column(Modifier.fillMaxSize().background(C.Surface)) {
-        TileRow(state, onTileTap)
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(C.Surface)
+            // Swipe from the left (rightward drag) anywhere on the home surface = search.
+            .pointerInput(Unit) {
+                val threshold = 64.dp.toPx()
+                var total = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { total = 0f },
+                    onHorizontalDrag = { _, dx -> total += dx },
+                    onDragEnd = { if (total > threshold) onOpenSearch() },
+                )
+            },
+    ) {
+        TileRow(state, onTap = onTileTap)
         Hero(state, onContextSelect, onEnableWeather)
         Agenda(state, onCompleteTask, onEnableCalendar)
     }
 }
 
-// ---- display boxes -------------------------------------------------------------
+// ---- display boxes: pinned to the very top, split around the front camera ---------
 
 @Composable
 private fun TileRow(state: HomeState, onTap: (HomeTile) -> Unit) {
-    val tiles = listOf(
-        Triple(HomeTile.Inbox, state.inboxCount, "unsorted"),
-        Triple(HomeTile.Today, state.todayCount, "due"),
-        Triple(HomeTile.Next, state.nextCount, "actions"),
-        Triple(HomeTile.Waiting, state.waitingCount, "on others"),
-    )
-    LazyRow(
-        Modifier.fillMaxWidth().padding(top = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp),
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        items(tiles, key = { it.first.name }) { (tile, count, hint) ->
-            Column(
-                Modifier
-                    .border(1.dp, if (tile == HomeTile.Inbox) C.Accent else C.Border, RoundedCornerShape(12.dp))
-                    .background(C.Card, RoundedCornerShape(12.dp))
-                    .clickable { onTap(tile) }
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-            ) {
-                BasicText(tile.name, style = TextStyle(color = C.Ink2, fontSize = 12.sp, fontFamily = Geomini))
-                BasicText(
-                    "$count",
-                    style = TextStyle(color = C.Ink, fontSize = 24.sp, fontFamily = Geomini, fontWeight = FontWeight.SemiBold),
-                )
-                BasicText(hint, style = TextStyle(color = C.Ink3, fontSize = 11.sp, fontFamily = Geomini))
-            }
-        }
+        Tile(HomeTile.Inbox, state.inboxCount, "unsorted", Modifier.weight(1f)) { onTap(HomeTile.Inbox) }
+        Spacer(Modifier.width(8.dp))
+        Tile(HomeTile.Today, state.todayCount, "due", Modifier.weight(1f)) { onTap(HomeTile.Today) }
+        Spacer(Modifier.width(56.dp)) // the front-camera gap
+        Tile(HomeTile.Next, state.nextCount, "actions", Modifier.weight(1f)) { onTap(HomeTile.Next) }
+        Spacer(Modifier.width(8.dp))
+        Tile(HomeTile.Waiting, state.waitingCount, "waiting", Modifier.weight(1f)) { onTap(HomeTile.Waiting) }
+    }
+}
+
+@Composable
+private fun Tile(tile: HomeTile, count: Int, hint: String, modifier: Modifier, onTap: () -> Unit) {
+    Column(
+        modifier
+            .border(1.dp, if (tile == HomeTile.Inbox) C.Accent else C.Border, RoundedCornerShape(10.dp))
+            .background(C.Card, RoundedCornerShape(10.dp))
+            .clickable(onClick = onTap)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    ) {
+        BasicText(tile.name, style = TextStyle(color = C.Ink2, fontSize = 11.sp, fontFamily = Geomini))
+        BasicText(
+            "$count",
+            style = TextStyle(color = C.Ink, fontSize = 20.sp, fontFamily = Geomini, fontWeight = FontWeight.SemiBold),
+        )
+        BasicText(hint, style = TextStyle(color = C.Ink3, fontSize = 10.sp, fontFamily = Geomini))
     }
 }
 
@@ -115,14 +134,27 @@ private fun Hero(state: HomeState, onContextSelect: (ContextView?) -> Unit, onEn
     var menuOpen by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-            BasicText(
-                state.clock,
-                style = TextStyle(color = C.Ink, fontSize = 72.sp, fontFamily = BigShoulders, fontWeight = FontWeight.Black),
-            )
+            Row(verticalAlignment = Alignment.Bottom) {
+                // 24h, no colon: solid hours, outlined minutes (device feedback 2026-07-16).
+                BasicText(
+                    state.clockHours,
+                    style = TextStyle(color = C.Ink, fontSize = 78.sp, fontFamily = BigShoulders, fontWeight = FontWeight.Black),
+                )
+                BasicText(
+                    state.clockMinutes,
+                    style = TextStyle(
+                        color = C.Ink,
+                        fontSize = 78.sp,
+                        fontFamily = BigShoulders,
+                        fontWeight = FontWeight.Black,
+                        drawStyle = Stroke(width = 4f),
+                    ),
+                )
+            }
             Box {
                 BasicText(
                     state.contextName?.let { "@$it" } ?: "@all",
-                    style = TextStyle(color = C.Ink2, fontSize = 72.sp, fontFamily = BigShoulders, fontWeight = FontWeight.Black),
+                    style = TextStyle(color = C.Ink2, fontSize = 78.sp, fontFamily = BigShoulders, fontWeight = FontWeight.Black),
                     modifier = Modifier.clickable { menuOpen = true },
                 )
                 if (menuOpen) {

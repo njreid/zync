@@ -29,6 +29,7 @@ fun main() {
     val content = ServerContent(service)
     content.commands.createTask("Buy milk")
     content.commands.createTask("Read a book")
+    content.commands.createTask("CSP probe task") // csp.spec completes this one
     val offsite = content.commands.createTask("Plan the offsite")
     seedStubProposal(service, offsite)
     // A context with one tagged task, so the context-pill filter is drivable.

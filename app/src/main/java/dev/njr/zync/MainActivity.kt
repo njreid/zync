@@ -34,6 +34,7 @@ import dev.njr.zync.home.buildAgenda
 import dev.njr.zync.launcher.LauncherIntents
 import dev.njr.zync.replica.PairingOutcome
 import dev.njr.zync.ui.BarAction
+import dev.njr.zync.ui.TextCaptureDialog
 import dev.njr.zync.ui.ZyncScreen
 import dev.njr.zync.ui.ZyncShell
 import dev.njr.zync.ui.createZyncWebView
@@ -60,6 +61,7 @@ class MainActivity : ComponentActivity() {
         }
 
     private var screen by mutableStateOf(ZyncScreen.Home)
+    private var textCaptureOpen by mutableStateOf(false)
     private var permissionTick by mutableIntStateOf(0)
     private val calendarPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { permissionTick++ }
@@ -76,26 +78,38 @@ class MainActivity : ComponentActivity() {
         val app = application as ZyncApp
         setContent {
             val homeState = rememberHomeState(app, permissionTick)
-            ZyncShell(
-                webView = webView,
-                screen = screen,
-                homeState = homeState,
-                onBarAction = ::handleBarAction,
-                onTileTap = { screen = ZyncScreen.Web },
-                onContextSelect = { ctx ->
-                    homeContextPrefs().edit()
-                        .putString("context_id", ctx?.id?.toString())
-                        .putString("context_name", ctx?.name?.removePrefix("@"))
-                        .apply()
-                    permissionTick++ // reuse the tick to recompute state
-                },
-                onCompleteTask = { task ->
-                    app.contentCommands.complete(task.id)
-                    app.contentChanges.notifyChanged()
-                },
-                onEnableWeather = { locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
-                onEnableCalendar = { calendarPermission.launch(Manifest.permission.READ_CALENDAR) },
-            )
+            androidx.compose.foundation.layout.Box {
+                ZyncShell(
+                    webView = webView,
+                    screen = screen,
+                    homeState = homeState,
+                    onBarAction = ::handleBarAction,
+                    onTileTap = { screen = ZyncScreen.Web },
+                    onContextSelect = { ctx ->
+                        homeContextPrefs().edit()
+                            .putString("context_id", ctx?.id?.toString())
+                            .putString("context_name", ctx?.name?.removePrefix("@"))
+                            .apply()
+                        permissionTick++ // reuse the tick to recompute state
+                    },
+                    onCompleteTask = { task ->
+                        app.contentCommands.complete(task.id)
+                        app.contentChanges.notifyChanged()
+                    },
+                    onEnableWeather = { locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
+                    onEnableCalendar = { calendarPermission.launch(Manifest.permission.READ_CALENDAR) },
+                )
+                if (textCaptureOpen) {
+                    TextCaptureDialog(
+                        onSave = { title ->
+                            app.replicaCapture.captureNote(title)
+                            app.contentChanges.notifyChanged()
+                            dev.njr.zync.sync.SyncScheduler.requestSync(this@MainActivity)
+                        },
+                        onDismiss = { textCaptureOpen = false },
+                    )
+                }
+            }
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -152,7 +166,8 @@ class MainActivity : ComponentActivity() {
             val events = CalendarSource.todaysEvents(this, dayStart, dayEnd)
             val dueBy = DueDates.parse(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time))!!
             HomeState(
-                clock = SimpleDateFormat(if (DateFormat.is24HourFormat(this)) "H:mm" else "h:mm", Locale.US).format(cal.time),
+                clockHours = SimpleDateFormat("HH", Locale.US).format(cal.time),
+                clockMinutes = SimpleDateFormat("mm", Locale.US).format(cal.time),
                 dateLine = SimpleDateFormat("EEEE, MMMM d", Locale.US).format(cal.time),
                 weatherLine = weather?.toString(),
                 contextName = contextName,
@@ -174,10 +189,25 @@ class MainActivity : ComponentActivity() {
             android.content.pm.PackageManager.PERMISSION_GRANTED
         if (!granted) return null
         val lm = getSystemService(LocationManager::class.java) ?: return null
+        // Last-known from any provider, else a one-shot current fix — a fresh phone
+        // often has NO last-known location, which read as "weather not loading".
         val location = runCatching {
-            LocationManager.NETWORK_PROVIDER.takeIf { lm.isProviderEnabled(it) }?.let { lm.getLastKnownLocation(it) }
-                ?: lm.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER)
-        }.getOrNull() ?: return null
+            listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
+                .filter { it in lm.allProviders }
+                .firstNotNullOfOrNull { lm.getLastKnownLocation(it) }
+        }.getOrNull() ?: kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+            val provider = listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER)
+                .firstOrNull { it in lm.allProviders }
+            if (provider == null) {
+                cont.resume(null) { _, _, _ -> }
+            } else {
+                runCatching {
+                    lm.getCurrentLocation(provider, null, mainExecutor) { loc ->
+                        if (cont.isActive) cont.resume(loc) { _, _, _ -> }
+                    }
+                }.onFailure { if (cont.isActive) cont.resume(null) { _, _, _ -> } }
+            }
+        } ?: return null
         return withContext(Dispatchers.IO) {
             val http = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO)
             try {
@@ -213,10 +243,7 @@ class MainActivity : ComponentActivity() {
             BarAction.Messages -> launch(LauncherIntents.messages(), "No messages app found")
             BarAction.Calendar -> launch(LauncherIntents.calendar(), "No calendar app found")
             BarAction.Phone -> launch(LauncherIntents.phone(), "No dialer found")
-            BarAction.CaptureText -> {
-                screen = ZyncScreen.Web
-                webView.evaluateJavascript("document.querySelector('.quick-add input')?.focus()", null)
-            }
+            BarAction.CaptureText -> textCaptureOpen = true
             BarAction.CaptureVoice -> startActivity(Intent(this, VoiceCaptureActivity::class.java))
             BarAction.CaptureScan -> startActivity(Intent(this, DocScanActivity::class.java))
             BarAction.CaptureUpload -> startActivity(Intent(this, DocUploadActivity::class.java))

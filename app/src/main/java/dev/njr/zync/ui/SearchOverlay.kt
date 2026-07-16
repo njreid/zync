@@ -89,8 +89,10 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                 modifier = Modifier.clickable(onClick = onDismiss).padding(6.dp),
             )
         }
+        val appMatches = AppSearch.filter(apps, query)
+        val settingsMatches = AppSearch.settingsMatches(query)
         LazyColumn(Modifier.weight(1f)) {
-            if (query.isNotBlank()) {
+            if (AppSearch.showWebSearch(query, appMatches.size + settingsMatches.size)) {
                 item(key = "web-search") {
                     Row(
                         Modifier
@@ -108,7 +110,22 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                     }
                 }
             }
-            items(AppSearch.filter(apps, query), key = { it.packageName + it.activityName }) { app ->
+            items(settingsMatches, key = { "s:" + it.action }) { setting ->
+                Row(
+                    Modifier.fillMaxWidth()
+                        .clickable {
+                            runCatching { context.startActivity(setting.launchIntent()) }
+                            onDismiss()
+                        }
+                        .padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    BasicText("⚙", style = TextStyle(color = TextMuted, fontSize = 20.sp))
+                    BasicText(setting.label, style = TextStyle(color = TextPrimary, fontSize = 15.sp))
+                }
+            }
+            items(appMatches, key = { it.packageName + it.activityName }) { app ->
                 AppRow(app) {
                     runCatching { context.startActivity(app.launchIntent()) }
                     onDismiss()

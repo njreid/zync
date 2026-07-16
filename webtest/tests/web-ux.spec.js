@@ -32,24 +32,22 @@ test('renders seeded inbox and Datastar drives live mutations', async ({ page })
   await expect(page.locator('#inbox')).not.toContainText('Buy milk', { timeout: 5000 });
   await expect(page.locator('#inbox')).toContainText('Read a book'); // others stay
 
-  // quick-add via the data-bind input → posts the signal → new item patched in
-  await page.locator('#inbox input[placeholder="New task"]').fill('Water plants');
-  await page.locator('#inbox button', { hasText: 'Add' }).click();
-  await expect(page.locator('#inbox')).toContainText('Water plants', { timeout: 5000 });
+  // the inbox is a triage surface: no entry field (creation belongs to capture)
+  expect(await page.locator('#inbox input').count()).toBe(0);
 
   // context pill (launcher L4): selecting @errands filters to its tagged tasks
   await page.locator('.context-pill summary').click();
   await page.locator('.context-pill a', { hasText: '@errands' }).click();
   await expect(page.locator('.context-pill summary')).toContainText('@errands');
   await expect(page.locator('#inbox')).toContainText('Plan the offsite');
-  await expect(page.locator('#inbox')).not.toContainText('Water plants');
+  await expect(page.locator('#inbox')).not.toContainText('Read a book');
   // and switching back to All contexts restores the plain inbox
   await page.locator('.context-pill summary').click();
   await page.locator('.context-pill a', { hasText: 'All contexts' }).click();
-  await expect(page.locator('#inbox')).toContainText('Water plants');
+  await expect(page.locator('#inbox')).toContainText('Read a book');
 
   // organize controls on the detail page: set a due date, tag a context
-  await page.locator('#inbox a', { hasText: 'Water plants' }).click();
+  await page.locator('#inbox a', { hasText: 'Read a book' }).click();
   await expect(page.locator('main')).toContainText('Organize');
   await page.locator('input[type="date"]').fill('2026-07-20');
   await page.locator('button', { hasText: 'Set due' }).click();

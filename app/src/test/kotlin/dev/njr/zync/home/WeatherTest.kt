@@ -21,7 +21,7 @@ class WeatherTest {
                 headersOf("Content-Type", "application/json"),
             )
         })
-        assertEquals("17° Partly cloudy", OpenMeteo(http).current(52.0, 13.4).toString())
+        assertEquals("⛅ 17° Partly cloudy", OpenMeteo(http).current(52.0, 13.4).toString())
     }
 
     @Test

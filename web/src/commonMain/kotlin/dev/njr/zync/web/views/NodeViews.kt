@@ -44,22 +44,12 @@ fun FlowContent.contextBar(read: ContentReadModel, selected: Ulid?) {
 
 /**
  * The home list: the inbox, or — with a context selected — the flat next-actions
- * view for that context across the whole tree. Quick-add always captures to the inbox.
+ * view for that context across the whole tree. Deliberately NO entry field: the
+ * inbox is a triage surface (sort, plan, clarify) — creation belongs to capture.
  */
 fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long, context: Ulid? = null) {
     contextBar(read, context)
     h2 { +"Inbox" }
-    // Quick add: Datastar binds the input to a signal and posts it.
-    div(classes = "quick-add") {
-        input(type = InputType.text) {
-            attributes["data-bind:title"] = ""
-            attributes["placeholder"] = "New task"
-        }
-        button {
-            attributes["data-on:click"] = "@post('/inbox?title=' + encodeURIComponent(\$title))"
-            +"Add"
-        }
-    }
     val items = if (context != null) read.contextTasks(context, now) else read.inbox(inbox, now)
     if (items.isEmpty()) {
         p("muted") { +(if (context != null) "No active tasks in this context." else "Inbox zero.") }

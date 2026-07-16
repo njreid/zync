@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.Zync" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Dark window chrome: the inset areas (status/nav bars) show the WINDOW
+         background during layout and around edge-to-edge content — Light here was
+         the white-bars bug. #13171F = the shared surface token. -->
+    <style name="Theme.Zync" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF13171F</item>
+        <item name="android:colorBackground">#FF13171F</item>
+    </style>
 </resources>
