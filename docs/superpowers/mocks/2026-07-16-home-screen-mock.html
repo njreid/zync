@@ -7,6 +7,7 @@
 <style>
   @font-face { font-family: "Geomini"; font-weight: 200 800; src: url("../../../web/src/commonMain/resources/fonts/geomini-var.woff2") format("woff2"); }
   @font-face { font-family: "Iosevka Charon Mono"; font-weight: 700; src: url("../../../web/src/commonMain/resources/fonts/iosevkacharonmono-700.woff2") format("woff2"); }
+  @font-face { font-family: "Big Shoulders"; font-weight: 900; src: url("../../../web/src/commonMain/resources/fonts/bigshoulders-900.woff2") format("woff2"); }
 </style>
 <style>
   /* Monochrome pico-dark + the validated categorical pair for calendar identity:
@@ -38,11 +39,10 @@
   /* ---- 2. hero ---- */
   .hero { padding: 12px 18px 14px; }
   .hero .toprow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-  .ctx-pill { font-family: "Iosevka Charon Mono", ui-monospace, monospace; font-weight: 700;
-              -webkit-text-stroke: .035em currentColor;
-              font-size: 64px; line-height: 1; letter-spacing: -0.07em; color: var(--ink2); }
+  .ctx-pill { font-family: "Big Shoulders", sans-serif; font-weight: 900;
+              font-size: 72px; line-height: 1; letter-spacing: 0; color: var(--ink2); }
   .ctx-pill::after { content: "▾"; color: var(--ink3); -webkit-text-stroke: 0; font-size: 20px; vertical-align: .55em; margin-left: 2px; }
-  .hero .time { font-family: "Iosevka Charon Mono", ui-monospace, monospace; font-weight: 700; -webkit-text-stroke: .035em currentColor; font-size: 64px; line-height: 1; letter-spacing: -0.07em; }
+  .hero .time { font-family: "Big Shoulders", sans-serif; font-weight: 900; font-size: 72px; line-height: 1; letter-spacing: 0; }
   .hero .meta { margin-top: 6px; font-size: 16px; color: var(--ink2); display: flex; gap: 16px; }
 
   /* ---- 3. agenda (the main surface): events + doable tasks in the gap ---- */
