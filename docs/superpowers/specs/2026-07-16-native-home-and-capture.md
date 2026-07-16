@@ -42,12 +42,16 @@ ingestion path (events as synced entities) — spec that with the backend piece.
 
 - Opens **listening immediately** (on-device transcription, live partials dimmed);
   mode pills: Voice · Type · Photo (camera intent) · Scan (ML Kit).
-- **Suggestion card** ("Suggested — on-device model"): improved title + dismissible
-  chips — `context`, `due`, `person`, and **`in` (tree node)**. "+ add" opens
-  pickers (context list / date / people / tree).
-- **Routing rule**: with an `in` chip the primary button becomes "Save to <node>"
-  and the task skips the Inbox; removing it reverts to "Save to Inbox".
-  "Save raw" always available (verbatim, no enrichment).
+- **Editable fields are the source of truth for saving**: a title input + chip row
+  (`context`, `due`, contact-matched `person`; "+ add" opens pickers). The
+  suggestion card is a **one-tap prefill** — tapping it fills the fields, which
+  can then be tweaked before saving (card shows "✓ Applied").
+- **Tree-node candidates are separate suggestion boxes** ("File under"): the model
+  proposes one or more nodes, each its own pickable box with a why-hint ("3 similar
+  tasks"), plus an explicit "Inbox · decide later" box. Single-select.
+- **Routing rule**: with a node picked the primary button becomes "Save to <node>"
+  and the task skips the Inbox; picking Inbox (or nothing) reverts to
+  "Save to Inbox". "Save raw" always available (verbatim, no enrichment).
 - Privacy line: audio + transcript stay on device until op-log sync.
 - Voice/scan/photo all still produce blob attachments exactly as today.
 
