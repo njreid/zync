@@ -251,27 +251,37 @@ class MainActivity : ComponentActivity() {
         val lm = getSystemService(LocationManager::class.java) ?: return null
         // Last-known from any provider, else a one-shot current fix — a fresh phone
         // often has NO last-known location, which read as "weather not loading".
-        val location = runCatching {
+        // The one-shot can also hang indoors (GPS never fixes), so it gets a hard
+        // timeout and we fall back to the last COORDS that ever produced weather:
+        // a stale position beats no forecast.
+        val prefs = homeContextPrefs()
+        val located = runCatching {
             listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
                 .filter { it in lm.allProviders }
                 .firstNotNullOfOrNull { lm.getLastKnownLocation(it) }
-        }.getOrNull() ?: kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-            val provider = listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER)
-                .firstOrNull { it in lm.allProviders }
-            if (provider == null) {
-                cont.resume(null) { _, _, _ -> }
-            } else {
-                runCatching {
-                    lm.getCurrentLocation(provider, null, mainExecutor) { loc ->
-                        if (cont.isActive) cont.resume(loc) { _, _, _ -> }
-                    }
-                }.onFailure { if (cont.isActive) cont.resume(null) { _, _, _ -> } }
+        }.getOrNull() ?: kotlinx.coroutines.withTimeoutOrNull(10_000) {
+            kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+                val provider = listOf(LocationManager.FUSED_PROVIDER, LocationManager.NETWORK_PROVIDER)
+                    .firstOrNull { it in lm.allProviders }
+                if (provider == null) {
+                    cont.resume(null) { _, _, _ -> }
+                } else {
+                    runCatching {
+                        lm.getCurrentLocation(provider, null, mainExecutor) { loc ->
+                            if (cont.isActive) cont.resume(loc) { _, _, _ -> }
+                        }
+                    }.onFailure { if (cont.isActive) cont.resume(null) { _, _, _ -> } }
+                }
             }
-        } ?: return null
+        }
+        val lat = located?.latitude ?: prefs.getString("weather_lat", null)?.toDoubleOrNull() ?: return null
+        val lon = located?.longitude ?: prefs.getString("weather_lon", null)?.toDoubleOrNull() ?: return null
         return withContext(Dispatchers.IO) {
             val http = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO)
             try {
-                OpenMeteo(http).current(location.latitude, location.longitude)
+                kotlinx.coroutines.withTimeoutOrNull(15_000) { OpenMeteo(http).current(lat, lon) }?.also {
+                    prefs.edit().putString("weather_lat", "$lat").putString("weather_lon", "$lon").apply()
+                }
             } finally {
                 http.close()
             }
