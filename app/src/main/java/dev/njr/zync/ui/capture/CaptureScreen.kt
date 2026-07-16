@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.njr.zync.R
@@ -297,6 +298,24 @@ fun CaptureScreen(
                 )
                 onDismiss()
             }
+        }
+
+        // Quick-capture hardware shortcut: double-press volume-down opens this screen
+        // from anywhere once the accessibility service is on (can't be enabled
+        // programmatically — deep-link the user to the toggle).
+        val quickKeys = remember { dev.njr.zync.capture.ZyncCaptureService.isEnabled(context) }
+        if (!quickKeys) {
+            BasicText(
+                "vol− ×2 opens capture from anywhere — enable in Accessibility",
+                style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini, textDecoration = TextDecoration.Underline),
+                modifier = Modifier
+                    .clickable {
+                        runCatching {
+                            context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        }
+                    }
+                    .padding(horizontal = 18.dp, vertical = 6.dp),
+            )
         }
     }
 }

@@ -182,6 +182,7 @@ class MainActivity : ComponentActivity() {
         }
         maybePromptHomeRole()
         handlePairingIntent(intent)
+        handleCaptureIntent(intent)
     }
 
     /** Assembles everything the native home surface renders, refreshing on op-log changes. */
@@ -352,6 +353,17 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handlePairingIntent(intent)
+        handleCaptureIntent(intent)
+    }
+
+    /** Volume-down double-press (ZyncCaptureService) lands here: open capture directly. */
+    private fun handleCaptureIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_CAPTURE, false) == true) {
+            intent.removeExtra(EXTRA_OPEN_CAPTURE) // consume: don't reopen on config-change redelivery
+            searchOpen = false
+            settingsRole = null
+            captureOpen = true
+        }
     }
 
     /** A tapped/scanned `zync://pair` link (from the server's /settings/pairing page). */
@@ -367,5 +379,10 @@ class MainActivity : ComponentActivity() {
             }
             Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
         }
+    }
+
+    companion object {
+        /** Intent extra: open straight into the native capture screen. */
+        const val EXTRA_OPEN_CAPTURE = "dev.njr.zync.OPEN_CAPTURE"
     }
 }

@@ -114,6 +114,7 @@ object AppSearch {
 
     /** Common settings surfaces, searchable by name. */
     val SETTINGS: List<SettingsEntry> = listOf(
+        SettingsEntry("Accessibility settings", Settings.ACTION_ACCESSIBILITY_SETTINGS),
         SettingsEntry("Wi-Fi settings", Settings.ACTION_WIFI_SETTINGS),
         SettingsEntry("Bluetooth settings", Settings.ACTION_BLUETOOTH_SETTINGS),
         SettingsEntry("Display settings", Settings.ACTION_DISPLAY_SETTINGS),

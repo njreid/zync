@@ -47,7 +47,7 @@ class CaptureSettingsBridge(
     }
 
     @JavascriptInterface
-    fun isQuickCaptureEnabled(): Boolean = isAccessibilityServiceEnabled()
+    fun isQuickCaptureEnabled(): Boolean = ZyncCaptureService.isEnabled(activity)
 
     @JavascriptInterface
     fun startVoiceNote() {
@@ -185,25 +185,4 @@ class CaptureSettingsBridge(
         }
     }
 
-    private fun isAccessibilityServiceEnabled(): Boolean {
-        val enabled = Settings.Secure.getInt(
-            activity.contentResolver,
-            Settings.Secure.ACCESSIBILITY_ENABLED,
-            0,
-        )
-        if (enabled != 1) return false
-
-        val expected = ComponentName(activity, ZyncCaptureService::class.java).flattenToString()
-        val services = Settings.Secure.getString(
-            activity.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-        ) ?: return false
-
-        val splitter = TextUtils.SimpleStringSplitter(':')
-        splitter.setString(services)
-        for (service in splitter) {
-            if (service.equals(expected, ignoreCase = true)) return true
-        }
-        return false
-    }
 }
