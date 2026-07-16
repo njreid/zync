@@ -83,9 +83,9 @@ object RulesExtractor : CaptureExtractor {
         }
         val hints = mapOf(
             "call" to listOf("call", "phone", "ring"),
-            "errands" to listOf("buy", "pick up", "store", "shop", "errand"),
+            "town" to listOf("buy", "pick up", "store", "shop", "errand"),
             "work" to listOf("meeting", "review", "contract", "client", "report"),
-            "computer" to listOf("email", "code", "website", "file", "upload"),
+            "desk" to listOf("email", "code", "website", "file", "upload"),
         )
         for ((ctx, words) in hints) {
             if (words.any { Regex("\\b$it").containsMatchIn(t) }) {

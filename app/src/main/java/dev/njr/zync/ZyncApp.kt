@@ -169,18 +169,32 @@ class ZyncApp : Application() {
         seedStandardContexts()
     }
 
-    /** One-time seed of the standard GTD contexts (skipped if any context exists). */
+    /**
+     * One-time seed of the standard contexts (skipped if any context exists).
+     * Convention: the first FOUR characters of every context are unique — the home
+     * screen shows `@` + 4 chars beside the clock.
+     */
     private fun seedStandardContexts() {
         val prefs = getSharedPreferences("zync_launcher", Context.MODE_PRIVATE)
-        if (prefs.getBoolean("contexts_seeded", false)) return
         Thread {
             runCatching {
-                if (contentRead.contexts().isEmpty()) {
-                    listOf("@home", "@work", "@errands", "@calls", "@computer")
-                        .forEach { contentCommands.createContext(it) }
-                    contentChanges.notifyChanged()
+                if (!prefs.getBoolean("contexts_seeded", false)) {
+                    if (contentRead.contexts().isEmpty()) {
+                        listOf("@home", "@work", "@town", "@calls", "@desk")
+                            .forEach { contentCommands.createContext(it) }
+                        contentChanges.notifyChanged()
+                    }
+                    prefs.edit().putBoolean("contexts_seeded", true).apply()
                 }
-                prefs.edit().putBoolean("contexts_seeded", true).apply()
+                // Rename migration (2026-07-16): errands→town, computer→desk.
+                if (!prefs.getBoolean("contexts_renamed_1", false)) {
+                    val renames = mapOf("@errands" to "@town", "@computer" to "@desk")
+                    contentRead.contexts().forEach { c ->
+                        renames[c.name]?.let { contentCommands.renameContext(c.id, it) }
+                    }
+                    contentChanges.notifyChanged()
+                    prefs.edit().putBoolean("contexts_renamed_1", true).apply()
+                }
             }.onFailure { Log.w(TAG, "context seeding failed", it) }
         }.apply { name = "zync-seed-contexts"; start() }
     }

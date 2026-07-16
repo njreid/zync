@@ -30,6 +30,8 @@ import dev.njr.zync.home.CalendarSource
 import dev.njr.zync.home.OpenMeteo
 import dev.njr.zync.home.WeatherNow
 import dev.njr.zync.home.buildAgenda
+import dev.njr.zync.launcher.BarApps
+import dev.njr.zync.launcher.BarRole
 import dev.njr.zync.launcher.LauncherIntents
 import dev.njr.zync.replica.PairingOutcome
 import dev.njr.zync.ui.BarAction
@@ -61,6 +63,8 @@ class MainActivity : ComponentActivity() {
 
     private var screen by mutableStateOf(ZyncScreen.Home)
     private var captureOpen by mutableStateOf(false)
+    private var settingsRole by mutableStateOf<BarRole?>(null)
+    private var barAppsTick by mutableIntStateOf(0)
     private var permissionTick by mutableIntStateOf(0)
     private var photoFile: java.io.File? = null
     private val takePicture =
@@ -109,7 +113,20 @@ class MainActivity : ComponentActivity() {
                     },
                     onEnableWeather = { locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
                     onEnableCalendar = { calendarPermission.launch(Manifest.permission.READ_CALENDAR) },
+                    barApps = { role -> barAppsTick; BarApps.load(this@MainActivity, role) },
+                    onLaunchApp = { app ->
+                        runCatching { startActivity(app.launchIntent()) }.onFailure {
+                            Toast.makeText(this@MainActivity, "${app.label} is not available", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onEditRole = { role -> settingsRole = role },
                 )
+                settingsRole?.let { role ->
+                    dev.njr.zync.ui.settings.BarSettingsScreen(
+                        initialRole = role,
+                        onDismiss = { settingsRole = null; barAppsTick++ },
+                    )
+                }
                 if (captureOpen) {
                     CaptureScreen(
                         contexts = app.contentRead.contexts(),

@@ -22,6 +22,9 @@ class ContentCommands(private val ops: OpEmitter) {
         return id
     }
 
+    /** Rename a context (contexts carry `name`, not `title`). */
+    fun renameContext(context: Ulid, name: String) = ops.setField(context, Fields.NAME, JsonPrimitive(name))
+
     /** Add a comment/annotation as a child node (planning + discussion live in the tree). */
     fun addComment(parent: Ulid, text: String): Ulid {
         val id = ops.newId()

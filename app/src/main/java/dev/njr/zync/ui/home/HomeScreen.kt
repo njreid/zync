@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -91,20 +94,21 @@ fun HomeScreen(
     }
 }
 
-// ---- display boxes: pinned to the very top, split around the front camera ---------
+// ---- display boxes: just below the status-bar line (device feedback) --------------
 
 @Composable
 private fun TileRow(state: HomeState, onTap: (HomeTile) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+        Modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Tile(HomeTile.Inbox, state.inboxCount, "unsorted", Modifier.weight(1f)) { onTap(HomeTile.Inbox) }
-        Spacer(Modifier.width(8.dp))
         Tile(HomeTile.Today, state.todayCount, "due", Modifier.weight(1f)) { onTap(HomeTile.Today) }
-        Spacer(Modifier.width(56.dp)) // the front-camera gap
         Tile(HomeTile.Next, state.nextCount, "actions", Modifier.weight(1f)) { onTap(HomeTile.Next) }
-        Spacer(Modifier.width(8.dp))
         Tile(HomeTile.Waiting, state.waitingCount, "waiting", Modifier.weight(1f)) { onTap(HomeTile.Waiting) }
     }
 }
@@ -152,9 +156,11 @@ private fun Hero(state: HomeState, onContextSelect: (ContextView?) -> Unit, onEn
                 )
             }
             Box {
+                // @ + first 4 chars (contexts keep their first four unique by convention);
+                // smaller than the clock so five glyphs always fit beside it.
                 BasicText(
-                    state.contextName?.let { "@$it" } ?: "@all",
-                    style = TextStyle(color = C.Ink2, fontSize = 78.sp, fontFamily = BigShoulders, fontWeight = FontWeight.Black),
+                    "@" + (state.contextName ?: "all").take(4),
+                    style = TextStyle(color = C.Ink2, fontSize = 54.sp, fontFamily = BigShoulders, fontWeight = FontWeight.Black),
                     modifier = Modifier.clickable { menuOpen = true },
                 )
                 if (menuOpen) {

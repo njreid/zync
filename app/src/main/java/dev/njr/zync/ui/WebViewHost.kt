@@ -80,6 +80,9 @@ fun ZyncShell(
     onCompleteTask: (NodeView) -> Unit,
     onEnableWeather: () -> Unit,
     onEnableCalendar: () -> Unit,
+    barApps: (dev.njr.zync.launcher.BarRole) -> List<dev.njr.zync.launcher.BarApp> = { emptyList() },
+    onLaunchApp: (dev.njr.zync.launcher.BarApp) -> Unit = {},
+    onEditRole: (dev.njr.zync.launcher.BarRole) -> Unit = {},
 ) {
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     // The dark surface paints edge-to-edge FIRST; insets are then applied per-region
@@ -102,7 +105,13 @@ fun ZyncShell(
                     )
                 }
             }
-            ZyncActionBar(onAction = onBarAction, onSearch = { searchOpen = true })
+            ZyncActionBar(
+                onAction = onBarAction,
+                onSearch = { searchOpen = true },
+                barApps = barApps,
+                onLaunchApp = onLaunchApp,
+                onEditRole = onEditRole,
+            )
         }
         if (searchOpen) SearchOverlay(onDismiss = { searchOpen = false })
     }
