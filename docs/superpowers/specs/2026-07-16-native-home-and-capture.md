@@ -59,3 +59,5 @@ ingestion path (events as synced entities) — spec that with the backend piece.
 - Contact-matched people unlock later actions (tap → contact card; "call/message
   Dana" from a task; agenda 1:1 linking).
 - Duration-aware gap suggestions (post-L5/operators).
+- Scan OCR + async summary: `2026-07-16-scan-ocr-summary.md` (Drive-API OCR on
+  the phone, summarize operator on the server).
