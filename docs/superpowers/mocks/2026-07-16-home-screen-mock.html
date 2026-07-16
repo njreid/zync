@@ -37,18 +37,18 @@
 
   /* ---- 2. hero ---- */
   .hero { padding: 12px 18px 14px; }
-  .hero .toprow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .hero .toprow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
   .ctx-pill { font-family: "Iosevka Charon Mono", ui-monospace, monospace; font-weight: 700;
-              font-size: 16px; color: var(--ink); border: 1px solid var(--border); background: var(--card);
-              border-radius: 999px; padding: 8px 16px; }
-  .ctx-pill::after { content: " ▾"; color: var(--ink3); }
+              -webkit-text-stroke: .035em currentColor;
+              font-size: 64px; line-height: 1; letter-spacing: -0.07em; color: var(--ink2); }
+  .ctx-pill::after { content: "▾"; color: var(--ink3); -webkit-text-stroke: 0; font-size: 20px; vertical-align: .55em; margin-left: 2px; }
   .hero .time { font-family: "Iosevka Charon Mono", ui-monospace, monospace; font-weight: 700; -webkit-text-stroke: .035em currentColor; font-size: 64px; line-height: 1; letter-spacing: -0.07em; }
   .hero .meta { margin-top: 6px; font-size: 16px; color: var(--ink2); display: flex; gap: 16px; }
 
   /* ---- 3. agenda (the main surface): events + doable tasks in the gap ---- */
   .agenda { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px 18px 8px; }
   .agenda h3 { margin: 4px 0 8px; font-size: 12px; font-weight: 500; color: var(--ink2); letter-spacing: .05em; text-transform: uppercase; }
-  .evt { display: grid; grid-template-columns: 58px 3px 1fr auto; gap: 0 12px; padding: 8px 0; font-size: 15px; align-items: baseline; }
+  .evt { display: grid; grid-template-columns: 58px 7px 1fr auto; gap: 0 12px; padding: 8px 0; font-size: 15px; align-items: baseline; }
   .evt .when { color: var(--ink2); font-variant-numeric: tabular-nums; font-size: 14px; }
   .evt .bar { align-self: stretch; border-radius: 2px; }
   .evt.work .bar { background: var(--work); }
