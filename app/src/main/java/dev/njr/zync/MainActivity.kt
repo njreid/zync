@@ -33,6 +33,7 @@ import dev.njr.zync.home.OpenMeteo
 import dev.njr.zync.home.WeatherNow
 import dev.njr.zync.home.buildAgenda
 import dev.njr.zync.launcher.BarApps
+import dev.njr.zync.launcher.ContextApps
 import dev.njr.zync.launcher.BarRole
 import dev.njr.zync.launcher.LauncherIntents
 import dev.njr.zync.replica.PairingOutcome
@@ -66,7 +67,7 @@ class MainActivity : ComponentActivity() {
     private var screen by mutableStateOf(ZyncScreen.Home)
     private var searchOpen by mutableStateOf(false)
     private var captureOpen by mutableStateOf(false)
-    private var settingsRole by mutableStateOf<BarRole?>(null)
+    private var settingsTab by mutableStateOf<dev.njr.zync.ui.settings.BarTab?>(null)
     private var syncLogOpen by mutableStateOf(false)
     private var pairingOpen by mutableStateOf(false)
     private var barAppsTick by mutableIntStateOf(0)
@@ -136,14 +137,27 @@ class MainActivity : ComponentActivity() {
                             Toast.makeText(this@MainActivity, "${app.label} is not available", Toast.LENGTH_SHORT).show()
                         }
                     },
-                    onEditRole = { role -> settingsRole = role },
+                    onEditRole = { role ->
+                        settingsTab = if (role == BarRole.Messages) {
+                            dev.njr.zync.ui.settings.BarTab.Messages
+                        } else {
+                            dev.njr.zync.ui.settings.BarTab.Calendar
+                        }
+                    },
                     searchOpen = searchOpen,
                     onSearchOpenChange = { searchOpen = it },
+                    contextApp = remember(homeState.contextName, barAppsTick) {
+                        ContextApps.pick(this@MainActivity, homeState.contextName)
+                    },
+                    onContextTap = { launchContextApp(homeState.contextName) },
+                    onContextEdit = { settingsTab = dev.njr.zync.ui.settings.BarTab.Context },
+                    onSwipeLaunch = ::launchSwipeApp,
                 )
-                settingsRole?.let { role ->
+                settingsTab?.let { tab ->
                     dev.njr.zync.ui.settings.BarSettingsScreen(
-                        initialRole = role,
-                        onDismiss = { settingsRole = null; barAppsTick++ },
+                        initialTab = tab,
+                        contexts = app.contentRead.contexts().mapNotNull { it.name },
+                        onDismiss = { settingsTab = null; barAppsTick++ },
                     )
                 }
                 if (syncLogOpen) {
@@ -184,7 +198,7 @@ class MainActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
-                    searchOpen || captureOpen || settingsRole != null || syncLogOpen || pairingOpen -> Unit // their BackHandlers own it
+                    searchOpen || captureOpen || settingsTab != null || syncLogOpen || pairingOpen -> Unit // their BackHandlers own it
                     screen == ZyncScreen.Web && webView.canGoBack() -> webView.goBack()
                     screen == ZyncScreen.Web -> screen = ZyncScreen.Home
                     // On the home surface an edge swipe (the system back gesture) opens
@@ -380,8 +394,24 @@ class MainActivity : ComponentActivity() {
         if (intent?.getBooleanExtra(EXTRA_OPEN_CAPTURE, false) == true) {
             intent.removeExtra(EXTRA_OPEN_CAPTURE) // consume: don't reopen on config-change redelivery
             searchOpen = false
-            settingsRole = null
+            settingsTab = null
             captureOpen = true
+        }
+    }
+
+    /** Center bar slot: launch the active context's app, or invite configuration. */
+    private fun launchContextApp(contextName: String?) {
+        val app = ContextApps.pick(this, contextName)
+        if (app == null || !dev.njr.zync.launcher.AppLaunch.launch(this, app.toEntry())) {
+            settingsTab = dev.njr.zync.ui.settings.BarTab.Context
+        }
+    }
+
+    /** Right-origin swipe: launch the configured swipe app (Harmonic by default). */
+    private fun launchSwipeApp() {
+        val app = ContextApps.swipeApp(this)
+        if (app == null || !dev.njr.zync.launcher.AppLaunch.launch(this, app.toEntry())) {
+            settingsTab = dev.njr.zync.ui.settings.BarTab.Swipe
         }
     }
 

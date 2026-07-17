@@ -87,6 +87,10 @@ fun ZyncShell(
     onEnableNotifications: () -> Unit = {},
     searchOpen: Boolean = false,
     onSearchOpenChange: (Boolean) -> Unit = {},
+    contextApp: dev.njr.zync.launcher.BarApp? = null,
+    onContextTap: () -> Unit = {},
+    onContextEdit: () -> Unit = {},
+    onSwipeLaunch: () -> Unit = {},
 ) {
     // The dark surface paints edge-to-edge FIRST; insets are then applied per-region
     // (home draws into the status-bar strip around the camera; the bar owns the
@@ -107,6 +111,7 @@ fun ZyncShell(
                         onOpenSearch = { onSearchOpenChange(true) },
                         onOpenEvent = onOpenEvent,
                         onEnableNotifications = onEnableNotifications,
+                        onSwipeLaunch = onSwipeLaunch,
                     )
                 }
             }
@@ -116,6 +121,10 @@ fun ZyncShell(
                 barApps = barApps,
                 onLaunchApp = onLaunchApp,
                 onEditRole = onEditRole,
+                contextApp = contextApp,
+                onContextTap = onContextTap,
+                onContextEdit = onContextEdit,
+                onSwipeLaunch = onSwipeLaunch,
             )
         }
         if (searchOpen) SearchOverlay(onDismiss = { onSearchOpenChange(false) })

@@ -1,17 +1,20 @@
 package dev.njr.zync.ui.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,42 +23,60 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
+import dev.njr.zync.launcher.AppLaunch
 import dev.njr.zync.launcher.AppSearch
 import dev.njr.zync.launcher.BarApp
 import dev.njr.zync.launcher.BarApps
 import dev.njr.zync.launcher.BarRole
+import dev.njr.zync.launcher.ContextApps
 import dev.njr.zync.ui.Geomini
 import dev.njr.zync.ui.ZyncColors as C
 
+/** The four configurable bar behaviors the settings screen edits. */
+enum class BarTab(val title: String) {
+    Messages("Messages"),
+    Calendar("Calendar"),
+    Context("Context"),
+    Swipe("Swipe"),
+}
+
 /**
- * Native settings: which apps live in the Messages/Calendar bar submenus and their
- * order — the FIRST is the primary (plain tap); the rest surface on
- * long-press → slide → release (device feedback 2026-07-16).
+ * Native settings for the action bar: Messages/Calendar app lists (FIRST = plain
+ * tap; the rest = long-press → slide → release submenu), the center slot's app
+ * per GTD context (defaults: @town→Maps, @home→Google Home, @work→work Drive),
+ * and the app a right swipe launches (default: Harmonic).
  */
 @Composable
-fun BarSettingsScreen(initialRole: BarRole, onDismiss: () -> Unit) {
+fun BarSettingsScreen(initialTab: BarTab, contexts: List<String>, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    var role by remember { mutableStateOf(initialRole) }
-    var apps by remember(role) { mutableStateOf(BarApps.load(context, role)) }
-    var adding by remember { mutableStateOf(false) }
+    var tab by remember { mutableStateOf(initialTab) }
+    var adding by remember { mutableStateOf(false) } // list tabs: picker open
+    var pickingFor by remember { mutableStateOf<String?>(null) } // context-name / "swipe"
+    var tick by remember { mutableIntStateOf(0) } // bump after any save
 
-    fun persist(next: List<BarApp>) {
-        apps = next
-        BarApps.save(context, role, next)
-    }
-
-    BackHandler(onBack = { if (adding) adding = false else onDismiss() })
+    BackHandler(onBack = {
+        when {
+            adding -> adding = false
+            pickingFor != null -> pickingFor = null
+            else -> onDismiss()
+        }
+    })
 
     Column(
         Modifier
@@ -65,67 +86,181 @@ fun BarSettingsScreen(initialRole: BarRole, onDismiss: () -> Unit) {
             .padding(horizontal = 18.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            BasicText("Action bar apps", style = TextStyle(color = C.Ink, fontSize = 17.sp, fontFamily = Geomini, fontWeight = FontWeight.SemiBold))
+            BasicText("Action bar", style = TextStyle(color = C.Ink, fontSize = 17.sp, fontFamily = Geomini, fontWeight = FontWeight.SemiBold))
             BasicText("✕", style = TextStyle(color = C.Ink3, fontSize = 20.sp), modifier = Modifier.clickable(onClick = onDismiss).padding(4.dp))
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            BarRole.entries.forEach { r ->
+            BarTab.entries.forEach { t ->
                 BasicText(
-                    r.title,
+                    t.title,
                     style = TextStyle(
-                        color = if (r == role) C.Surface else C.Ink2,
+                        color = if (t == tab) C.Surface else C.Ink2,
                         fontSize = 13.sp,
                         fontFamily = Geomini,
                         fontWeight = FontWeight.SemiBold,
                     ),
                     modifier = Modifier
-                        .background(if (r == role) C.Ink else C.Surface, RoundedCornerShape(999.dp))
-                        .border(1.dp, if (r == role) C.Ink else C.Border, RoundedCornerShape(999.dp))
-                        .clickable { role = r; adding = false }
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                        .background(if (t == tab) C.Ink else C.Surface, RoundedCornerShape(999.dp))
+                        .border(1.dp, if (t == tab) C.Ink else C.Border, RoundedCornerShape(999.dp))
+                        .clickable { tab = t; adding = false; pickingFor = null }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                 )
             }
         }
 
-        if (adding) {
-            AppPicker(
-                exclude = apps.map { it.packageName + it.activityName + (it.userSerial ?: 0) }.toSet(),
-                onPick = { picked -> persist(apps + picked); adding = false },
-            )
-        } else {
-            BasicText(
-                "First app = tap · rest = long-press, slide, release",
-                style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini),
-                modifier = Modifier.padding(vertical = 10.dp),
-            )
-            LazyColumn(Modifier.weight(1f)) {
-                items(apps.size) { i ->
-                    val app = apps[i]
+        when (tab) {
+            BarTab.Messages, BarTab.Calendar -> {
+                val role = if (tab == BarTab.Messages) BarRole.Messages else BarRole.Calendar
+                key(role, tick) { RoleList(role, adding, onAdding = { adding = it }, onSaved = { tick++ }) }
+            }
+            BarTab.Context -> {
+                val target = pickingFor
+                if (target != null) {
+                    AppPicker(exclude = emptySet(), onPick = { picked ->
+                        ContextApps.save(context, target, picked)
+                        pickingFor = null
+                        tick++
+                    })
+                } else {
+                    BasicText(
+                        "The bar's center slot launches this app for the active context",
+                        style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini),
+                        modifier = Modifier.padding(vertical = 10.dp),
+                    )
+                    val explicit = remember(tick) { ContextApps.explicit(context) }
+                    LazyColumn(Modifier.weight(1f)) {
+                        items(contexts, key = { it }) { name ->
+                            val at = "@" + name.removePrefix("@")
+                            val chosen = explicit[at]
+                            val effective = chosen ?: ContextApps.defaultFor(context, at)
+                            Row(
+                                Modifier.fillMaxWidth().clickable { pickingFor = at }.padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                AppIcon(effective)
+                                Column(Modifier.weight(1f)) {
+                                    BasicText(at, style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini))
+                                    BasicText(
+                                        when {
+                                            chosen != null -> chosen.label + workTag(chosen)
+                                            effective != null -> "default: ${effective.label}" + workTag(effective)
+                                            else -> "tap to choose an app"
+                                        },
+                                        style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini),
+                                    )
+                                }
+                                if (chosen != null) {
+                                    RowButton("✕") { ContextApps.save(context, at, null); tick++ }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            BarTab.Swipe -> {
+                if (pickingFor == "swipe") {
+                    AppPicker(exclude = emptySet(), onPick = { picked ->
+                        ContextApps.saveSwipe(context, picked)
+                        pickingFor = null
+                        tick++
+                    })
+                } else {
+                    BasicText(
+                        "Swiping the bar (or home) from the right opens this app; from the left opens search",
+                        style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini),
+                        modifier = Modifier.padding(vertical = 10.dp),
+                    )
+                    val app = remember(tick) { ContextApps.swipeApp(context) }
                     Row(
-                        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        Modifier.fillMaxWidth().clickable { pickingFor = "swipe" }.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
+                        AppIcon(app)
                         BasicText(
-                            if (i == 0) "● ${app.label}" else app.label,
+                            app?.let { it.label + workTag(it) } ?: "tap to choose an app",
                             style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini),
                             modifier = Modifier.weight(1f),
                         )
-                        if (i > 0) RowButton("↑") { persist(apps.toMutableList().apply { add(i - 1, removeAt(i)) }) }
-                        if (i < apps.size - 1) RowButton("↓") { persist(apps.toMutableList().apply { add(i + 1, removeAt(i)) }) }
-                        RowButton("✕") { persist(apps.toMutableList().apply { removeAt(i) }) }
+                        if (app != null) RowButton("✕") { ContextApps.saveSwipe(context, null); tick++ }
                     }
-                }
-                items(listOf("add")) { _ ->
-                    BasicText(
-                        "+ Add app",
-                        style = TextStyle(color = C.Accent, fontSize = 15.sp, fontFamily = Geomini),
-                        modifier = Modifier.clickable { adding = true }.padding(vertical = 12.dp),
-                    )
                 }
             }
         }
+    }
+}
+
+/** The Messages/Calendar ordered list (● first = primary tap). */
+@Composable
+private fun RoleList(role: BarRole, adding: Boolean, onAdding: (Boolean) -> Unit, onSaved: () -> Unit) {
+    val context = LocalContext.current
+    var apps by remember(role) { mutableStateOf(BarApps.load(context, role)) }
+
+    fun persist(next: List<BarApp>) {
+        apps = next
+        BarApps.save(context, role, next)
+        onSaved()
+    }
+
+    if (adding) {
+        AppPicker(
+            exclude = apps.map { it.packageName + it.activityName + (it.userSerial ?: 0) }.toSet(),
+            onPick = { picked -> persist(apps + picked); onAdding(false) },
+        )
+    } else {
+        BasicText(
+            "First app = tap · rest = long-press, slide, release",
+            style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini),
+            modifier = Modifier.padding(vertical = 10.dp),
+        )
+        LazyColumn {
+            items(apps.size) { i ->
+                val app = apps[i]
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    AppIcon(app)
+                    BasicText(
+                        (if (i == 0) "● ${app.label}" else app.label) + workTag(app),
+                        style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini),
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (i > 0) RowButton("↑") { persist(apps.toMutableList().apply { add(i - 1, removeAt(i)) }) }
+                    if (i < apps.size - 1) RowButton("↓") { persist(apps.toMutableList().apply { add(i + 1, removeAt(i)) }) }
+                    RowButton("✕") { persist(apps.toMutableList().apply { removeAt(i) }) }
+                }
+            }
+            item(key = "add") {
+                BasicText(
+                    "+ Add app",
+                    style = TextStyle(color = C.Accent, fontSize = 15.sp, fontFamily = Geomini),
+                    modifier = Modifier.clickable { onAdding(true) }.padding(vertical = 12.dp),
+                )
+            }
+        }
+    }
+}
+
+/** " · work" marker — the badge on the icon is easy to miss at list sizes. */
+private fun workTag(app: BarApp): String = if (app.userSerial != null) " · work" else ""
+
+@Composable
+private fun AppIcon(app: BarApp?) {
+    val context = LocalContext.current
+    val bitmap: ImageBitmap? = remember(app) {
+        app?.let {
+            AppLaunch.icon(context, it.packageName, it.activityName, it.userSerial)
+                ?.toBitmap(96, 96)?.asImageBitmap()
+        }
+    }
+    if (bitmap != null) {
+        Image(bitmap = bitmap, contentDescription = null, modifier = Modifier.size(34.dp))
+    } else {
+        Spacer(Modifier.size(34.dp))
     }
 }
 
@@ -163,14 +298,18 @@ private fun AppPicker(exclude: Set<String>, onPick: (BarApp) -> Unit) {
             AppSearch.filter(all, query).filterNot { it.packageName + it.activityName + (it.userSerial ?: 0) in exclude },
             key = { it.packageName + it.activityName + (it.userSerial ?: 0) },
         ) { app ->
-            BasicText(
-                app.label,
-                style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onPick(BarApp(app.label, app.packageName, app.activityName, app.userSerial)) }
-                    .padding(vertical = 10.dp),
-            )
+            val bar = BarApp(app.label, app.packageName, app.activityName, app.userSerial)
+            Row(
+                Modifier.fillMaxWidth().clickable { onPick(bar) }.padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                AppIcon(bar)
+                BasicText(
+                    app.label + workTag(bar),
+                    style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini),
+                )
+            }
         }
     }
 }

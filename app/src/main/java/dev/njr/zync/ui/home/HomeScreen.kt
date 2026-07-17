@@ -75,19 +75,24 @@ fun HomeScreen(
     onOpenSearch: () -> Unit = {},
     onOpenEvent: (dev.njr.zync.home.CalEvent) -> Unit = {},
     onEnableNotifications: () -> Unit = {},
+    onSwipeLaunch: () -> Unit = {},
 ) {
     Column(
         Modifier
             .fillMaxSize()
             .background(C.Surface)
-            // Swipe from the left (rightward drag) anywhere on the home surface = search.
+            // Swipe from the left (rightward drag) = search; from the right = the
+            // configurable swipe app (Harmonic by default).
             .pointerInput(Unit) {
                 val threshold = 64.dp.toPx()
                 var total = 0f
                 detectHorizontalDragGestures(
                     onDragStart = { total = 0f },
                     onHorizontalDrag = { _, dx -> total += dx },
-                    onDragEnd = { if (total > threshold) onOpenSearch() },
+                    onDragEnd = {
+                        if (total > threshold) onOpenSearch()
+                        else if (total < -threshold) onSwipeLaunch()
+                    },
                 )
             },
     ) {

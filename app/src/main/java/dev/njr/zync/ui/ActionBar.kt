@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -55,11 +56,13 @@ private val BarCard = Color(0xFF1A212B)
 private val BarAccent = Color(0xFF4A90C2)
 
 /**
- * The launcher action bar (spec L1): Messages · Calendar · Phone · Search · Capture.
- * Messages/Calendar honor the user's configured app lists (settings screen): plain
- * tap = the first (primary) app; long-press → slide → release picks from the
- * submenu, whose last row opens the settings editor. Any decisive horizontal swipe
- * opens search. The bar owns the nav-bar strip.
+ * The launcher action bar (spec L1, order per device feedback 2026-07-17):
+ * Phone · Calendar · Context-app · Messages · Capture. Messages/Calendar honor the
+ * user's configured app lists: plain tap = the first (primary) app; long-press →
+ * slide → release picks from the submenu, whose TOP row opens the settings editor.
+ * The center slot launches the active context's app (real icon; long-press edits).
+ * Swiping from the left opens search (no Search slot needed); from the right, the
+ * configurable swipe app. The bar owns the nav-bar strip.
  */
 @Composable
 fun ZyncActionBar(
@@ -68,6 +71,10 @@ fun ZyncActionBar(
     barApps: (BarRole) -> List<BarApp> = { emptyList() },
     onLaunchApp: (BarApp) -> Unit = {},
     onEditRole: (BarRole) -> Unit = {},
+    contextApp: BarApp? = null,
+    onContextTap: () -> Unit = {},
+    onContextEdit: () -> Unit = {},
+    onSwipeLaunch: () -> Unit = {},
 ) {
     Column(
         Modifier
@@ -79,7 +86,10 @@ fun ZyncActionBar(
                 detectHorizontalDragGestures(
                     onDragStart = { total = 0f },
                     onHorizontalDrag = { _, dx -> total += dx },
-                    onDragEnd = { if (kotlin.math.abs(total) > threshold) onSearch() },
+                    onDragEnd = {
+                        if (total > threshold) onSearch() // rightward drag = "from the left"
+                        else if (total < -threshold) onSwipeLaunch() // leftward drag = "from the right"
+                    },
                 )
             }
             .windowInsetsPadding(WindowInsets.navigationBars),
@@ -89,15 +99,42 @@ fun ZyncActionBar(
             Modifier.fillMaxWidth().padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            configurableSlot(R.drawable.ic_messages, BarRole.Messages, Modifier.weight(1f), barApps, onLaunchApp, onEditRole) {
-                onAction(BarAction.Messages)
-            }
+            barSlot(R.drawable.ic_phone, "Phone", Modifier.weight(1f)) { onAction(BarAction.Phone) }
             configurableSlot(R.drawable.ic_calendar, BarRole.Calendar, Modifier.weight(1f), barApps, onLaunchApp, onEditRole) {
                 onAction(BarAction.Calendar)
             }
-            barSlot(R.drawable.ic_phone, "Phone", Modifier.weight(1f)) { onAction(BarAction.Phone) }
-            barSlot(R.drawable.ic_search, "Search", Modifier.weight(1f)) { onSearch() }
+            contextSlot(contextApp, Modifier.weight(1f), onContextTap, onContextEdit)
+            configurableSlot(R.drawable.ic_messages, BarRole.Messages, Modifier.weight(1f), barApps, onLaunchApp, onEditRole) {
+                onAction(BarAction.Messages)
+            }
             barSlot(R.drawable.ic_capture, "Capture", Modifier.weight(1f)) { onAction(BarAction.Capture) }
+        }
+    }
+}
+
+/**
+ * The center slot: the active context's app, wearing its real (badged) icon —
+ * no tint, no label. Tap launches; long-press edits; unset shows an @ invite.
+ */
+@Composable
+private fun contextSlot(app: BarApp?, modifier: Modifier, onTap: () -> Unit, onEdit: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val bitmap = remember(app) {
+        app?.let {
+            dev.njr.zync.launcher.AppLaunch.icon(context, it.packageName, it.activityName, it.userSerial)
+                ?.toBitmap(108, 108)?.asImageBitmap()
+        }
+    }
+    Column(
+        modifier
+            .pointerInput(app) { detectTapGestures(onTap = { onTap() }, onLongPress = { onEdit() }) }
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (bitmap != null) {
+            Image(bitmap = bitmap, contentDescription = app?.label, modifier = Modifier.size(42.dp))
+        } else {
+            BasicText("@", style = TextStyle(color = BarMuted, fontSize = 32.sp, fontWeight = FontWeight.Bold))
         }
     }
 }
