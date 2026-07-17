@@ -311,7 +311,7 @@ class MainActivity : ComponentActivity() {
         val lat = located?.latitude ?: prefs.getString("weather_lat", null)?.toDoubleOrNull() ?: return null
         val lon = located?.longitude ?: prefs.getString("weather_lon", null)?.toDoubleOrNull() ?: return null
         return withContext(Dispatchers.IO) {
-            val http = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO)
+            val http = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp)
             try {
                 kotlinx.coroutines.withTimeoutOrNull(15_000) { OpenMeteo(http).current(lat, lon) }?.also {
                     prefs.edit().putString("weather_lat", "$lat").putString("weather_lon", "$lon").apply()
@@ -441,6 +441,10 @@ class MainActivity : ComponentActivity() {
             val message = when (outcome) {
                 is PairingOutcome.Paired -> "Paired — syncing with ${outcome.server.address}"
                 is PairingOutcome.Failed -> "Pairing failed: ${outcome.reason}"
+            }
+            if (outcome is PairingOutcome.Failed) {
+                // Full reason lands in the sync log (tap the sync tile) — toasts truncate.
+                dev.njr.zync.sync.SyncMonitor.record(this@MainActivity, "pairing failed: ${outcome.reason}", ok = false)
             }
             Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
             onDone(outcome is PairingOutcome.Paired)

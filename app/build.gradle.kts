@@ -128,7 +128,7 @@ dependencies {
   implementation(project(":web"))
 
   // Sync client (device-signed push/pull to the central server)
-  implementation(libs.ktor.client.cio)
+  implementation(libs.ktor.client.okhttp)
   implementation(libs.ktor.client.content.negotiation)
 
   // Ktor server stack + serialization (the loopback server that hosts the shared :web UI)

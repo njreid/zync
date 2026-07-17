@@ -67,7 +67,7 @@ suspend fun pairFromUri(
         return PairingOutcome.Failed("not a zync pairing link")
     }
     val outcome = runCatching { PairingClient(http, json).pair(invite, Ed25519DeviceSigner.generateSeed(), replicaId) }
-        .getOrElse { return PairingOutcome.Failed(it.message ?: "pairing request failed") }
+        .getOrElse { return PairingOutcome.Failed(it.message ?: (it::class.simpleName ?: "pairing request failed")) }
     if (outcome is PairingOutcome.Paired) store.save(outcome.server)
     return outcome
 }
