@@ -106,8 +106,15 @@ fun loginPageHtml(): String = """
       setStatus(r.ok ? 'Passkey registered — you can sign in now.' : 'Registration failed.');
     }
 
-    document.getElementById('signin').addEventListener('click', () => signIn().catch(e => setStatus(e.message)));
-    document.getElementById('register').addEventListener('click', () => register().catch(e => setStatus(e.message)));
+    const explain = (e) => {
+      let m = e.message || String(e);
+      if (/registrable domain|relying party/i.test(m)) {
+        m += " — open this page at its canonical https address (not an IP or a different host).";
+      }
+      setStatus(m);
+    };
+    document.getElementById('signin').addEventListener('click', () => signIn().catch(explain));
+    document.getElementById('register').addEventListener('click', () => register().catch(explain));
 
     // Paste-free enrolment path: /login?reg=<token> prefills the field and opens the
     // panel (the token is one-time and short-lived, so a URL is an acceptable carrier).

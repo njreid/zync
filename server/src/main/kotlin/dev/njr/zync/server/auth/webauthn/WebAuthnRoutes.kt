@@ -104,8 +104,15 @@ fun io.ktor.server.application.Application.installWebSessionGate(
         if (SESSION_EXEMPT.any { path == it || path.startsWith("$it/") }) return@intercept
         val token = sessionToken(call)
         if (token == null || !sessions.validate(token, now())) {
-            if (path == "/" || path == "/index.html") call.respondRedirect("/login")
-            else call.respond(HttpStatusCode.Unauthorized)
+            // Browser NAVIGATIONS (Accept: text/html) bounce to /login — sessions are
+            // in-memory, so after a redeploy a tapped nav link (e.g. /settings/pairing)
+            // must re-auth, not dead-end on a bare 401 page. API/SSE calls still 401.
+            val wantsHtml = call.request.headers[io.ktor.http.HttpHeaders.Accept]?.contains("text/html") == true
+            if (call.request.local.method == io.ktor.http.HttpMethod.Get && wantsHtml) {
+                call.respondRedirect("/login")
+            } else {
+                call.respond(HttpStatusCode.Unauthorized)
+            }
             finish()
         }
     }
