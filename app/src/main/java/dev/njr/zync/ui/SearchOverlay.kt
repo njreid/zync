@@ -26,8 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -58,10 +57,11 @@ fun SearchOverlay(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val apps = remember { AppSearch.launchableApps(context) }
     var query by remember { mutableStateOf("") }
-    val focus = remember { FocusRequester() }
+    // No auto-focus: the overlay opens onto the recent-selections list for one-tap
+    // reuse; tapping the field brings the keyboard + recent query texts.
+    var fieldFocused by remember { mutableStateOf(false) }
 
     BackHandler(onBack = onDismiss)
-    LaunchedEffect(Unit) { focus.requestFocus() }
 
     fun launchRecent(item: RecentItem) {
         when (item.kind) {
@@ -98,7 +98,7 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                     .weight(1f)
                     .background(FieldBackground)
                     .padding(horizontal = 12.dp, vertical = 10.dp)
-                    .focusRequester(focus),
+                    .onFocusChanged { fieldFocused = it.isFocused },
             )
             BasicText(
                 "Close",
@@ -107,8 +107,9 @@ fun SearchOverlay(onDismiss: () -> Unit) {
             )
         }
 
-        // recent query texts, shown while the field is empty (tap to re-run)
-        if (query.isBlank()) {
+        // recent query texts: only once the user has tapped into the field (device
+        // feedback 2026-07-17) — before that the list below leads with recent selections
+        if (fieldFocused && query.isBlank()) {
             val recentQueries = remember { SearchHistory.recentQueries(context) }
             if (recentQueries.isNotEmpty()) {
                 Column(Modifier.padding(bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

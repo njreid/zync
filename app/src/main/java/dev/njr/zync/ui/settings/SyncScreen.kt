@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.sp
 import dev.njr.zync.sync.SyncMonitor
 import dev.njr.zync.sync.SyncScheduler
 import dev.njr.zync.ui.CharonMono
-import dev.njr.zync.ui.Geomini
+import dev.njr.zync.ui.ZyncSans
 import dev.njr.zync.ui.ZyncColors as C
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -61,7 +61,7 @@ fun SyncScreen(serverAddress: String?, onDismiss: () -> Unit) {
             .padding(horizontal = 18.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            BasicText("Sync", style = TextStyle(color = C.Ink, fontSize = 17.sp, fontFamily = Geomini, fontWeight = FontWeight.SemiBold))
+            BasicText("Sync", style = TextStyle(color = C.Ink, fontSize = 17.sp, fontFamily = ZyncSans, fontWeight = FontWeight.SemiBold))
             BasicText("✕", style = TextStyle(color = C.Ink3, fontSize = 20.sp), modifier = Modifier.clickable(onClick = onDismiss).padding(4.dp))
         }
 
@@ -72,7 +72,7 @@ fun SyncScreen(serverAddress: String?, onDismiss: () -> Unit) {
             )
             BasicText(
                 if (syncing) "syncing…" else "Sync now",
-                style = TextStyle(color = if (syncing) C.Ink3 else C.Accent, fontSize = 13.sp, fontFamily = Geomini, fontWeight = FontWeight.SemiBold),
+                style = TextStyle(color = if (syncing) C.Ink3 else C.Accent, fontSize = 13.sp, fontFamily = ZyncSans, fontWeight = FontWeight.SemiBold),
                 modifier = Modifier
                     .border(1.dp, C.Border, RoundedCornerShape(999.dp))
                     .clickable(enabled = !syncing) { SyncScheduler.requestSync(context) }
@@ -81,7 +81,7 @@ fun SyncScreen(serverAddress: String?, onDismiss: () -> Unit) {
         }
 
         if (events.isEmpty()) {
-            BasicText("No sync activity yet.", style = TextStyle(color = C.Ink3, fontSize = 13.sp, fontFamily = Geomini))
+            BasicText("No sync activity yet.", style = TextStyle(color = C.Ink3, fontSize = 13.sp, fontFamily = ZyncSans))
         } else {
             LazyColumn(Modifier.weight(1f)) {
                 items(events) { e ->
@@ -94,7 +94,7 @@ fun SyncScreen(serverAddress: String?, onDismiss: () -> Unit) {
                         Spacer(Modifier.width(10.dp))
                         BasicText(
                             e.message,
-                            style = TextStyle(color = if (e.ok) C.Ink else C.Accent, fontSize = 13.sp, fontFamily = Geomini),
+                            style = TextStyle(color = if (e.ok) C.Ink else C.Accent, fontSize = 13.sp, fontFamily = ZyncSans),
                         )
                     }
                 }

@@ -56,7 +56,7 @@ import dev.njr.zync.capture.RulesExtractor
 import dev.njr.zync.capture.Suggestion
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.ui.CharonMono
-import dev.njr.zync.ui.Geomini
+import dev.njr.zync.ui.ZyncSans
 import dev.njr.zync.ui.ZyncColors as C
 import dev.njr.zync.web.content.ContextView
 import dev.njr.zync.web.content.DueDates
@@ -163,7 +163,7 @@ fun CaptureScreen(
     ) {
         // header + modes
         Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            BasicText("Capture", style = TextStyle(color = C.Ink, fontSize = 17.sp, fontFamily = Geomini, fontWeight = FontWeight.SemiBold))
+            BasicText("Capture", style = TextStyle(color = C.Ink, fontSize = 17.sp, fontFamily = ZyncSans, fontWeight = FontWeight.SemiBold))
             BasicText("✕", style = TextStyle(color = C.Ink3, fontSize = 20.sp), modifier = Modifier.clickable(onClick = onDismiss).padding(4.dp))
         }
         Row(Modifier.padding(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -199,24 +199,24 @@ fun CaptureScreen(
                         transcript.isEmpty() -> "Tap the mic to start"
                         else -> "Stopped · transcript kept with the task"
                     },
-                    style = TextStyle(color = C.Ink2, fontSize = 13.sp, fontFamily = Geomini),
+                    style = TextStyle(color = C.Ink2, fontSize = 13.sp, fontFamily = ZyncSans),
                 )
             }
             if (transcript.isNotEmpty()) {
                 Row(Modifier.padding(horizontal = 18.dp)) {
-                    BasicText("“$finalTranscript", style = TextStyle(color = C.Ink2, fontSize = 15.sp, fontFamily = Geomini))
-                    if (partial.isNotEmpty()) BasicText(" $partial…", style = TextStyle(color = C.Ink3, fontSize = 15.sp, fontFamily = Geomini))
-                    BasicText("”", style = TextStyle(color = C.Ink2, fontSize = 15.sp, fontFamily = Geomini))
+                    BasicText("“$finalTranscript", style = TextStyle(color = C.Ink2, fontSize = 15.sp, fontFamily = ZyncSans))
+                    if (partial.isNotEmpty()) BasicText(" $partial…", style = TextStyle(color = C.Ink3, fontSize = 15.sp, fontFamily = ZyncSans))
+                    BasicText("”", style = TextStyle(color = C.Ink2, fontSize = 15.sp, fontFamily = ZyncSans))
                 }
             }
         }
 
         // editable fields — the save surface
-        BasicText("TASK", style = TextStyle(color = C.Ink3, fontSize = 11.sp, fontFamily = Geomini, letterSpacing = 0.6.sp), modifier = Modifier.padding(start = 18.dp, top = 14.dp))
+        BasicText("TASK", style = TextStyle(color = C.Ink3, fontSize = 11.sp, fontFamily = ZyncSans, letterSpacing = 0.6.sp), modifier = Modifier.padding(start = 18.dp, top = 14.dp))
         BasicTextField(
             value = title,
             onValueChange = { title = it },
-            textStyle = TextStyle(color = C.Ink, fontSize = 17.sp, fontFamily = Geomini, fontWeight = FontWeight.SemiBold),
+            textStyle = TextStyle(color = C.Ink, fontSize = 17.sp, fontFamily = ZyncSans, fontWeight = FontWeight.SemiBold),
             cursorBrush = SolidColor(C.Ink),
             modifier = Modifier
                 .fillMaxWidth()
@@ -233,7 +233,7 @@ fun CaptureScreen(
 
         // suggestion card: one-tap prefill
         suggestion?.let { s ->
-            BasicText("SUGGESTED — ON-DEVICE", style = TextStyle(color = C.Ink3, fontSize = 11.sp, fontFamily = Geomini, letterSpacing = 0.6.sp), modifier = Modifier.padding(start = 18.dp, top = 12.dp))
+            BasicText("SUGGESTED — ON-DEVICE", style = TextStyle(color = C.Ink3, fontSize = 11.sp, fontFamily = ZyncSans, letterSpacing = 0.6.sp), modifier = Modifier.padding(start = 18.dp, top = 12.dp))
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -249,18 +249,18 @@ fun CaptureScreen(
                     }
                     .padding(12.dp),
             ) {
-                BasicText(s.title, style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini, fontWeight = FontWeight.SemiBold))
+                BasicText(s.title, style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans, fontWeight = FontWeight.SemiBold))
                 val mini = listOfNotNull(s.contextName, s.dueLabel, s.person).joinToString(" · ")
-                if (mini.isNotEmpty()) BasicText(mini, style = TextStyle(color = C.Ink2, fontSize = 12.sp, fontFamily = Geomini), modifier = Modifier.padding(top = 4.dp))
+                if (mini.isNotEmpty()) BasicText(mini, style = TextStyle(color = C.Ink2, fontSize = 12.sp, fontFamily = ZyncSans), modifier = Modifier.padding(top = 4.dp))
                 BasicText(
                     if (applied) "✓ Applied — tweak above" else "Tap to fill the fields",
-                    style = TextStyle(color = if (applied) C.Accent else C.Ink3, fontSize = 11.sp, fontFamily = Geomini),
+                    style = TextStyle(color = if (applied) C.Accent else C.Ink3, fontSize = 11.sp, fontFamily = ZyncSans),
                     modifier = Modifier.padding(top = 6.dp),
                 )
             }
 
             // file-under: separately pickable boxes
-            BasicText("FILE UNDER", style = TextStyle(color = C.Ink3, fontSize = 11.sp, fontFamily = Geomini, letterSpacing = 0.6.sp), modifier = Modifier.padding(start = 18.dp, top = 10.dp))
+            BasicText("FILE UNDER", style = TextStyle(color = C.Ink3, fontSize = 11.sp, fontFamily = ZyncSans, letterSpacing = 0.6.sp), modifier = Modifier.padding(start = 18.dp, top = 10.dp))
             LazyRow(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp)) {
                 items(s.nodeCandidates, key = { it.id }) { cand ->
                     NodeBox(cand.title, cand.why, pickedParent?.id == cand.id) {
@@ -307,7 +307,7 @@ fun CaptureScreen(
         if (!quickKeys) {
             BasicText(
                 "vol− ×2 opens capture from anywhere — enable in Accessibility",
-                style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini, textDecoration = TextDecoration.Underline),
+                style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans, textDecoration = TextDecoration.Underline),
                 modifier = Modifier
                     .clickable {
                         runCatching {
@@ -352,7 +352,7 @@ private fun Chip(kind: String, value: String, onRemove: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicText(kind, style = TextStyle(color = C.Ink3, fontSize = 11.sp, fontFamily = CharonMono, fontWeight = FontWeight.Bold))
-        BasicText(value, style = TextStyle(color = C.Ink, fontSize = 13.sp, fontFamily = Geomini))
+        BasicText(value, style = TextStyle(color = C.Ink, fontSize = 13.sp, fontFamily = ZyncSans))
         BasicText("✕", style = TextStyle(color = C.Ink3, fontSize = 12.sp))
     }
 }
@@ -368,9 +368,9 @@ private fun NodeBox(title: String, why: String, picked: Boolean, onTap: () -> Un
     ) {
         BasicText(
             if (picked) "$title ✓" else title,
-            style = TextStyle(color = if (picked) C.Ink else C.Ink2, fontSize = 14.sp, fontFamily = Geomini, fontWeight = FontWeight.Medium),
+            style = TextStyle(color = if (picked) C.Ink else C.Ink2, fontSize = 14.sp, fontFamily = ZyncSans, fontWeight = FontWeight.Medium),
         )
-        BasicText(why, style = TextStyle(color = C.Ink3, fontSize = 11.sp, fontFamily = Geomini), modifier = Modifier.padding(top = 2.dp))
+        BasicText(why, style = TextStyle(color = C.Ink3, fontSize = 11.sp, fontFamily = ZyncSans), modifier = Modifier.padding(top = 2.dp))
     }
 }
 
@@ -389,7 +389,7 @@ private fun ActionButton(label: String, primary: Boolean, enabled: Boolean, modi
             style = TextStyle(
                 color = if (primary) androidx.compose.ui.graphics.Color.White else C.Ink2,
                 fontSize = 15.sp,
-                fontFamily = Geomini,
+                fontFamily = ZyncSans,
                 fontWeight = if (primary) FontWeight.SemiBold else FontWeight.Normal,
             ),
         )

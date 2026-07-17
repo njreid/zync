@@ -31,7 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.njr.zync.ui.CharonMono
-import dev.njr.zync.ui.Geomini
+import dev.njr.zync.ui.ZyncSans
 import dev.njr.zync.ui.ZyncColors as C
 
 /**
@@ -55,14 +55,14 @@ fun PairingScreen(onPair: (String) -> Unit, onDismiss: () -> Unit) {
             .padding(horizontal = 18.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            BasicText("Pair with server", style = TextStyle(color = C.Ink, fontSize = 17.sp, fontFamily = Geomini, fontWeight = FontWeight.SemiBold))
+            BasicText("Pair with server", style = TextStyle(color = C.Ink, fontSize = 17.sp, fontFamily = ZyncSans, fontWeight = FontWeight.SemiBold))
             BasicText("✕", style = TextStyle(color = C.Ink3, fontSize = 20.sp), modifier = Modifier.clickable(onClick = onDismiss).padding(4.dp))
         }
 
         BasicText(
             "On another device, sign in to your zync server and open Settings → Pairing. " +
                 "Scan the QR code there with this phone's camera — or paste the invite link below.",
-            style = TextStyle(color = C.Ink2, fontSize = 14.sp, fontFamily = Geomini, lineHeight = 20.sp),
+            style = TextStyle(color = C.Ink2, fontSize = 14.sp, fontFamily = ZyncSans, lineHeight = 20.sp),
         )
 
         Spacer(Modifier.height(18.dp))
@@ -91,7 +91,7 @@ fun PairingScreen(onPair: (String) -> Unit, onDismiss: () -> Unit) {
             style = TextStyle(
                 color = if (invite != null) C.Surface else C.Ink3,
                 fontSize = 15.sp,
-                fontFamily = Geomini,
+                fontFamily = ZyncSans,
                 fontWeight = FontWeight.SemiBold,
             ),
             modifier = Modifier

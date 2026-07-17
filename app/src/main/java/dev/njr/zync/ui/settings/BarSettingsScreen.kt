@@ -45,7 +45,7 @@ import dev.njr.zync.launcher.BarApp
 import dev.njr.zync.launcher.BarApps
 import dev.njr.zync.launcher.BarRole
 import dev.njr.zync.launcher.ContextApps
-import dev.njr.zync.ui.Geomini
+import dev.njr.zync.ui.ZyncSans
 import dev.njr.zync.ui.ZyncColors as C
 
 /** The four configurable bar behaviors the settings screen edits. */
@@ -86,7 +86,7 @@ fun BarSettingsScreen(initialTab: BarTab, contexts: List<String>, onDismiss: () 
             .padding(horizontal = 18.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            BasicText("Action bar", style = TextStyle(color = C.Ink, fontSize = 17.sp, fontFamily = Geomini, fontWeight = FontWeight.SemiBold))
+            BasicText("Action bar", style = TextStyle(color = C.Ink, fontSize = 17.sp, fontFamily = ZyncSans, fontWeight = FontWeight.SemiBold))
             BasicText("✕", style = TextStyle(color = C.Ink3, fontSize = 20.sp), modifier = Modifier.clickable(onClick = onDismiss).padding(4.dp))
         }
 
@@ -97,7 +97,7 @@ fun BarSettingsScreen(initialTab: BarTab, contexts: List<String>, onDismiss: () 
                     style = TextStyle(
                         color = if (t == tab) C.Surface else C.Ink2,
                         fontSize = 13.sp,
-                        fontFamily = Geomini,
+                        fontFamily = ZyncSans,
                         fontWeight = FontWeight.SemiBold,
                     ),
                     modifier = Modifier
@@ -125,7 +125,7 @@ fun BarSettingsScreen(initialTab: BarTab, contexts: List<String>, onDismiss: () 
                 } else {
                     BasicText(
                         "The bar's center slot launches this app for the active context",
-                        style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini),
+                        style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
                         modifier = Modifier.padding(vertical = 10.dp),
                     )
                     val explicit = remember(tick) { ContextApps.explicit(context) }
@@ -141,14 +141,14 @@ fun BarSettingsScreen(initialTab: BarTab, contexts: List<String>, onDismiss: () 
                             ) {
                                 AppIcon(effective)
                                 Column(Modifier.weight(1f)) {
-                                    BasicText(at, style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini))
+                                    BasicText(at, style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans))
                                     BasicText(
                                         when {
                                             chosen != null -> chosen.label + workTag(chosen)
                                             effective != null -> "default: ${effective.label}" + workTag(effective)
                                             else -> "tap to choose an app"
                                         },
-                                        style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini),
+                                        style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
                                     )
                                 }
                                 if (chosen != null) {
@@ -169,7 +169,7 @@ fun BarSettingsScreen(initialTab: BarTab, contexts: List<String>, onDismiss: () 
                 } else {
                     BasicText(
                         "Swiping the bar (or home) from the right opens this app; from the left opens search",
-                        style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini),
+                        style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
                         modifier = Modifier.padding(vertical = 10.dp),
                     )
                     val app = remember(tick) { ContextApps.swipeApp(context) }
@@ -181,7 +181,7 @@ fun BarSettingsScreen(initialTab: BarTab, contexts: List<String>, onDismiss: () 
                         AppIcon(app)
                         BasicText(
                             app?.let { it.label + workTag(it) } ?: "tap to choose an app",
-                            style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini),
+                            style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans),
                             modifier = Modifier.weight(1f),
                         )
                         if (app != null) RowButton("✕") { ContextApps.saveSwipe(context, null); tick++ }
@@ -212,7 +212,7 @@ private fun RoleList(role: BarRole, adding: Boolean, onAdding: (Boolean) -> Unit
     } else {
         BasicText(
             "First app = tap · rest = long-press, slide, release",
-            style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini),
+            style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
             modifier = Modifier.padding(vertical = 10.dp),
         )
         LazyColumn {
@@ -226,7 +226,7 @@ private fun RoleList(role: BarRole, adding: Boolean, onAdding: (Boolean) -> Unit
                     AppIcon(app)
                     BasicText(
                         (if (i == 0) "● ${app.label}" else app.label) + workTag(app),
-                        style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini),
+                        style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans),
                         modifier = Modifier.weight(1f),
                     )
                     if (i > 0) RowButton("↑") { persist(apps.toMutableList().apply { add(i - 1, removeAt(i)) }) }
@@ -237,7 +237,7 @@ private fun RoleList(role: BarRole, adding: Boolean, onAdding: (Boolean) -> Unit
             item(key = "add") {
                 BasicText(
                     "+ Add app",
-                    style = TextStyle(color = C.Accent, fontSize = 15.sp, fontFamily = Geomini),
+                    style = TextStyle(color = C.Accent, fontSize = 15.sp, fontFamily = ZyncSans),
                     modifier = Modifier.clickable { onAdding(true) }.padding(vertical = 12.dp),
                 )
             }
@@ -285,7 +285,7 @@ private fun AppPicker(exclude: Set<String>, onPick: (BarApp) -> Unit) {
         value = query,
         onValueChange = { query = it },
         singleLine = true,
-        textStyle = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini),
+        textStyle = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans),
         cursorBrush = SolidColor(C.Ink),
         modifier = Modifier
             .fillMaxWidth()
@@ -307,7 +307,7 @@ private fun AppPicker(exclude: Set<String>, onPick: (BarApp) -> Unit) {
                 AppIcon(bar)
                 BasicText(
                     app.label + workTag(bar),
-                    style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini),
+                    style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans),
                 )
             }
         }

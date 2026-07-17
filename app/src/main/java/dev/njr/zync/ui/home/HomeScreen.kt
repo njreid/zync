@@ -40,7 +40,7 @@ import androidx.compose.ui.window.Popup
 import dev.njr.zync.home.AgendaRow
 import dev.njr.zync.ui.BigShoulders
 import dev.njr.zync.ui.CharonMono
-import dev.njr.zync.ui.Geomini
+import dev.njr.zync.ui.ZyncSans
 import dev.njr.zync.ui.ZyncColors as C
 import dev.njr.zync.web.content.ContextView
 
@@ -130,12 +130,12 @@ private fun Tile(tile: HomeTile, count: Int, hint: String, modifier: Modifier, o
             .clickable(onClick = onTap)
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
-        BasicText(tile.name, style = TextStyle(color = C.Ink2, fontSize = 11.sp, fontFamily = Geomini))
+        BasicText(tile.name, style = TextStyle(color = C.Ink2, fontSize = 11.sp, fontFamily = ZyncSans))
         BasicText(
             "$count",
-            style = TextStyle(color = C.Ink, fontSize = 20.sp, fontFamily = Geomini, fontWeight = FontWeight.SemiBold),
+            style = TextStyle(color = C.Ink, fontSize = 20.sp, fontFamily = ZyncSans, fontWeight = FontWeight.SemiBold),
         )
-        BasicText(hint, style = TextStyle(color = C.Ink3, fontSize = 10.sp, fontFamily = Geomini))
+        BasicText(hint, style = TextStyle(color = C.Ink3, fontSize = 10.sp, fontFamily = ZyncSans))
     }
 }
 
@@ -159,9 +159,9 @@ private fun SyncTile(state: dev.njr.zync.sync.SyncState, modifier: Modifier, onT
             .clickable(onClick = onTap)
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
-        BasicText("Sync", style = TextStyle(color = C.Ink2, fontSize = 11.sp, fontFamily = Geomini))
+        BasicText("Sync", style = TextStyle(color = C.Ink2, fontSize = 11.sp, fontFamily = ZyncSans))
         BasicText(glyph, style = TextStyle(color = tone, fontSize = 20.sp, fontWeight = FontWeight.SemiBold))
-        BasicText(hint, style = TextStyle(color = C.Ink3, fontSize = 10.sp, fontFamily = Geomini))
+        BasicText(hint, style = TextStyle(color = C.Ink3, fontSize = 10.sp, fontFamily = ZyncSans))
     }
 }
 
@@ -221,14 +221,14 @@ private fun Hero(state: HomeState, onContextSelect: (ContextView?) -> Unit, onEn
             }
         }
         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            BasicText(state.dateLine, style = TextStyle(color = C.Ink2, fontSize = 16.sp, fontFamily = Geomini))
+            BasicText(state.dateLine, style = TextStyle(color = C.Ink2, fontSize = 16.sp, fontFamily = ZyncSans))
             // Always tappable: enables permission the first time, retries the fetch after.
             BasicText(
                 state.weatherLine ?: "enable weather",
                 style = TextStyle(
                     color = if (state.weatherLine == null || state.weatherLine.startsWith("retry")) C.Ink3 else C.Ink2,
                     fontSize = 16.sp,
-                    fontFamily = Geomini,
+                    fontFamily = ZyncSans,
                     textDecoration = if (state.weatherLine == null) TextDecoration.Underline else null,
                 ),
                 modifier = Modifier.clickable(onClick = onEnableWeather),
@@ -265,7 +265,7 @@ private fun Agenda(
     if (!state.calendarPermission) {
         BasicText(
             "Grant calendar access to see your agenda",
-            style = TextStyle(color = C.Ink3, fontSize = 14.sp, fontFamily = Geomini, textDecoration = TextDecoration.Underline),
+            style = TextStyle(color = C.Ink3, fontSize = 14.sp, fontFamily = ZyncSans, textDecoration = TextDecoration.Underline),
             modifier = Modifier.clickable(onClick = onEnableCalendar).padding(horizontal = 18.dp, vertical = 10.dp),
         )
     }
@@ -275,9 +275,9 @@ private fun Agenda(
             items(agenda.allDay.size) { i ->
                 val e = agenda.allDay[i]
                 Row(Modifier.fillMaxWidth().clickable { onOpenEvent(e) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BasicText("all day", style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini), modifier = Modifier.width(58.dp))
+                    BasicText("all day", style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans), modifier = Modifier.width(58.dp))
                     ProfileBar(e, 1f)
-                    BasicText(e.title, style = TextStyle(color = C.Ink2, fontSize = 14.sp, fontFamily = Geomini), modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
+                    BasicText(e.title, style = TextStyle(color = C.Ink2, fontSize = 14.sp, fontFamily = ZyncSans), modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
                 }
             }
             item(key = "allday-divider") {
@@ -302,7 +302,7 @@ private fun Agenda(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Box(Modifier.size(16.dp).border(1.5.dp, C.Ink3, RoundedCornerShape(5.dp)))
-                    BasicText(task.title ?: "(untitled)", style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = Geomini))
+                    BasicText(task.title ?: "(untitled)", style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans))
                 }
             }
         }
@@ -319,7 +319,7 @@ private fun Agenda(
             item(key = "notif-enable") {
                 BasicText(
                     "Enable notification access for non-calendar reminders",
-                    style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = Geomini, textDecoration = TextDecoration.Underline),
+                    style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans, textDecoration = TextDecoration.Underline),
                     modifier = Modifier.clickable(onClick = onEnableNotifications).padding(vertical = 10.dp),
                 )
             }
@@ -358,13 +358,13 @@ private fun EventRow(row: AgendaRow.Event, onOpenEvent: (dev.njr.zync.home.CalEv
     ) {
         BasicText(
             formatTime(row.event.beginMillis),
-            style = TextStyle(color = fg2, fontSize = 14.sp, fontFamily = Geomini),
+            style = TextStyle(color = fg2, fontSize = 14.sp, fontFamily = ZyncSans),
             modifier = Modifier.width(58.dp),
         )
         ProfileBar(row.event, alpha)
         BasicText(
             row.event.title,
-            style = TextStyle(color = fg, fontSize = 15.sp, fontFamily = Geomini, fontWeight = if (inverted) FontWeight.SemiBold else FontWeight.Normal),
+            style = TextStyle(color = fg, fontSize = 15.sp, fontFamily = ZyncSans, fontWeight = if (inverted) FontWeight.SemiBold else FontWeight.Normal),
             modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
         )
         BasicText(
@@ -382,7 +382,7 @@ private fun EventRow(row: AgendaRow.Event, onOpenEvent: (dev.njr.zync.home.CalEv
 private fun NowRow() {
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f).height(1.dp).background(C.Accent.copy(alpha = .5f)))
-        BasicText("now", style = TextStyle(color = C.Accent, fontSize = 11.sp, fontFamily = Geomini), modifier = Modifier.padding(horizontal = 8.dp))
+        BasicText("now", style = TextStyle(color = C.Accent, fontSize = 11.sp, fontFamily = ZyncSans), modifier = Modifier.padding(horizontal = 8.dp))
         Box(Modifier.weight(1f).height(1.dp).background(C.Accent.copy(alpha = .5f)))
     }
 }
