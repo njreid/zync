@@ -20,7 +20,7 @@ import kotlinx.html.ul
  * Dark theme is forced (`data-theme="dark"`, the v0.2 look); styles come from
  * vendored stylesheet FILES because the loopback CSP has no inline-style carve-out.
  */
-fun HTML.page(pageTitle: String, content: FlowContent.() -> Unit) {
+fun HTML.page(pageTitle: String, settingsHref: String? = null, content: FlowContent.() -> Unit) {
     attributes["lang"] = "en"
     attributes["data-theme"] = "dark"
     head {
@@ -38,6 +38,8 @@ fun HTML.page(pageTitle: String, content: FlowContent.() -> Unit) {
             ul {
                 li { a(href = "/") { +"Inbox" } }
                 li { a(href = "/tree") { +"Tree" } }
+                // Server-only (the phone loopback has no pairing page to link to).
+                settingsHref?.let { li { a(href = it) { +"Pairing" } } }
             }
         }
         main(classes = "container") { content() }

@@ -89,6 +89,9 @@ fun Application.zyncModule(
             if (!call.requireAuth(auth.authenticator)) return@get
             call.respond(hardening.metrics.snapshot(usage()))
         }
-        if (content != null) webRoutes(content.read, changes = content.changes, commands = content.commands)
+        if (content != null) {
+            val pairingPage = if (pairing?.publicAddress != null) "/settings/pairing" else null
+            webRoutes(content.read, changes = content.changes, commands = content.commands, settingsHref = pairingPage)
+        }
     }
 }

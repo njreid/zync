@@ -154,10 +154,9 @@ private fun configurableSlot(
         Image(
             painter = painterResource(icon),
             contentDescription = role.title,
-            modifier = Modifier.size(30.dp),
+            modifier = Modifier.size(42.dp),
             colorFilter = ColorFilter.tint(BarMuted),
         )
-        BasicText(role.title, style = TextStyle(color = BarMuted, fontSize = 11.sp))
 
         if (menuOpen) {
             // Popup bottom flush with the slot top: offset up by exactly the menu height.
@@ -216,9 +215,8 @@ private fun barSlot(@DrawableRes icon: Int, label: String, modifier: Modifier, o
         Image(
             painter = painterResource(icon),
             contentDescription = label,
-            modifier = Modifier.size(30.dp),
+            modifier = Modifier.size(42.dp),
             colorFilter = ColorFilter.tint(BarMuted),
         )
-        BasicText(label, style = TextStyle(color = BarMuted, fontSize = 11.sp))
     }
 }

@@ -96,12 +96,15 @@ internal fun pairingPageHtml(pairingUri: String, openUrl: String): String = """
     svg { width: 100%; max-width: 20rem; display: block; margin: 1rem 0; border-radius: .4rem; }
     code { word-break: break-all; font-size: .8rem; display: block; margin: 1rem 0; color: #8a91a0; }
     .muted { color: #8a91a0; }
+    a.button { display: block; text-align: center; font-size: 1.1rem; padding: .9rem 2rem; margin: 1rem 0;
+               background: #0172ad; color: #fff; border-radius: .5rem; text-decoration: none; }
   </style>
 </head>
 <body>
   <h1>Pair a phone</h1>
-  <p>Scan with the phone's camera — it opens a page with an "Open zync" button.
-     Already reading this on the phone? <a href="$pairingUri">Pair this device</a>.</p>
+  <a class="button" href="$pairingUri">Pair this phone</a>
+  <p class="muted">Reading this on another device? Scan with the phone's camera instead — it opens
+     a page with an "Open zync" button.</p>
   ${Qr.svg(openUrl)}
   <code>$openUrl</code>
   <p class="muted">The code is single-use and expires in 2 minutes — reload for a fresh one.</p>

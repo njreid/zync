@@ -165,7 +165,8 @@ private fun SyncTile(state: dev.njr.zync.sync.SyncState, modifier: Modifier, onT
 @Composable
 private fun Hero(state: HomeState, onContextSelect: (ContextView?) -> Unit, onEnableWeather: () -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp)) {
+    // Tight horizontal padding: the clock + 5-glyph context must share one line (no wrap).
+    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Row(verticalAlignment = Alignment.Bottom) {
                 // 24h, no colon: solid hours, outlined minutes (device feedback 2026-07-16).
@@ -189,7 +190,9 @@ private fun Hero(state: HomeState, onContextSelect: (ContextView?) -> Unit, onEn
                 // smaller than the clock so five glyphs always fit beside it.
                 BasicText(
                     "@" + (state.contextName ?: "all").take(4),
-                    style = TextStyle(color = C.Ink2, fontSize = 54.sp, fontFamily = BigShoulders, fontWeight = FontWeight.Black),
+                    style = TextStyle(color = C.Ink2, fontSize = 48.sp, fontFamily = BigShoulders, fontWeight = FontWeight.Black),
+                    maxLines = 1,
+                    softWrap = false,
                     modifier = Modifier.clickable { menuOpen = true },
                 )
                 if (menuOpen) {

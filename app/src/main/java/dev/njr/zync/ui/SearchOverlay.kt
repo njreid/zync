@@ -111,15 +111,16 @@ fun SearchOverlay(onDismiss: () -> Unit) {
         if (query.isBlank()) {
             val recentQueries = remember { SearchHistory.recentQueries(context) }
             if (recentQueries.isNotEmpty()) {
-                Row(Modifier.padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     recentQueries.forEach { q ->
                         BasicText(
                             q,
                             style = TextStyle(color = TextMuted, fontSize = 13.sp),
                             modifier = Modifier
-                                .background(FieldBackground, androidx.compose.foundation.shape.RoundedCornerShape(999.dp))
+                                .fillMaxWidth()
+                                .background(FieldBackground, androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
                                 .clickable { query = q }
-                                .padding(horizontal = 12.dp, vertical = 5.dp),
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                         )
                     }
                 }

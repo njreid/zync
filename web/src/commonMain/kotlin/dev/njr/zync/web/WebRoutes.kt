@@ -46,6 +46,8 @@ fun Route.webRoutes(
     now: () -> Long = { Long.MAX_VALUE },
     changes: ChangeNotifier? = null,
     commands: ContentCommands? = null,
+    /** Nav link to the pairing/settings page — server-only (null on the phone loopback). */
+    settingsHref: String? = null,
 ) {
     get("/") {
         // ?context=<id> selects a context (persisted in a cookie so mutations and the
@@ -61,7 +63,7 @@ fun Route.webRoutes(
         }
         val context = call.selectedContext()
         call.respondHtml {
-            page("Inbox") {
+            page("Inbox", settingsHref) {
                 div {
                     id = "inbox"
                     // Datastar: open the SSE stream on load; the server patches #inbox on change.
@@ -72,20 +74,20 @@ fun Route.webRoutes(
         }
     }
     get("/tree") {
-        call.respondHtml { page("Tree") { h2 { +"Tree" }; treeSection(read, null) } }
+        call.respondHtml { page("Tree", settingsHref) { h2 { +"Tree" }; treeSection(read, null) } }
     }
     get("/node/{id}") {
         val node = call.parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }?.let(read::node)
         if (node == null) {
             call.respondText("not found", status = HttpStatusCode.NotFound)
         } else {
-            call.respondHtml { page(node.title ?: "Node") { div { id = "node-detail"; nodeDetail(read, node) } } }
+            call.respondHtml { page(node.title ?: "Node", settingsHref) { div { id = "node-detail"; nodeDetail(read, node) } } }
         }
     }
     get("/node/{id}/read") {
         val node = call.parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }?.let(read::node)
         if (node == null) call.respondText("not found", status = HttpStatusCode.NotFound)
-        else call.respondHtml { page(node.title ?: "Read") { readingView(node) } }
+        else call.respondHtml { page(node.title ?: "Read", settingsHref) { readingView(node) } }
     }
     get("/assets/datastar.js") {
         call.respondText(WebPlatform.datastarRuntime(), ContentType("application", "javascript"))
