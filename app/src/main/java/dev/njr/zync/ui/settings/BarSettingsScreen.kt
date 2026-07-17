@@ -90,7 +90,7 @@ fun BarSettingsScreen(initialRole: BarRole, onDismiss: () -> Unit) {
 
         if (adding) {
             AppPicker(
-                exclude = apps.map { it.packageName + it.activityName }.toSet(),
+                exclude = apps.map { it.packageName + it.activityName + (it.userSerial ?: 0) }.toSet(),
                 onPick = { picked -> persist(apps + picked); adding = false },
             )
         } else {
@@ -160,8 +160,8 @@ private fun AppPicker(exclude: Set<String>, onPick: (BarApp) -> Unit) {
     )
     LazyColumn {
         items(
-            AppSearch.filter(all, query).filterNot { it.packageName + it.activityName in exclude },
-            key = { it.packageName + it.activityName },
+            AppSearch.filter(all, query).filterNot { it.packageName + it.activityName + (it.userSerial ?: 0) in exclude },
+            key = { it.packageName + it.activityName + (it.userSerial ?: 0) },
         ) { app ->
             BasicText(
                 app.label,

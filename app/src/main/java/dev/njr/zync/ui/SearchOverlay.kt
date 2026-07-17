@@ -134,7 +134,7 @@ fun SearchOverlay(onDismiss: () -> Unit) {
             if (query.isBlank()) {
                 val recents = SearchHistory.recentItems(context)
                 if (recents.isNotEmpty()) {
-                    items(recents, key = { "r:" + it.label + it.kind }) { item ->
+                    items(recents, key = { "r:" + it.label + it.kind + (it.userSerial ?: 0) }) { item ->
                         Row(
                             Modifier.fillMaxWidth().clickable { launchRecent(item) }.padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
