@@ -85,7 +85,7 @@ private suspend fun registrationAllowed(call: ApplicationCall, endpoint: WebAuth
  * assets, health, and the device/sync/pairing APIs (which carry their own auth). Everything
  * else — the `:web` document, its data routes, and its mutation POSTs — needs a session.
  */
-private val SESSION_EXEMPT = listOf("/auth", "/login", "/assets", "/health", "/sync", "/debug", "/blob", "/metrics", "/pair", "/agenda", "/favicon")
+private val SESSION_EXEMPT = listOf("/auth", "/login", "/assets", "/health", "/sync", "/debug", "/blob", "/metrics", "/pair", "/agenda", "/integrations", "/favicon")
 
 /**
  * Gate the server-hosted `:web` UI behind a browser session: an unauthenticated document

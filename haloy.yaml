@@ -64,6 +64,15 @@ env:
   - name: "ZYNC_AGENDA_TOKEN"
     from:
       env: "ZYNC_AGENDA_TOKEN"
+  # Newz handoff (zync→newz WebView SSO): the DEDICATED integration signing seed
+  # (public key published to newz via deploy config) + the service credential newz
+  # presents on its private redeem call. Either unset closes that half.
+  - name: "ZYNC_NEWZ_SIGNING_SEED"
+    from:
+      env: "ZYNC_NEWZ_SIGNING_SEED"
+  - name: "ZYNC_NEWZ_REDEEM_TOKEN"
+    from:
+      env: "ZYNC_NEWZ_REDEEM_TOKEN"
 
 # Build the JVM distribution the Dockerfile packages, before haloy builds the image.
 pre_deploy:

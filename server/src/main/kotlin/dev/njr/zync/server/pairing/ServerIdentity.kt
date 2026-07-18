@@ -21,6 +21,8 @@ class ServerIdentity private constructor(private val privateSeed: ByteArray) {
     companion object {
         fun fromSeed(seed: ByteArray) = ServerIdentity(seed)
 
+        fun fromBase64Seed(seed: String) = ServerIdentity(Base64.decode(seed.trim()))
+
         /** Load the identity from [keyFile] (base64 seed), creating + persisting it if absent. */
         fun loadOrCreate(keyFile: String): ServerIdentity {
             val file = File(keyFile)

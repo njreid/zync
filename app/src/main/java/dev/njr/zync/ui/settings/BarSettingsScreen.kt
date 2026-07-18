@@ -168,7 +168,7 @@ fun BarSettingsScreen(initialTab: BarTab, contexts: List<String>, onDismiss: () 
                     })
                 } else {
                     BasicText(
-                        "Swiping the bar (or home) from the right opens this app; from the left opens search",
+                        "Swiping from the right opens the newz feed by default — or pick an app instead; from the left opens search",
                         style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
                         modifier = Modifier.padding(vertical = 10.dp),
                     )
@@ -180,7 +180,7 @@ fun BarSettingsScreen(initialTab: BarTab, contexts: List<String>, onDismiss: () 
                     ) {
                         AppIcon(app)
                         BasicText(
-                            app?.let { it.label + workTag(it) } ?: "tap to choose an app",
+                            app?.let { it.label + workTag(it) } ?: "Newz feed · built-in",
                             style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans),
                             modifier = Modifier.weight(1f),
                         )

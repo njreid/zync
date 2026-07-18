@@ -5,6 +5,7 @@ name: Deploy server
 #   secrets: HALOY_API_TOKEN     — from the haloyd install output on the box
 #            ZYNC_WEBAUTHN_REG_TOKEN
 #            ZYNC_AGENDA_TOKEN    — bearer token for the agenda push endpoint
+#            ZYNC_NEWZ_SIGNING_SEED, ZYNC_NEWZ_REDEEM_TOKEN — newz handoff (see docs)
 #   vars:    HALOY_SERVER        — the haloyd API host (e.g. haloy.zync.example.com)
 #            ZYNC_DOMAIN         — the app domain (e.g. zync.example.com)
 #            ZYNC_PUBLIC_ADDR    — https://<ZYNC_DOMAIN>
@@ -90,6 +91,8 @@ jobs:
           ZYNC_WEBAUTHN_ORIGIN: ${{ vars.ZYNC_WEBAUTHN_ORIGIN }}
           ZYNC_WEBAUTHN_REG_TOKEN: ${{ secrets.ZYNC_WEBAUTHN_REG_TOKEN }}
           ZYNC_AGENDA_TOKEN: ${{ secrets.ZYNC_AGENDA_TOKEN }}
+          ZYNC_NEWZ_SIGNING_SEED: ${{ secrets.ZYNC_NEWZ_SIGNING_SEED }}
+          ZYNC_NEWZ_REDEEM_TOKEN: ${{ secrets.ZYNC_NEWZ_REDEEM_TOKEN }}
         run: |
           haloy validate-config
           haloy deploy

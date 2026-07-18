@@ -24,7 +24,6 @@ object ContextApps {
         "@home" to Default("com.google.android.apps.chromecast.app"),
         "@work" to Default("com.google.android.apps.docs", workProfile = true),
     )
-    private val SWIPE_DEFAULT = Default("com.simon.harmonichackernews")
 
     /** The app for a context (with or without the `@`): explicit pick, else default. */
     fun pick(context: Context, contextName: String?): BarApp? {
@@ -47,11 +46,11 @@ object ContextApps {
         prefs(context).edit().putString(CONTEXT_KEY, json.encodeToString(next.toMap())).apply()
     }
 
-    /** What a rightward-origin ("right") swipe launches: explicit pick, else Harmonic. */
+    /** The right swipe's EXPLICIT app pick; null = the built-in newz feed surface. */
     fun swipeApp(context: Context): BarApp? =
         runCatching {
             prefs(context).getString(SWIPE_KEY, null)?.let { json.decodeFromString<BarApp>(it) }
-        }.getOrNull() ?: resolveDefault(context, SWIPE_DEFAULT)
+        }.getOrNull()
 
     fun saveSwipe(context: Context, app: BarApp?) {
         prefs(context).edit().apply {

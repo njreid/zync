@@ -1,0 +1,25 @@
+-- Newz handoff tokens (zync→newz WebView SSO, spec ../newz/zync-integration-spec.md):
+-- only METADATA is stored — jti, device, timestamps — never the signed token itself.
+-- Redemption is one-time and atomic (single-writer sqlite + a guarded UPDATE in a tx).
+CREATE TABLE newz_handoff (
+  jti TEXT NOT NULL PRIMARY KEY,
+  device_id TEXT NOT NULL,
+  issued_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  redeemed_at INTEGER
+);
+
+insertHandoff:
+INSERT INTO newz_handoff(jti, device_id, issued_at, expires_at) VALUES (?, ?, ?, ?);
+
+getHandoff:
+SELECT device_id, expires_at, redeemed_at FROM newz_handoff WHERE jti = ?;
+
+markRedeemed:
+UPDATE newz_handoff SET redeemed_at = ? WHERE jti = ? AND redeemed_at IS NULL AND expires_at > ?;
+
+recentMints:
+SELECT COUNT(*) FROM newz_handoff WHERE device_id = ? AND issued_at > ?;
+
+prune:
+DELETE FROM newz_handoff WHERE expires_at < ?;

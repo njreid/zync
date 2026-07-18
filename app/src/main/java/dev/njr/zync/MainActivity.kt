@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
     private var settingsTab by mutableStateOf<dev.njr.zync.ui.settings.BarTab?>(null)
     private var syncLogOpen by mutableStateOf(false)
     private var pairingOpen by mutableStateOf(false)
+    private var newzOpen by mutableStateOf(false)
     private var barAppsTick by mutableIntStateOf(0)
     private var permissionTick by mutableIntStateOf(0)
     private var photoFile: java.io.File? = null
@@ -181,6 +182,13 @@ class MainActivity : ComponentActivity() {
                         onDismiss = { pairingOpen = false },
                     )
                 }
+                if (newzOpen) {
+                    dev.njr.zync.ui.NewzScreen(
+                        mint = ::mintNewzUrl,
+                        onOpenPairing = { pairingOpen = true },
+                        onDismiss = { newzOpen = false },
+                    )
+                }
                 if (captureOpen) {
                     CaptureScreen(
                         contexts = app.contentRead.contexts(),
@@ -207,7 +215,7 @@ class MainActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
-                    searchOpen || captureOpen || settingsTab != null || syncLogOpen || pairingOpen -> Unit // their BackHandlers own it
+                    searchOpen || captureOpen || settingsTab != null || syncLogOpen || pairingOpen || newzOpen -> Unit // their BackHandlers own it
                     screen == ZyncScreen.Web && webView.canGoBack() -> webView.goBack()
                     screen == ZyncScreen.Web -> screen = ZyncScreen.Home
                     // On the home surface an edge swipe (the system back gesture) opens
@@ -436,11 +444,33 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Right-origin swipe: launch the configured swipe app (Harmonic by default). */
+    /** Right-origin swipe: an explicitly chosen app, else the built-in newz feed. */
     private fun launchSwipeApp() {
         val app = ContextApps.swipeApp(this)
-        if (app == null || !dev.njr.zync.launcher.AppLaunch.launch(this, app.toEntry())) {
-            settingsTab = dev.njr.zync.ui.settings.BarTab.Swipe
+        when {
+            app == null -> newzOpen = true
+            !dev.njr.zync.launcher.AppLaunch.launch(this, app.toEntry()) ->
+                settingsTab = dev.njr.zync.ui.settings.BarTab.Swipe
+        }
+    }
+
+    /** Mint the one-time newz handoff URL with the device identity (never logged). */
+    private suspend fun mintNewzUrl(): Result<String> {
+        val app = application as ZyncApp
+        val paired = app.pairingStore.load() ?: return Result.failure(dev.njr.zync.ui.NewzNotPaired())
+        val http = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp)
+        return try {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    dev.njr.zync.replica.mintNewzHandoff(
+                        http, paired,
+                        now = { System.currentTimeMillis() },
+                        nonce = { java.util.UUID.randomUUID().toString() },
+                    ).handoffUrl
+                }
+            }
+        } finally {
+            http.close()
         }
     }
 
