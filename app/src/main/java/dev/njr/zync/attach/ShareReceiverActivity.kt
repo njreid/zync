@@ -32,11 +32,26 @@ class ShareReceiverActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val uris = extractUris(intent)
-        if (uris.isEmpty()) {
+        val sharedText = if (uris.isEmpty()) intent?.getStringExtra(Intent.EXTRA_TEXT)?.trim() else null
+        if (uris.isEmpty() && sharedText.isNullOrEmpty()) {
             toastAndFinish("Nothing to add to zync")
             return
         }
         val app = application as ZyncApp
+        if (!sharedText.isNullOrEmpty()) {
+            // A shared URL/text becomes a plain Inbox note: title from the subject or
+            // a compact form of the URL, the full text preserved in notes.
+            val subject = intent?.getStringExtra(Intent.EXTRA_SUBJECT)
+            lifecycleScope.launch(Dispatchers.IO) {
+                runCatching {
+                    app.replicaCapture.captureNote(ShareImport.titleForText(subject, sharedText), notes = sharedText)
+                    app.contentChanges.notifyChanged()
+                    dev.njr.zync.sync.SyncScheduler.requestSync(app)
+                }
+                withContext(Dispatchers.Main) { toastAndFinish("Added to your Inbox") }
+            }
+            return
+        }
         lifecycleScope.launch(Dispatchers.IO) {
             var added = 0
             for (uri in uris) {
@@ -45,7 +60,7 @@ class ShareReceiverActivity : ComponentActivity() {
             withContext(Dispatchers.Main) {
                 toastAndFinish(
                     if (added > 0) "Added $added item(s) to your Inbox"
-                    else "Unsupported share (only audio and PDF)"
+                    else "Unsupported share (audio, PDF, images, links)"
                 )
             }
         }
@@ -57,8 +72,9 @@ class ShareReceiverActivity : ComponentActivity() {
         val bytes = runCatching {
             contentResolver.openInputStream(uri)?.use { it.readBytes() }
         }.getOrNull() ?: return false
+        if (bytes.size > 25 * 1024 * 1024) return false // shares can be huge; cap them
         app.captureToInbox(
-            title = ShareImport.titleFor(type),
+            title = ShareImport.titleFor(type, mime),
             type = type,
             bytes = bytes,
             extension = ShareImport.extensionFor(mime),

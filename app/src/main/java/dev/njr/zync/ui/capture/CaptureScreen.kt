@@ -92,6 +92,8 @@ fun CaptureScreen(
     onSave: (CaptureResult) -> Unit,
     onDismiss: () -> Unit,
     extractor: CaptureExtractor = RulesExtractor,
+    /** (id, title) of the task being viewed when capture opened — preselected as the parent. */
+    initialParent: Pair<String, String>? = null,
 ) {
     val context = LocalContext.current
     var mode by remember { mutableStateOf(CaptureMode.Voice) }
@@ -104,7 +106,9 @@ fun CaptureScreen(
     var pickedContext by remember { mutableStateOf<ContextView?>(null) }
     var dueMillis by remember { mutableStateOf<Long?>(null) }
     var person by remember { mutableStateOf<String?>(null) }
-    var pickedParent by remember { mutableStateOf<NodeCand?>(null) }
+    var pickedParent by remember {
+        mutableStateOf(initialParent?.let { NodeCand(it.first, it.second) })
+    }
     var applied by remember { mutableStateOf(false) }
 
     val transcript = (finalTranscript + " " + partial).trim()
@@ -262,7 +266,14 @@ fun CaptureScreen(
             // file-under: separately pickable boxes
             BasicText("FILE UNDER", style = TextStyle(color = C.Ink3, fontSize = 11.sp, fontFamily = ZyncSans, letterSpacing = 0.6.sp), modifier = Modifier.padding(start = 18.dp, top = 10.dp))
             LazyRow(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp)) {
-                items(s.nodeCandidates, key = { it.id }) { cand ->
+                initialParent?.let { (id, title) ->
+                    item(key = "viewing-$id") {
+                        NodeBox(title, "viewing now", pickedParent?.id == id) {
+                            pickedParent = if (pickedParent?.id == id) null else NodeCand(id, title)
+                        }
+                    }
+                }
+                items(s.nodeCandidates.filter { it.id != initialParent?.first }, key = { it.id }) { cand ->
                     NodeBox(cand.title, cand.why, pickedParent?.id == cand.id) {
                         pickedParent = if (pickedParent?.id == cand.id) null else NodeCand(cand.id, cand.title)
                     }

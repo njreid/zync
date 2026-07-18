@@ -21,9 +21,26 @@ class ShareImportTest {
 
     @Test
     fun `unsupported and null mimes are rejected`() {
-        assertNull(ShareImport.typeFor("image/jpeg"))
+        // text/plain is a NOTE capture upstream, never an attachment
         assertNull(ShareImport.typeFor("text/plain"))
+        assertNull(ShareImport.typeFor("video/mp4"))
         assertNull(ShareImport.typeFor(null))
+    }
+
+    @Test
+    fun `images import as attachments with their own title`() {
+        assertEquals(AttachmentType.PDF, ShareImport.typeFor("image/jpeg"))
+        assertEquals("jpg", ShareImport.extensionFor("image/jpeg"))
+        assertEquals("png", ShareImport.extensionFor("image/png"))
+        assertEquals("Shared image", ShareImport.titleFor(AttachmentType.PDF, "image/png"))
+    }
+
+    @Test
+    fun `shared text titles come from subject then compact url then text`() {
+        assertEquals("Great article", ShareImport.titleForText("Great article", "https://x.com/a?b=c"))
+        assertEquals("x.com/a", ShareImport.titleForText(null, "look https://www.x.com/a?utm=1"))
+        assertEquals("just a thought", ShareImport.titleForText(null, "just a thought"))
+        assertEquals("https://www.x.com/a?utm=1", ShareImport.firstUrl("look https://www.x.com/a?utm=1"))
     }
 
     @Test

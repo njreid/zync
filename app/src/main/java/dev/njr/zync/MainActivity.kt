@@ -68,6 +68,7 @@ class MainActivity : ComponentActivity() {
     private var screen by mutableStateOf(ZyncScreen.Home)
     private var searchOpen by mutableStateOf(false)
     private var captureOpen by mutableStateOf(false)
+    private var captureParent by mutableStateOf<Pair<String, String>?>(null)
     private var settingsTab by mutableStateOf<dev.njr.zync.ui.settings.BarTab?>(null)
     private var syncLogOpen by mutableStateOf(false)
     private var pairingOpen by mutableStateOf(false)
@@ -191,6 +192,7 @@ class MainActivity : ComponentActivity() {
                 }
                 if (captureOpen) {
                     CaptureScreen(
+                        initialParent = captureParent,
                         contexts = app.contentRead.contexts(),
                         projects = app.contentRead.projects(),
                         contactMatch = { name -> ContactMatcher.match(this@MainActivity, name) },
@@ -242,6 +244,7 @@ class MainActivity : ComponentActivity() {
         var notifEvents by remember { mutableStateOf<List<dev.njr.zync.home.CalEvent>>(emptyList()) }
         val syncEvents by dev.njr.zync.sync.SyncMonitor.events.collectAsState()
         val syncingNow by dev.njr.zync.sync.SyncMonitor.syncing.collectAsState()
+        val titleTick by dev.njr.zync.home.TitleCleaner.tick.collectAsState()
 
         LaunchedEffect(Unit) { // minute clock
             while (true) {
@@ -265,7 +268,7 @@ class MainActivity : ComponentActivity() {
         val dayEnd = dayStart + 24L * 60 * 60_000
         val lookaheadEnd = dayStart + 3L * 24 * 60 * 60_000 // three-day agenda look-ahead
 
-        return remember(nowMillis, contentTick, permissionTick, weather, notifEvents, syncEvents, syncingNow) {
+        return remember(nowMillis, contentTick, permissionTick, weather, notifEvents, syncEvents, syncingNow, titleTick) {
             val read = app.contentRead
             val prefs = homeContextPrefs()
             val contextId = prefs.getString("context_id", null)?.let { runCatching { Ulid.parse(it) }.getOrNull() }
@@ -284,9 +287,11 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }.getOrDefault(emptyList())
-            val allEvents = CalendarSource.todaysEvents(this, dayStart, lookaheadEnd) +
-                notifEvents.filter { it.beginMillis in dayStart until lookaheadEnd } +
-                serverEvents.filter { it.beginMillis < lookaheadEnd && it.endMillis > dayStart }
+            val allEvents = (
+                CalendarSource.todaysEvents(this, dayStart, lookaheadEnd) +
+                    notifEvents.filter { it.beginMillis in dayStart until lookaheadEnd } +
+                    serverEvents.filter { it.beginMillis < lookaheadEnd && it.endMillis > dayStart }
+                ).map { dev.njr.zync.home.TitleCleaner.polish(this, it) }
             val events = allEvents.filter { it.beginMillis < dayEnd && it.endMillis > dayStart }
             val dayFmt = SimpleDateFormat("EEE d", Locale.US)
             val futureDays = (1..2).map { i ->
@@ -385,7 +390,10 @@ class MainActivity : ComponentActivity() {
             BarAction.Messages -> launch(LauncherIntents.messages(), "No messages app found")
             BarAction.Calendar -> launch(LauncherIntents.calendar(), "No calendar app found")
             BarAction.Phone -> launch(LauncherIntents.phone(), "No dialer found")
-            BarAction.Capture -> captureOpen = true
+            BarAction.Capture -> {
+                captureParent = viewedNode()
+                captureOpen = true
+            }
         }
     }
 
@@ -433,8 +441,19 @@ class MainActivity : ComponentActivity() {
             intent.removeExtra(EXTRA_OPEN_CAPTURE) // consume: don't reopen on config-change redelivery
             searchOpen = false
             settingsTab = null
+            captureParent = null // global gesture: no task context
             captureOpen = true
         }
+    }
+
+    /** The task open in the WebView right now, if any — capture files under it. */
+    private fun viewedNode(): Pair<String, String>? {
+        if (screen != dev.njr.zync.ui.ZyncScreen.Web) return null
+        val url = webView.url ?: return null
+        val id = Regex("/node/([0-9A-Za-z]{26})").find(url)?.groupValues?.get(1) ?: return null
+        val ulid = runCatching { Ulid.parse(id) }.getOrNull() ?: return null
+        val title = (application as ZyncApp).contentRead.node(ulid)?.title ?: return null
+        return id to title
     }
 
     /** Center bar slot: launch the active context's app, or invite configuration. */
