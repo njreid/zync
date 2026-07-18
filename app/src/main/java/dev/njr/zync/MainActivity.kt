@@ -263,8 +263,21 @@ class MainActivity : ComponentActivity() {
             val contextId = prefs.getString("context_id", null)?.let { runCatching { Ulid.parse(it) }.getOrNull() }
             val contextName = prefs.getString("context_name", null)
             val suggestions = if (contextId != null) read.contextTasks(contextId, nowMillis) else read.activeTasks(nowMillis)
+            val serverEvents = runCatching {
+                app.opDatabase.agendaEventQueries.upcoming(nowMillis - 60 * 60_000).executeAsList().map { row ->
+                    dev.njr.zync.home.CalEvent(
+                        title = row.title,
+                        beginMillis = row.begin_ms,
+                        endMillis = row.end_ms,
+                        profile = if (row.profile == "HOME") dev.njr.zync.home.CalEvent.Profile.HOME else dev.njr.zync.home.CalEvent.Profile.WORK,
+                        calendarName = row.source,
+                        allDay = row.all_day != 0L,
+                    )
+                }
+            }.getOrDefault(emptyList())
             val allEvents = CalendarSource.todaysEvents(this, dayStart, lookaheadEnd) +
-                notifEvents.filter { it.beginMillis in dayStart until lookaheadEnd }
+                notifEvents.filter { it.beginMillis in dayStart until lookaheadEnd } +
+                serverEvents.filter { it.beginMillis < lookaheadEnd && it.endMillis > dayStart }
             val events = allEvents.filter { it.beginMillis < dayEnd && it.endMillis > dayStart }
             val dayFmt = SimpleDateFormat("EEE d", Locale.US)
             val futureDays = (1..2).map { i ->

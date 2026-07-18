@@ -1,0 +1,27 @@
+-- Agenda side channel (build-order #4): externally-owned calendar events pushed by
+-- an ingestion adapter, replaced wholesale per source. On the SERVER this is the
+-- store behind /agenda; on the PHONE the same table caches the last pulled snapshot
+-- (source = the sync peer) so the agenda survives process death.
+CREATE TABLE agenda_event (
+  source TEXT NOT NULL,
+  title TEXT NOT NULL,
+  begin_ms INTEGER NOT NULL,
+  end_ms INTEGER NOT NULL,
+  all_day INTEGER NOT NULL DEFAULT 0,
+  profile TEXT NOT NULL DEFAULT 'WORK'
+);
+CREATE INDEX agenda_event_source ON agenda_event(source);
+
+deleteSource:
+DELETE FROM agenda_event WHERE source = ?;
+
+insertEvent:
+INSERT INTO agenda_event(source, title, begin_ms, end_ms, all_day, profile)
+VALUES (?, ?, ?, ?, ?, ?);
+
+upcoming:
+SELECT source, title, begin_ms, end_ms, all_day, profile FROM agenda_event
+WHERE end_ms > ? ORDER BY begin_ms;
+
+prune:
+DELETE FROM agenda_event WHERE end_ms < ?;

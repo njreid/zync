@@ -4,6 +4,7 @@ name: Deploy server
 # Runs on every published release, or on demand. Requirements (repo settings):
 #   secrets: HALOY_API_TOKEN     — from the haloyd install output on the box
 #            ZYNC_WEBAUTHN_REG_TOKEN
+#            ZYNC_AGENDA_TOKEN    — bearer token for the agenda push endpoint
 #   vars:    HALOY_SERVER        — the haloyd API host (e.g. haloy.zync.example.com)
 #            ZYNC_DOMAIN         — the app domain (e.g. zync.example.com)
 #            ZYNC_PUBLIC_ADDR    — https://<ZYNC_DOMAIN>
@@ -88,6 +89,7 @@ jobs:
           ZYNC_WEBAUTHN_RP_ID: ${{ vars.ZYNC_WEBAUTHN_RP_ID }}
           ZYNC_WEBAUTHN_ORIGIN: ${{ vars.ZYNC_WEBAUTHN_ORIGIN }}
           ZYNC_WEBAUTHN_REG_TOKEN: ${{ secrets.ZYNC_WEBAUTHN_REG_TOKEN }}
+          ZYNC_AGENDA_TOKEN: ${{ secrets.ZYNC_AGENDA_TOKEN }}
         run: |
           haloy validate-config
           haloy deploy

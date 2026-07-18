@@ -25,6 +25,27 @@ class ReplicaSynchronizer(
     suspend fun syncOnce() {
         uploadPendingBlobs()
         client.sync()
+        refreshAgenda()
+    }
+
+    /** Pull the server's agenda snapshot into the local cache table ("server" source).
+     *  Best-effort: agenda staleness must never fail an op-log sync. */
+    private suspend fun refreshAgenda() {
+        runCatching {
+            val snapshot = client.fetchAgenda()
+            db.transaction {
+                db.agendaEventQueries.deleteSource(AGENDA_CACHE_SOURCE)
+                snapshot.events.forEach {
+                    db.agendaEventQueries.insertEvent(
+                        AGENDA_CACHE_SOURCE, it.title, it.beginMillis, it.endMillis, if (it.allDay) 1 else 0, it.profile,
+                    )
+                }
+            }
+        }.onFailure { warn("agenda refresh failed: ${it.message}") }
+    }
+
+    companion object {
+        const val AGENDA_CACHE_SOURCE = "server"
     }
 
     private suspend fun uploadPendingBlobs() {

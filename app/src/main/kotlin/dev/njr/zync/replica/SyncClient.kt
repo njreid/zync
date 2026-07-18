@@ -113,6 +113,15 @@ class SyncClient(
         }
     }
 
+    /** The agenda side channel: all sources' upcoming externally-pushed events. */
+    suspend fun fetchAgenda(): dev.njr.zync.core.agenda.AgendaSnapshot {
+        val response = http.get("$baseUrl/agenda") {
+            authHeaders("GET", "/agenda").forEach { (k, v) -> header(k, v) }
+        }
+        response.requireOk("agenda")
+        return json.decodeFromString(dev.njr.zync.core.agenda.AgendaSnapshot.serializer(), response.bodyAsText())
+    }
+
     private fun authHeaders(method: String, path: String, query: String = "", body: ByteArray = ByteArray(0)): Map<String, String> =
         signedHeaders(signer, method, path, now(), nonce(), query, body)
 }

@@ -59,6 +59,11 @@ env:
   - name: "ZYNC_WEBAUTHN_REG_TOKEN"
     from:
       env: "ZYNC_WEBAUTHN_REG_TOKEN"
+  # Agenda side channel: bearer token for POST /agenda/{source} (Apps Script pusher).
+  # Unset = ingestion disabled.
+  - name: "ZYNC_AGENDA_TOKEN"
+    from:
+      env: "ZYNC_AGENDA_TOKEN"
 
 # Build the JVM distribution the Dockerfile packages, before haloy builds the image.
 pre_deploy:
