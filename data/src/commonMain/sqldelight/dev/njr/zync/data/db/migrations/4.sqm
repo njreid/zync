@@ -1,0 +1,2 @@
+-- v4 → v5: agenda events carry a location (join links on the phone).
+ALTER TABLE agenda_event ADD COLUMN location TEXT;

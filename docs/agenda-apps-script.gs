@@ -35,6 +35,7 @@ function pushAgenda() {
         endMillis: e.getEndTime().getTime(),
         allDay: e.isAllDayEvent(),
         profile: 'WORK',
+        location: titles ? e.getLocation() || null : null,
       };
     });
 

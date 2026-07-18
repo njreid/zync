@@ -16,6 +16,8 @@ data class AgendaEventDto(
     val allDay: Boolean = false,
     /** "WORK" or "HOME" — drives the agenda identity color on the phone. */
     val profile: String = "WORK",
+    /** Free-text location; a URL inside becomes a "join" link on the phone. */
+    val location: String? = null,
 )
 
 /** `POST /agenda/{source}` body: this source's upcoming events, replacing the last push. */

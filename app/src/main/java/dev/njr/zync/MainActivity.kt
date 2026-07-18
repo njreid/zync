@@ -280,6 +280,7 @@ class MainActivity : ComponentActivity() {
                         profile = if (row.profile == "HOME") dev.njr.zync.home.CalEvent.Profile.HOME else dev.njr.zync.home.CalEvent.Profile.WORK,
                         calendarName = row.source,
                         allDay = row.all_day != 0L,
+                        location = row.location,
                     )
                 }
             }.getOrDefault(emptyList())

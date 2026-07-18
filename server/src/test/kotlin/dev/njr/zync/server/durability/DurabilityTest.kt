@@ -62,7 +62,7 @@ class DurabilityTest {
     fun freshBootCreatesAtCurrentSchemaVersion() {
         val db = StartupSequence.open(dbPath, DbBackupGateway.None)
         // schema version = 1 + number of .sqm migrations; a new migration bumps this
-        assertEquals(4L, ZyncDatabase.Schema.version)
+        assertEquals(5L, ZyncDatabase.Schema.version)
         // usable: a write/read round-trips
         val store = SqlDelightStateStore(db)
         apply(dev.njr.zync.server.Ops().setField(id(1), "title", str("hi"), hlc(10)), store)

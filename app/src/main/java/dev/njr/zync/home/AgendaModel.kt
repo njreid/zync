@@ -15,8 +15,17 @@ data class CalEvent(
     val eventId: Long = 0,
     /** True when learned from a system notification rather than a calendar. */
     val fromNotification: Boolean = false,
+    /** Where it happens; a URL here becomes a "join" link on the agenda row. */
+    val location: String? = null,
 ) {
     enum class Profile { HOME, WORK }
+
+    /** The first URL inside [location], if any (video-call links ride in there). */
+    val joinUrl: String? get() = location?.let { URL_RE.find(it)?.value }
+
+    private companion object {
+        val URL_RE = Regex("https?://\\S+")
+    }
 }
 
 /** A timed row of the agenda, in render order. */

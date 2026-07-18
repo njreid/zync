@@ -32,6 +32,7 @@ object CalendarSource {
             CalendarContract.Instances.CALENDAR_DISPLAY_NAME,
             CalendarContract.Instances.ALL_DAY,
             CalendarContract.Instances.EVENT_ID,
+            CalendarContract.Instances.EVENT_LOCATION,
         )
         val events = mutableListOf<CalEvent>()
         runCatching {
@@ -51,6 +52,7 @@ object CalendarSource {
                             calendarName = name,
                             allDay = c.getInt(4) == 1,
                             eventId = c.getLong(5),
+                            location = c.getString(6)?.takeIf { it.isNotBlank() },
                         )
                     }
                 }

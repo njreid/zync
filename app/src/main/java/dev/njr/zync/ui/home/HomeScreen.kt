@@ -31,9 +31,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
@@ -384,11 +386,36 @@ private fun EventRow(row: AgendaRow.Event, onOpenEvent: (dev.njr.zync.home.CalEv
             modifier = Modifier.width(58.dp),
         )
         ProfileBar(row.event, alpha)
-        BasicText(
-            row.event.title,
-            style = TextStyle(color = fg, fontSize = 15.sp, fontFamily = ZyncSans, fontWeight = if (inverted) FontWeight.SemiBold else FontWeight.Normal),
-            modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
-        )
+        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+            BasicText(
+                row.event.title,
+                style = TextStyle(color = fg, fontSize = 15.sp, fontFamily = ZyncSans, fontWeight = if (inverted) FontWeight.SemiBold else FontWeight.Normal),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // Location under the title, quieter; a URL inside becomes a "join" link.
+            val join = row.event.joinUrl
+            val locContext = LocalContext.current
+            when {
+                join != null -> BasicText(
+                    "join",
+                    style = TextStyle(color = C.Accent.copy(alpha = alpha), fontSize = 12.sp, fontFamily = ZyncSans, textDecoration = TextDecoration.Underline),
+                    modifier = Modifier.clickable {
+                        runCatching {
+                            locContext.startActivity(
+                                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(join)),
+                            )
+                        }
+                    },
+                )
+                row.event.location != null -> BasicText(
+                    row.event.location!!,
+                    style = TextStyle(color = fg2, fontSize = 12.sp, fontFamily = ZyncSans),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         BasicText(
             when {
                 row.event.fromNotification -> "Notif"

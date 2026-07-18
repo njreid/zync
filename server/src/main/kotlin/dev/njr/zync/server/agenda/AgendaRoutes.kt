@@ -56,7 +56,7 @@ fun Route.agendaRoutes(endpoint: AgendaEndpoint, auth: ServerAuth, now: () -> Lo
         endpoint.db.transaction {
             queries.deleteSource(source)
             push.events.forEach {
-                queries.insertEvent(source, it.title, it.beginMillis, it.endMillis, if (it.allDay) 1 else 0, it.profile)
+                queries.insertEvent(source, it.title, it.beginMillis, it.endMillis, if (it.allDay) 1 else 0, it.profile, it.location?.take(500))
             }
             queries.prune(now() - LOOKBACK_MS)
         }
@@ -66,7 +66,7 @@ fun Route.agendaRoutes(endpoint: AgendaEndpoint, auth: ServerAuth, now: () -> Lo
     get("/agenda") {
         if (!call.requireAuth(auth.authenticator)) return@get
         val events = queries.upcoming(now() - LOOKBACK_MS).executeAsList().map {
-            AgendaEventDto(it.title, it.begin_ms, it.end_ms, it.all_day != 0L, it.profile)
+            AgendaEventDto(it.title, it.begin_ms, it.end_ms, it.all_day != 0L, it.profile, it.location)
         }
         call.respond(AgendaSnapshot(events))
     }
