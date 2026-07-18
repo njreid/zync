@@ -32,6 +32,7 @@ import dev.njr.zync.home.NotificationEvents
 import dev.njr.zync.home.OpenMeteo
 import dev.njr.zync.home.WeatherNow
 import dev.njr.zync.home.buildAgenda
+import dev.njr.zync.home.upcomingDays
 import dev.njr.zync.launcher.BarApps
 import dev.njr.zync.launcher.ContextApps
 import dev.njr.zync.launcher.BarRole
@@ -122,9 +123,17 @@ class MainActivity : ComponentActivity() {
                     onEnableWeather = { locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
                     onEnableCalendar = { calendarPermission.launch(Manifest.permission.READ_CALENDAR) },
                     onOpenEvent = { event ->
-                        CalendarSource.viewIntent(event)?.let { intent ->
-                            runCatching { startActivity(intent) }
-                        } ?: Toast.makeText(this@MainActivity, "No calendar entry for this item", Toast.LENGTH_SHORT).show()
+                        // Notification-sourced items rarely have a calendar entry — fire the
+                        // original notification's own launch action instead.
+                        val opened =
+                            if (event.fromNotification) {
+                                NotificationEvents.launch(event)
+                            } else {
+                                CalendarSource.viewIntent(event)?.let { intent ->
+                                    runCatching { startActivity(intent) }.isSuccess
+                                } ?: false
+                            }
+                        if (!opened) Toast.makeText(this@MainActivity, "Nothing to open for this item", Toast.LENGTH_SHORT).show()
                     },
                     onEnableNotifications = {
                         runCatching {
@@ -246,6 +255,7 @@ class MainActivity : ComponentActivity() {
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }.timeInMillis
         val dayEnd = dayStart + 24L * 60 * 60_000
+        val lookaheadEnd = dayStart + 3L * 24 * 60 * 60_000 // three-day agenda look-ahead
 
         return remember(nowMillis, contentTick, permissionTick, weather, notifEvents, syncEvents, syncingNow) {
             val read = app.contentRead
@@ -253,8 +263,14 @@ class MainActivity : ComponentActivity() {
             val contextId = prefs.getString("context_id", null)?.let { runCatching { Ulid.parse(it) }.getOrNull() }
             val contextName = prefs.getString("context_name", null)
             val suggestions = if (contextId != null) read.contextTasks(contextId, nowMillis) else read.activeTasks(nowMillis)
-            val events = CalendarSource.todaysEvents(this, dayStart, dayEnd) +
-                notifEvents.filter { it.beginMillis in dayStart until dayEnd }
+            val allEvents = CalendarSource.todaysEvents(this, dayStart, lookaheadEnd) +
+                notifEvents.filter { it.beginMillis in dayStart until lookaheadEnd }
+            val events = allEvents.filter { it.beginMillis < dayEnd && it.endMillis > dayStart }
+            val dayFmt = SimpleDateFormat("EEE d", Locale.US)
+            val futureDays = (1..2).map { i ->
+                val s = dayStart + i * 24L * 60 * 60_000
+                Triple(dayFmt.format(java.util.Date(s)), s, s + 24L * 60 * 60_000)
+            }
             val dueBy = DueDates.parse(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time))!!
             val locationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -269,7 +285,7 @@ class MainActivity : ComponentActivity() {
                 todayCount = read.dueTasks(dueBy).size,
                 waitingCount = read.waitingTasks(nowMillis).size,
                 sync = dev.njr.zync.sync.SyncMonitor.state(this, paired = app.pairingStore.load() != null),
-                agenda = buildAgenda(events, nowMillis, suggestions),
+                agenda = buildAgenda(events, nowMillis, suggestions, upcoming = upcomingDays(allEvents, futureDays)),
                 calendarPermission = CalendarSource.hasPermission(this),
                 notificationsEnabled = NotificationEvents.listenerEnabled(this),
             )

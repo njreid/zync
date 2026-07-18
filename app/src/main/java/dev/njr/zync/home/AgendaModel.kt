@@ -39,7 +39,26 @@ data class AgendaView(
     val free: Boolean,
     val suggestions: List<NodeView>,
     val rows: List<AgendaRow>,
+    /** The look-ahead: subsequent days' sections (empty days dropped). */
+    val upcoming: List<AgendaDay> = emptyList(),
 )
+
+/** One future day of the look-ahead. */
+data class AgendaDay(val label: String, val allDay: List<CalEvent>, val timed: List<CalEvent>)
+
+/**
+ * Pure day-bucketing for the look-ahead: each (label, dayStart, dayEnd) window keeps
+ * the events overlapping it (deduped, timed sorted); event-less days are dropped.
+ */
+fun upcomingDays(events: List<CalEvent>, days: List<Triple<String, Long, Long>>): List<AgendaDay> =
+    days.mapNotNull { (label, start, end) ->
+        val inDay = events
+            .distinctBy { "${it.title}|${it.beginMillis}" }
+            .filter { it.beginMillis < end && it.endMillis > start }
+        if (inDay.isEmpty()) return@mapNotNull null
+        val (allDay, timed) = inDay.partition { it.allDay }
+        AgendaDay(label, allDay.sortedBy { it.title }, timed.sortedBy { it.beginMillis })
+    }
 
 fun buildAgenda(
     events: List<CalEvent>,
@@ -47,6 +66,7 @@ fun buildAgenda(
     suggestions: List<NodeView>,
     soonMinutes: Int = 5,
     maxSuggestions: Int = 3,
+    upcoming: List<AgendaDay> = emptyList(),
 ): AgendaView {
     val (allDay, timed) = events.distinctBy { "${it.title}|${it.beginMillis}" }.partition { it.allDay }
     val sorted = timed.sortedBy { it.beginMillis }
@@ -73,5 +93,6 @@ fun buildAgenda(
         free = !busyNow,
         suggestions = if (!busyNow) suggestions.take(maxSuggestions) else emptyList(),
         rows = rows,
+        upcoming = upcoming,
     )
 }

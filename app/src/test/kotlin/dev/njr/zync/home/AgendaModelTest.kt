@@ -71,6 +71,27 @@ class AgendaModelTest {
     }
 
     @Test
+    fun lookaheadBucketsByDayAndDropsEmptyOnes() {
+        val day = 24 * 60 * m
+        val days = listOf(
+            Triple("Fri", day, 2 * day),
+            Triple("Sat", 2 * day, 3 * day),
+        )
+        val sections = upcomingDays(
+            listOf(
+                event("Brunch", day + 600 * m, day + 660 * m),
+                event("Trip", day, 2 * day, allDay = true),
+                event("Early", day + 60 * m, day + 90 * m),
+                // Saturday has nothing → no section
+            ),
+            days,
+        )
+        assertEquals(listOf("Fri"), sections.map { it.label })
+        assertEquals(listOf("Trip"), sections[0].allDay.map { it.title })
+        assertEquals(listOf("Early", "Brunch"), sections[0].timed.map { it.title })
+    }
+
+    @Test
     fun duplicateNotificationEventsAreDeduped() {
         val fromCal = event("1:1 with Priya", 200 * m, 230 * m)
         val fromNotif = fromCal.copy(fromNotification = true, calendarName = "com.example.app")

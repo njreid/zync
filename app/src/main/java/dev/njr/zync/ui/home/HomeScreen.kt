@@ -315,6 +315,28 @@ private fun Agenda(
             }
         }
 
+        // 4. the look-ahead: subsequent days (label + their events, dimmed)
+        agenda.upcoming.forEach { day ->
+            item(key = "day-" + day.label) {
+                BasicText(
+                    day.label,
+                    style = TextStyle(color = C.Ink3, fontSize = 13.sp, fontFamily = CharonMono, fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+                )
+            }
+            items(day.allDay.size) { i ->
+                val e = day.allDay[i]
+                Row(Modifier.fillMaxWidth().clickable { onOpenEvent(e) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    BasicText("all day", style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans), modifier = Modifier.width(58.dp))
+                    ProfileBar(e, 1f)
+                    BasicText(e.title, style = TextStyle(color = C.Ink2, fontSize = 14.sp, fontFamily = ZyncSans), modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
+                }
+            }
+            items(day.timed.size) { i ->
+                EventRow(AgendaRow.Event(day.timed[i], past = false, startingSoon = false), onOpenEvent)
+            }
+        }
+
         if (!state.notificationsEnabled) {
             item(key = "notif-enable") {
                 BasicText(

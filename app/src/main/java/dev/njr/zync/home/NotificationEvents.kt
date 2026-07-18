@@ -19,11 +19,23 @@ object NotificationEvents {
     private val flow = MutableStateFlow<List<CalEvent>>(emptyList())
     val events: StateFlow<List<CalEvent>> = flow
 
-    fun add(event: CalEvent) {
+    /** The source notification's tap action, keyed like the dedupe key — a
+     *  notification event usually has NO calendar entry to deep-link into. */
+    private val intents = HashMap<String, android.app.PendingIntent>()
+
+    fun add(event: CalEvent, contentIntent: android.app.PendingIntent? = null) {
+        if (contentIntent != null) intents[key(event)] = contentIntent
         flow.value = (flow.value + event)
             .distinctBy { "${it.title}|${it.beginMillis}" }
             .filter { it.endMillis > System.currentTimeMillis() - 60 * 60_000 }
+        intents.keys.retainAll(flow.value.map(::key).toSet())
     }
+
+    /** Fire the original notification's launch action; false when gone/cancelled. */
+    fun launch(event: CalEvent): Boolean =
+        intents[key(event)]?.let { runCatching { it.send() }.isSuccess } ?: false
+
+    private fun key(event: CalEvent) = "${event.title}|${event.beginMillis}"
 
     fun listenerEnabled(context: Context): Boolean =
         NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
@@ -52,6 +64,7 @@ class ZyncNotificationListener : NotificationListenerService() {
                 calendarName = sbn.packageName,
                 fromNotification = true,
             ),
+            contentIntent = n.contentIntent,
         )
     }
 
