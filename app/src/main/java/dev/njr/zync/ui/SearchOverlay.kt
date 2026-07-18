@@ -130,6 +130,18 @@ fun SearchOverlay(onDismiss: () -> Unit) {
 
         val appMatches = AppSearch.filter(apps, query)
         val settingsMatches = AppSearch.settingsMatches(query)
+        var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
+        val fewLocalMatches = AppSearch.showWebSearch(query, appMatches.size + settingsMatches.size)
+        LaunchedEffect(query, fewLocalMatches) {
+            // Chrome-style live web suggestions once local matches thin out; debounced
+            // so we only ask after the user pauses typing.
+            if (query.length >= 2 && fewLocalMatches) {
+                kotlinx.coroutines.delay(150)
+                suggestions = dev.njr.zync.launcher.WebSuggest.fetch(query)
+            } else {
+                suggestions = emptyList()
+            }
+        }
         LazyColumn(Modifier.weight(1f)) {
             // 1. five most recent selections head the blank-query list
             if (query.isBlank()) {
@@ -165,6 +177,24 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                             .padding(vertical = 12.dp),
                     ) {
                         BasicText("Search the web for “$query”", style = TextStyle(color = TextPrimary, fontSize = 15.sp))
+                    }
+                }
+            }
+            // 2b. live suggestions (tap = straight to a web search for that text)
+            if (query.length >= 2 && fewLocalMatches) {
+                items(suggestions.filter { it != query }, key = { "g:$it" }) { sug ->
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .clickable {
+                                SearchHistory.recordQuery(context, sug)
+                                launchRecent(RecentItem(RecentItem.Kind.Web, sug, webQuery = sug))
+                            }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        BasicText("🔎", style = TextStyle(color = TextFaint, fontSize = 15.sp))
+                        BasicText(sug, style = TextStyle(color = TextMuted, fontSize = 15.sp))
                     }
                 }
             }
