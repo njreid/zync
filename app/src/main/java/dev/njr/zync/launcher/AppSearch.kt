@@ -89,13 +89,19 @@ object AppSearch {
         }.sortedBy { it.label.lowercase() }
     }.getOrDefault(emptyList())
 
-    /** Case-insensitive substring filter; blank query = the full drawer. */
-    fun filter(apps: List<AppEntry>, query: String): List<AppEntry> {
+    /** Case-insensitive substring filter; blank query = the full drawer, most-launched first. */
+    fun filter(apps: List<AppEntry>, query: String, usage: Map<String, Long> = emptyMap()): List<AppEntry> {
         val q = query.trim().lowercase()
-        if (q.isEmpty()) return apps
-        // Substring OR word-initials ("gc" → Google Calendar) — prefix hits rank first.
+        fun uses(e: AppEntry): Long = usage[SearchHistory.usageKey(e.packageName, e.activityName, e.userSerial)] ?: 0L
+        if (q.isEmpty()) return apps.sortedWith(compareByDescending<AppEntry> { uses(it) }.thenBy { it.label })
+        // Substring OR word-initials ("gc" → Google Calendar) — prefix hits rank first,
+        // then most-launched within each tier.
         val matches = apps.filter { q in it.label.lowercase() || initials(it.label).startsWith(q) }
-        return matches.sortedBy { if (it.label.lowercase().startsWith(q) || initials(it.label).startsWith(q)) 0 else 1 }
+        return matches.sortedWith(
+            compareBy<AppEntry> { if (it.label.lowercase().startsWith(q) || initials(it.label).startsWith(q)) 0 else 1 }
+                .thenByDescending { uses(it) }
+                .thenBy { it.label },
+        )
     }
 
     private fun initials(label: String): String =

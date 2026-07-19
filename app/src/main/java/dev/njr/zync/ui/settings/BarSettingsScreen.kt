@@ -272,7 +272,7 @@ private fun RoleList(role: BarRole, adding: Boolean, onAdding: (Boolean) -> Unit
                     AppIcon(app)
                     BasicText(
                         (if (i == 0) "● ${app.label}" else app.label) + workTag(app),
-                        style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans),
+                        style = TextStyle(color = workInk(app, C.Ink), fontSize = 15.sp, fontFamily = ZyncSans),
                         modifier = Modifier.weight(1f),
                     )
                     if (i > 0) RowButton("↑") { persist(apps.toMutableList().apply { add(i - 1, removeAt(i)) }) }
@@ -293,6 +293,10 @@ private fun RoleList(role: BarRole, adding: Boolean, onAdding: (Boolean) -> Unit
 
 /** " · work" marker — the badge on the icon is easy to miss at list sizes. */
 private fun workTag(app: BarApp): String = if (app.userSerial != null) " · work" else ""
+
+/** Work-profile rows read in a blue-leaning ink. */
+internal fun workInk(app: BarApp?, default: androidx.compose.ui.graphics.Color): androidx.compose.ui.graphics.Color =
+    if (app?.userSerial != null) androidx.compose.ui.graphics.Color(0xFF9FBEE3) else default
 
 @Composable
 private fun AppIcon(app: BarApp?) {
@@ -353,7 +357,7 @@ private fun AppPicker(exclude: Set<String>, onPick: (BarApp) -> Unit) {
                 AppIcon(bar)
                 BasicText(
                     app.label + workTag(bar),
-                    style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans),
+                    style = TextStyle(color = workInk(bar, C.Ink), fontSize = 15.sp, fontFamily = ZyncSans),
                 )
             }
         }

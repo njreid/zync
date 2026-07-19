@@ -239,7 +239,12 @@ private fun MenuRow(label: String, icon: BarApp?, hot: Boolean) {
             Image(bitmap = it, contentDescription = null, modifier = Modifier.size(32.dp))
             androidx.compose.foundation.layout.Spacer(Modifier.width(12.dp))
         }
-        BasicText(label, style = TextStyle(color = if (hot) BarInk else BarMuted, fontSize = 15.sp, fontWeight = if (hot) FontWeight.SemiBold else FontWeight.Normal))
+        val ink = when {
+            hot -> BarInk
+            icon?.userSerial != null -> Color(0xFF9FBEE3) // work-profile rows: blue-leaning ink
+            else -> BarMuted
+        }
+        BasicText(label, style = TextStyle(color = ink, fontSize = 15.sp, fontWeight = if (hot) FontWeight.SemiBold else FontWeight.Normal))
     }
 }
 

@@ -3,7 +3,9 @@ package dev.njr.zync.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
@@ -40,6 +42,8 @@ import androidx.core.graphics.drawable.toBitmap
 import dev.njr.zync.launcher.AppEntry
 import dev.njr.zync.launcher.AppLaunch
 import dev.njr.zync.launcher.AppSearch
+import dev.njr.zync.launcher.CalcEval
+import dev.njr.zync.launcher.ContactSearch
 import dev.njr.zync.launcher.RecentItem
 import dev.njr.zync.launcher.SearchHistory
 
@@ -47,6 +51,7 @@ private val OverlayBackground = Color(0xF2000000) // near-opaque pure black (AMO
 private val TextPrimary = Color(0xFFC2C7D0)
 private val TextMuted = Color(0xFF8A91A0)
 private val TextFaint = Color(0xFF5C6470)
+private val TextWork = Color(0xFF9FBEE3) // blue-leaning ink: work-profile rows read differently at a glance
 private val FieldBackground = Color(0xFF1A212B)
 
 /**
@@ -54,6 +59,7 @@ private val FieldBackground = Color(0xFF1A212B)
  * settings pages, web handoff (≤5 local matches), the five most recent selections at
  * the top of the blank list, and the five most recent query texts under the field.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SearchOverlay(onDismiss: () -> Unit) {
     val context = LocalContext.current
@@ -62,6 +68,10 @@ fun SearchOverlay(onDismiss: () -> Unit) {
     // No auto-focus: the overlay opens onto the recent-selections list for one-tap
     // reuse; tapping the field brings the keyboard + recent query texts.
     var fieldFocused by remember { mutableStateOf(false) }
+    var contactsGranted by remember { mutableStateOf(ContactSearch.hasPermission(context)) }
+    val contactsPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted -> contactsGranted = granted }
 
     BackHandler(onBack = onDismiss)
 
@@ -100,7 +110,7 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(
                     onGo = {
                         // Enter = top result: best app, else settings, else web search.
-                        val top = AppSearch.filter(apps, query).firstOrNull()
+                        val top = AppSearch.filter(apps, query, SearchHistory.usageCounts(context)).firstOrNull()
                         val setting = AppSearch.settingsMatches(query).firstOrNull()
                         when {
                             top != null -> launchRecent(
@@ -114,7 +124,7 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                         if (query.isNotBlank()) SearchHistory.recordQuery(context, query)
                     },
                 ),
-                textStyle = TextStyle(color = TextPrimary, fontSize = 18.sp),
+                textStyle = TextStyle(color = TextPrimary, fontSize = 19.sp),
                 cursorBrush = SolidColor(TextPrimary),
                 modifier = Modifier
                     .weight(1f)
@@ -122,6 +132,13 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                     .padding(horizontal = 12.dp, vertical = 10.dp)
                     .onFocusChanged { fieldFocused = it.isFocused },
             )
+            if (query.isNotEmpty()) {
+                BasicText(
+                    "✕",
+                    style = TextStyle(color = TextMuted, fontSize = 16.sp),
+                    modifier = Modifier.clickable { query = "" }.padding(6.dp),
+                )
+            }
             BasicText(
                 "Close",
                 style = TextStyle(color = TextMuted, fontSize = 14.sp),
@@ -150,7 +167,8 @@ fun SearchOverlay(onDismiss: () -> Unit) {
             }
         }
 
-        val appMatches = AppSearch.filter(apps, query)
+        val usage = remember { SearchHistory.usageCounts(context) }
+        val appMatches = AppSearch.filter(apps, query, usage)
         val settingsMatches = AppSearch.settingsMatches(query)
         var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
         val fewLocalMatches = AppSearch.showWebSearch(query, appMatches.size + settingsMatches.size)
@@ -165,6 +183,27 @@ fun SearchOverlay(onDismiss: () -> Unit) {
             }
         }
         LazyColumn(Modifier.weight(1f)) {
+            // 0. inline calculator: "17*23" answers in place; tap copies
+            if (CalcEval.looksLikeMath(query)) {
+                CalcEval.eval(query)?.let { result ->
+                    item(key = "calc") {
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable {
+                                    val cm = context.getSystemService(android.content.ClipboardManager::class.java)
+                                    cm?.setPrimaryClip(android.content.ClipData.newPlainText("result", result))
+                                }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            BasicText("=", style = TextStyle(color = TextFaint, fontSize = 18.sp))
+                            BasicText(result, style = TextStyle(color = TextPrimary, fontSize = 19.sp))
+                            BasicText("tap to copy", style = TextStyle(color = TextFaint, fontSize = 11.sp))
+                        }
+                    }
+                }
+            }
             // 1. recents: their own labeled section, divider below (device feedback)
             if (query.isBlank()) {
                 val recents = SearchHistory.recentItems(context)
@@ -189,7 +228,10 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                             }
                             BasicText(
                                 item.label,
-                                style = TextStyle(color = TextPrimary, fontSize = 15.sp),
+                                style = TextStyle(
+                                    color = if (item.userSerial != null) TextWork else TextPrimary,
+                                    fontSize = 16.sp,
+                                ),
                                 maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             )
@@ -216,7 +258,7 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                             }
                             .padding(vertical = 12.dp),
                     ) {
-                        BasicText("Search the web for “$query”", style = TextStyle(color = TextPrimary, fontSize = 15.sp))
+                        BasicText("Search the web for “$query”", style = TextStyle(color = TextPrimary, fontSize = 16.sp))
                     }
                 }
             }
@@ -251,25 +293,68 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     BasicText("⚙", style = TextStyle(color = TextMuted, fontSize = 20.sp))
-                    BasicText(setting.label, style = TextStyle(color = TextPrimary, fontSize = 15.sp))
+                    BasicText(setting.label, style = TextStyle(color = TextPrimary, fontSize = 16.sp))
                 }
             }
-            // 4. apps (all profiles; work apps carry badged icons)
+            // 3b. contacts (once granted; an invite row asks the first time)
+            if (query.trim().length >= 2) {
+                if (contactsGranted) {
+                    items(ContactSearch.search(context, query), key = { "c:" + it.id }) { hit ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable { runCatching { context.startActivity(ContactSearch.viewIntent(hit)) }; onDismiss() }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            BasicText("👤", style = TextStyle(color = TextMuted, fontSize = 17.sp))
+                            BasicText(hit.name, style = TextStyle(color = TextPrimary, fontSize = 16.sp))
+                        }
+                    }
+                } else {
+                    item(key = "contacts-enable") {
+                        BasicText(
+                            "search contacts too…",
+                            style = TextStyle(color = TextFaint, fontSize = 13.sp),
+                            modifier = Modifier
+                                .clickable { contactsPermission.launch(android.Manifest.permission.READ_CONTACTS) }
+                                .padding(vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+            // 4. apps (all profiles; work apps carry badged icons + blue-leaning ink)
             items(appMatches, key = { it.packageName + it.activityName + (it.userSerial ?: 0) }) { app ->
                 Row(
                     Modifier.fillMaxWidth()
-                        .clickable {
-                            if (query.isNotBlank()) SearchHistory.recordQuery(context, query)
-                            launchRecent(
-                                RecentItem(RecentItem.Kind.App, app.label, app.packageName, app.activityName, app.userSerial),
-                            )
-                        }
+                        .combinedClickable(
+                            onClick = {
+                                if (query.isNotBlank()) SearchHistory.recordQuery(context, query)
+                                launchRecent(
+                                    RecentItem(RecentItem.Kind.App, app.label, app.packageName, app.activityName, app.userSerial),
+                                )
+                            },
+                            // The standard launcher escape hatch: App info (uninstall/force-stop).
+                            onLongClick = {
+                                runCatching {
+                                    context.startActivity(
+                                        android.content.Intent(
+                                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                            android.net.Uri.parse("package:" + app.packageName),
+                                        ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                                    )
+                                }
+                            },
+                        )
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     AppIcon(app.packageName, app.activityName, app.userSerial)
-                    BasicText(app.label, style = TextStyle(color = TextPrimary, fontSize = 15.sp))
+                    BasicText(
+                        app.label,
+                        style = TextStyle(color = if (app.userSerial != null) TextWork else TextPrimary, fontSize = 16.sp),
+                    )
                 }
             }
         }
