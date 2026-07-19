@@ -92,6 +92,7 @@ jobs:
           ZYNC_WEBAUTHN_REG_TOKEN: ${{ secrets.ZYNC_WEBAUTHN_REG_TOKEN }}
           ZYNC_AGENDA_TOKEN: ${{ secrets.ZYNC_AGENDA_TOKEN }}
           ZYNC_NEWZ_SIGNING_SEED: ${{ secrets.ZYNC_NEWZ_SIGNING_SEED }}
+          ZYNC_NEWZ_PUBLIC_ADDR: ${{ vars.ZYNC_NEWZ_PUBLIC_ADDR }}
           ZYNC_NEWZ_REDEEM_TOKEN: ${{ secrets.ZYNC_NEWZ_REDEEM_TOKEN }}
         run: |
           haloy validate-config
