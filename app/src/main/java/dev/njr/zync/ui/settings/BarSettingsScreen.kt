@@ -48,12 +48,13 @@ import dev.njr.zync.launcher.ContextApps
 import dev.njr.zync.ui.ZyncSans
 import dev.njr.zync.ui.ZyncColors as C
 
-/** The four configurable bar behaviors the settings screen edits. */
+/** The configurable behaviors the settings screen edits. */
 enum class BarTab(val title: String) {
     Messages("Messages"),
     Calendar("Calendar"),
     Context("Context"),
     Swipe("Swipe"),
+    Agenda("Agenda"),
 }
 
 /**
@@ -86,7 +87,7 @@ fun BarSettingsScreen(initialTab: BarTab, contexts: List<String>, onDismiss: () 
             .padding(horizontal = 18.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            BasicText("Action bar", style = TextStyle(color = C.Ink, fontSize = 17.sp, fontFamily = ZyncSans, fontWeight = FontWeight.SemiBold))
+            BasicText("Settings", style = TextStyle(color = C.Ink, fontSize = 17.sp, fontFamily = ZyncSans, fontWeight = FontWeight.SemiBold))
             BasicText("✕", style = TextStyle(color = C.Ink3, fontSize = 20.sp), modifier = Modifier.clickable(onClick = onDismiss).padding(4.dp))
         }
 
@@ -153,6 +154,51 @@ fun BarSettingsScreen(initialTab: BarTab, contexts: List<String>, onDismiss: () 
                                 }
                                 if (chosen != null) {
                                     RowButton("✕") { ContextApps.save(context, at, null); tick++ }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            BarTab.Agenda -> {
+                BasicText(
+                    "Calendars shown on the agenda",
+                    style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
+                    modifier = Modifier.padding(vertical = 10.dp),
+                )
+                val cals = remember { dev.njr.zync.home.CalendarSource.availableCalendars(context) }
+                val excluded = remember(tick) { dev.njr.zync.home.CalendarChoices.excluded(context) }
+                if (cals.isEmpty()) {
+                    BasicText(
+                        "No calendars (grant calendar access from the home agenda first)",
+                        style = TextStyle(color = C.Ink3, fontSize = 13.sp, fontFamily = ZyncSans),
+                    )
+                } else {
+                    LazyColumn(Modifier.weight(1f)) {
+                        items(cals, key = { it.id }) { cal ->
+                            val on = cal.id !in excluded
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clickable {
+                                        dev.njr.zync.home.CalendarChoices.setExcluded(
+                                            context,
+                                            if (on) excluded + cal.id else excluded - cal.id,
+                                        )
+                                        tick++
+                                    }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                BasicText(
+                                    if (on) "\u2611" else "\u2610",
+                                    style = TextStyle(color = if (on) C.Accent else C.Ink3, fontSize = 18.sp),
+                                )
+                                Column(Modifier.weight(1f)) {
+                                    BasicText(cal.name, style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans))
+                                    if (cal.account.isNotBlank()) {
+                                        BasicText(cal.account, style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans))
+                                    }
                                 }
                             }
                         }

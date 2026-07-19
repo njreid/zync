@@ -168,7 +168,7 @@ class MainActivity : ComponentActivity() {
                     dev.njr.zync.ui.settings.BarSettingsScreen(
                         initialTab = tab,
                         contexts = app.contentRead.contexts().mapNotNull { it.name },
-                        onDismiss = { settingsTab = null; barAppsTick++ },
+                        onDismiss = { settingsTab = null; barAppsTick++; permissionTick++ },
                     )
                 }
                 if (syncLogOpen) {
