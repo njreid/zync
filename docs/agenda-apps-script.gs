@@ -2,7 +2,7 @@
  * zync work-agenda pusher (build-order #4, Apps Script path).
  *
  * Runs INSIDE the work Google account, so no third-party OAuth grant is involved:
- * reads the next three days from the default calendar and POSTs them to the zync
+ * reads the next seven days from the default calendar and POSTs them to the zync
  * server's agenda side channel. The push replaces the previous one wholesale, so
  * moved/deleted meetings simply disappear on the next run.
  *
@@ -24,7 +24,7 @@ function pushAgenda() {
   var titles = props.getProperty('TITLES') !== 'false';
 
   var now = new Date();
-  var horizon = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+  var horizon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   var events = CalendarApp.getDefaultCalendar().getEvents(now, horizon)
     .filter(function (e) { return e.getMyStatus() !== CalendarApp.GuestStatus.NO; })
     .slice(0, 400)

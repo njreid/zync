@@ -156,7 +156,16 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     searchOpen = searchOpen,
-                    onSearchOpenChange = { searchOpen = it },
+                    onSearchOpenChange = { open ->
+                        searchOpen = open
+                        if (!open) {
+                            // Closing search always lands on the home surface, not
+                            // whatever overlay/surface sat beneath it.
+                            screen = ZyncScreen.Home
+                            syncLogOpen = false
+                            pairingOpen = false
+                        }
+                    },
                     contextApp = remember(homeState.contextName, barAppsTick) {
                         ContextApps.pick(this@MainActivity, homeState.contextName)
                     },
@@ -241,6 +250,7 @@ class MainActivity : ComponentActivity() {
         var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
         var contentTick by remember { mutableIntStateOf(0) }
         var weather by remember { mutableStateOf<WeatherNow?>(null) }
+        var forecast by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
         var notifEvents by remember { mutableStateOf<List<dev.njr.zync.home.CalEvent>>(emptyList()) }
         val syncEvents by dev.njr.zync.sync.SyncMonitor.events.collectAsState()
         val syncingNow by dev.njr.zync.sync.SyncMonitor.syncing.collectAsState()
@@ -256,7 +266,9 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(Unit) { NotificationEvents.events.collect { notifEvents = it } }
         LaunchedEffect(permissionTick) { // weather: on grant + hourly
             while (true) {
-                weather = fetchWeather()
+                val (now, daily) = fetchWeather()
+                weather = now
+                forecast = daily
                 delay(60L * 60_000)
             }
         }
@@ -266,9 +278,9 @@ class MainActivity : ComponentActivity() {
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }.timeInMillis
         val dayEnd = dayStart + 24L * 60 * 60_000
-        val lookaheadEnd = dayStart + 3L * 24 * 60 * 60_000 // three-day agenda look-ahead
+        val lookaheadEnd = dayStart + 7L * 24 * 60 * 60_000 // seven-day agenda look-ahead
 
-        return remember(nowMillis, contentTick, permissionTick, weather, notifEvents, syncEvents, syncingNow, titleTick) {
+        return remember(nowMillis, contentTick, permissionTick, weather, forecast, notifEvents, syncEvents, syncingNow, titleTick) {
             val read = app.contentRead
             val prefs = homeContextPrefs()
             val contextId = prefs.getString("context_id", null)?.let { runCatching { Ulid.parse(it) }.getOrNull() }
@@ -294,9 +306,11 @@ class MainActivity : ComponentActivity() {
                 ).map { dev.njr.zync.home.TitleCleaner.polish(this, it) }
             val events = allEvents.filter { it.beginMillis < dayEnd && it.endMillis > dayStart }
             val dayFmt = SimpleDateFormat("EEE d", Locale.US)
-            val futureDays = (1..2).map { i ->
+            val isoFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val futureDays = (1..6).map { i ->
                 val s = dayStart + i * 24L * 60 * 60_000
-                Triple(dayFmt.format(java.util.Date(s)), s, s + 24L * 60 * 60_000)
+                val cast = forecast[isoFmt.format(java.util.Date(s))]?.let { "  $it" } ?: ""
+                Triple(dayFmt.format(java.util.Date(s)) + cast, s, s + 24L * 60 * 60_000)
             }
             val dueBy = DueDates.parse(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time))!!
             val locationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
@@ -321,11 +335,11 @@ class MainActivity : ComponentActivity() {
 
     private fun homeContextPrefs() = getSharedPreferences("zync_launcher", Context.MODE_PRIVATE)
 
-    private suspend fun fetchWeather(): WeatherNow? {
+    private suspend fun fetchWeather(): Pair<WeatherNow?, Map<String, String>> {
         val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (!granted) return null
-        val lm = getSystemService(LocationManager::class.java) ?: return null
+        if (!granted) return null to emptyMap()
+        val lm = getSystemService(LocationManager::class.java) ?: return null to emptyMap()
         // Last-known from any provider, else a one-shot current fix — a fresh phone
         // often has NO last-known location, which read as "weather not loading".
         // The one-shot can also hang indoors (GPS never fixes), so it gets a hard
@@ -351,14 +365,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        val lat = located?.latitude ?: prefs.getString("weather_lat", null)?.toDoubleOrNull() ?: return null
-        val lon = located?.longitude ?: prefs.getString("weather_lon", null)?.toDoubleOrNull() ?: return null
+        val lat = located?.latitude ?: prefs.getString("weather_lat", null)?.toDoubleOrNull() ?: return null to emptyMap()
+        val lon = located?.longitude ?: prefs.getString("weather_lon", null)?.toDoubleOrNull() ?: return null to emptyMap()
         return withContext(Dispatchers.IO) {
             val http = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp)
             try {
-                kotlinx.coroutines.withTimeoutOrNull(15_000) { OpenMeteo(http).current(lat, lon) }?.also {
+                val meteo = OpenMeteo(http)
+                val now = kotlinx.coroutines.withTimeoutOrNull(15_000) { meteo.current(lat, lon) }?.also {
                     prefs.edit().putString("weather_lat", "$lat").putString("weather_lon", "$lon").apply()
                 }
+                // Day-name forecasts for the agenda look-ahead ("Sat 25  🌧 18°").
+                val daily = kotlinx.coroutines.withTimeoutOrNull(15_000) { meteo.daily(lat, lon) }.orEmpty()
+                now to daily.associate { it.dateIso to it.label }
             } finally {
                 http.close()
             }

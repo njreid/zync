@@ -5,12 +5,18 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /** The hero line's weather: summary icon + temperature + a short condition word. */
 data class WeatherNow(val temperatureC: Int, val condition: String, val icon: String) {
     override fun toString(): String = "$icon $temperatureC° $condition"
+}
+
+/** One day of forecast for the agenda look-ahead ("Sat 25  🌧 18°"). */
+data class DayForecast(val dateIso: String, val icon: String, val maxC: Int) {
+    val label: String get() = "$icon $maxC°"
 }
 
 /**
@@ -32,6 +38,30 @@ class OpenMeteo(private val http: HttpClient, private val baseUrl: String = "htt
                 icon = wmoIcon(code),
             )
         }.getOrNull()
+    }
+
+    /** Seven-day daily forecast (device local dates via timezone=auto); empty on failure. */
+    suspend fun daily(latitude: Double, longitude: Double): List<DayForecast> {
+        val response = runCatching {
+            http.get(
+                "$baseUrl/v1/forecast?latitude=$latitude&longitude=$longitude" +
+                    "&daily=weather_code,temperature_2m_max&forecast_days=7&timezone=auto",
+            )
+        }.getOrNull() ?: return emptyList()
+        if (!response.status.isSuccess()) return emptyList()
+        return runCatching {
+            val daily = Json.parseToJsonElement(response.bodyAsText()).jsonObject["daily"]!!.jsonObject
+            val dates = daily["time"]!!.jsonArray
+            val codes = daily["weather_code"]!!.jsonArray
+            val maxes = daily["temperature_2m_max"]!!.jsonArray
+            dates.indices.map { i ->
+                DayForecast(
+                    dateIso = dates[i].jsonPrimitive.content,
+                    icon = wmoIcon(codes[i].jsonPrimitive.content.toInt()),
+                    maxC = maxes[i].jsonPrimitive.content.toDouble().toInt(),
+                )
+            }
+        }.getOrNull() ?: emptyList()
     }
 
     companion object {
