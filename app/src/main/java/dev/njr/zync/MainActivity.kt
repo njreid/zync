@@ -451,6 +451,36 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         handlePairingIntent(intent)
         handleCaptureIntent(intent)
+        handleHomeIntent(intent)
+    }
+
+    /**
+     * The home gesture while zync IS home re-delivers MAIN/HOME here: from anywhere
+     * it returns to the main home surface; already there, it opens Google search
+     * with the input focused (the system-wide "just search" escape hatch).
+     */
+    private fun handleHomeIntent(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_MAIN || intent.hasCategory(Intent.CATEGORY_HOME) != true) return
+        val atHome = screen == dev.njr.zync.ui.ZyncScreen.Home && !searchOpen && !captureOpen &&
+            settingsTab == null && !syncLogOpen && !pairingOpen && !newzOpen
+        if (atHome) {
+            runCatching {
+                startActivity(
+                    Intent(android.app.SearchManager.INTENT_ACTION_GLOBAL_SEARCH)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }.recoverCatching {
+                startActivity(Intent(Intent.ACTION_WEB_SEARCH).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        } else {
+            searchOpen = false
+            captureOpen = false
+            settingsTab = null
+            syncLogOpen = false
+            pairingOpen = false
+            newzOpen = false
+            screen = dev.njr.zync.ui.ZyncScreen.Home
+        }
     }
 
     /** Volume-down double-press (ZyncCaptureService) lands here: open capture directly. */
