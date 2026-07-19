@@ -16,13 +16,13 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * On-device (Gemini Nano via AICore) cleanup of agenda titles: pithy, Title Case,
- * and any venue embedded in the title moves to the location field (only when the
- * event has none). Results live in a 30-day prefs cache keyed by the RAW title, so
- * each distinct title costs one inference ever — agenda builds stay synchronous
- * (cache hit or raw passthrough) and a tick nudges recomposition when an async
- * clean lands. Nano being unavailable (non-Pixel, AICore off) degrades to raw
- * titles for the session; per-title failures retry next session only.
+ * On-device (Gemini Nano via the ML Kit Prompt API) cleanup of agenda titles:
+ * pithy, Title Case, and any venue embedded in the title moves to the location
+ * field (only when the event has none). Results live in a 30-day prefs cache
+ * keyed by the RAW title, so each distinct title costs one inference ever —
+ * agenda builds stay synchronous (cache hit or raw passthrough) and a tick
+ * nudges recomposition when an async clean lands. A DOWNLOADABLE model is
+ * downloaded on first use; UNAVAILABLE devices degrade to raw titles.
  */
 object TitleCleaner {
     @Serializable
@@ -67,43 +67,58 @@ object TitleCleaner {
             inflight += raw
         }
         scope.launch {
-            val cleaned = mutex.withLock { generate(appContext, raw) }
+            val outcome = mutex.withLock { generate(raw) }
             synchronized(inflight) { inflight -= raw }
-            if (cleaned == null) {
-                synchronized(inflight) { failedThisSession += raw }
-                return@launch
+            when (outcome) {
+                is Gen.Ok -> {
+                    store(appContext, raw, outcome.cleaned)
+                    _tick.value++
+                }
+                is Gen.Retry -> Unit // next agenda rebuild re-enqueues
+                is Gen.Failed -> synchronized(inflight) { failedThisSession += raw }
             }
-            store(appContext, raw, cleaned)
-            _tick.value++
         }
     }
 
-    /** One Nano inference; null on any failure (SDK missing, model downloading, junk output). */
-    private suspend fun generate(context: Context, raw: String): Cleaned? = runCatching {
-        val m = model ?: com.google.ai.edge.aicore.GenerativeModel(
-            com.google.ai.edge.aicore.generationConfig {
-                this.context = context
-                temperature = 0.1f
-                topK = 16
-                maxOutputTokens = 128
-            },
-        ).also { model = it }
+    private sealed interface Gen {
+        data class Ok(val cleaned: Cleaned) : Gen
+        /** Model busy/downloading — drop from in-flight so a later rebuild retries. */
+        data object Retry : Gen
+        data object Failed : Gen
+    }
+
+    /** One Nano inference through the ML Kit Prompt API (download-on-first-use). */
+    private suspend fun generate(raw: String): Gen = runCatching {
+        val m = (model as? com.google.mlkit.genai.prompt.GenerativeModel)
+            ?: com.google.mlkit.genai.prompt.Generation.getClient().also { model = it }
+        when (m.checkStatus()) {
+            com.google.mlkit.genai.common.FeatureStatus.AVAILABLE -> Unit
+            com.google.mlkit.genai.common.FeatureStatus.DOWNLOADABLE -> {
+                Log.i("zync", "nano: downloading the model for title cleanup")
+                runCatching { m.download().collect { } }
+                if (m.checkStatus() != com.google.mlkit.genai.common.FeatureStatus.AVAILABLE) return@runCatching Gen.Retry
+            }
+            com.google.mlkit.genai.common.FeatureStatus.DOWNLOADING -> return@runCatching Gen.Retry
+            else -> {
+                nanoUnavailable = true
+                Log.i("zync", "nano: unavailable on this device; agenda titles stay raw")
+                return@runCatching Gen.Failed
+            }
+        }
         val prompt =
             "Rewrite this calendar event title. Reply with ONLY minified JSON " +
                 "{\"title\":string,\"location\":string|null}. The title must be pithy Title Case " +
                 "with boilerplate (ticket ids, 'Meeting:', urls, brackets) dropped. If a venue, room, " +
                 "address, or place name is embedded in the original, move it to location; else null. " +
                 "Original: $raw"
-        val text = (m as com.google.ai.edge.aicore.GenerativeModel).generateContent(prompt).text
-            ?: return@runCatching null
-        parseCleaned(text)?.let { Cleaned(it.t.ifBlank { raw }.take(80), it.l?.take(120), System.currentTimeMillis()) }
+        val text = m.generateContent(prompt).candidates.firstOrNull()?.text
+            ?: return@runCatching Gen.Failed
+        parseCleaned(text)
+            ?.let { Gen.Ok(Cleaned(it.t.ifBlank { raw }.take(80), it.l?.take(120), System.currentTimeMillis())) }
+            ?: Gen.Failed
     }.getOrElse {
-        // Init failures mean no Nano here — stop trying for the session.
-        if (model == null) {
-            nanoUnavailable = true
-            Log.i("zync", "nano unavailable for title cleanup: ${it.message}")
-        }
-        null
+        Log.i("zync", "nano title cleanup failed for '${raw.take(40)}': ${it.message}")
+        Gen.Failed
     }
 
     /** Tolerates markdown fences and stray prose around the JSON object. */

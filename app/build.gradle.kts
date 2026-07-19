@@ -129,7 +129,7 @@ dependencies {
 
   // Sync client (device-signed push/pull to the central server)
   implementation(libs.ktor.client.okhttp)
-  implementation(libs.aicore) // Gemini Nano (AICore) — agenda title cleanup, Pixel 9+
+  implementation(libs.mlkit.genai.prompt) // Gemini Nano (ML Kit Prompt API) — agenda title cleanup, Pixel 9+
   implementation(libs.ktor.client.content.negotiation)
 
   // Ktor server stack + serialization (the loopback server that hosts the shared :web UI)

@@ -279,7 +279,7 @@ private fun Agenda(
                 Row(Modifier.fillMaxWidth().clickable { onOpenEvent(e) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                     BasicText("all day", style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans), modifier = Modifier.width(58.dp))
                     ProfileBar(e, 1f)
-                    BasicText(e.title, style = TextStyle(color = C.Ink2, fontSize = 14.sp, fontFamily = ZyncSans), modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
+                    BasicText(e.title, style = TextStyle(color = C.Ink2, fontSize = 14.sp, fontFamily = ZyncSans), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
                 }
             }
             item(key = "allday-divider") {
@@ -331,7 +331,7 @@ private fun Agenda(
                 Row(Modifier.fillMaxWidth().clickable { onOpenEvent(e) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                     BasicText("all day", style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans), modifier = Modifier.width(58.dp))
                     ProfileBar(e, 1f)
-                    BasicText(e.title, style = TextStyle(color = C.Ink2, fontSize = 14.sp, fontFamily = ZyncSans), modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
+                    BasicText(e.title, style = TextStyle(color = C.Ink2, fontSize = 14.sp, fontFamily = ZyncSans), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
                 }
             }
             items(day.timed.size) { i ->
