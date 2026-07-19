@@ -6,7 +6,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -92,6 +94,26 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                 value = query,
                 onValueChange = { query = it },
                 singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Go,
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onGo = {
+                        // Enter = top result: best app, else settings, else web search.
+                        val top = AppSearch.filter(apps, query).firstOrNull()
+                        val setting = AppSearch.settingsMatches(query).firstOrNull()
+                        when {
+                            top != null -> launchRecent(
+                                RecentItem(RecentItem.Kind.App, top.label, top.packageName, top.activityName, top.userSerial),
+                            )
+                            setting != null -> launchRecent(
+                                RecentItem(RecentItem.Kind.Setting, setting.label, settingsAction = setting.action),
+                            )
+                            query.isNotBlank() -> launchRecent(RecentItem(RecentItem.Kind.Web, "Web: $query", webQuery = query))
+                        }
+                        if (query.isNotBlank()) SearchHistory.recordQuery(context, query)
+                    },
+                ),
                 textStyle = TextStyle(color = TextPrimary, fontSize = 18.sp),
                 cursorBrush = SolidColor(TextPrimary),
                 modifier = Modifier
@@ -143,10 +165,17 @@ fun SearchOverlay(onDismiss: () -> Unit) {
             }
         }
         LazyColumn(Modifier.weight(1f)) {
-            // 1. five most recent selections head the blank-query list
+            // 1. recents: their own labeled section, divider below (device feedback)
             if (query.isBlank()) {
                 val recents = SearchHistory.recentItems(context)
                 if (recents.isNotEmpty()) {
+                    item(key = "recent-header") {
+                        BasicText(
+                            "RECENT",
+                            style = TextStyle(color = TextFaint, fontSize = 11.sp, letterSpacing = 1.2.sp),
+                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                        )
+                    }
                     items(recents, key = { "r:" + it.label + it.kind + (it.userSerial ?: 0) }) { item ->
                         Row(
                             Modifier.fillMaxWidth().clickable { launchRecent(item) }.padding(vertical = 8.dp),
@@ -158,9 +187,20 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                                 RecentItem.Kind.Setting -> BasicText("⚙", style = TextStyle(color = TextMuted, fontSize = 20.sp))
                                 RecentItem.Kind.Web -> BasicText("🔎", style = TextStyle(color = TextMuted, fontSize = 17.sp))
                             }
-                            BasicText(item.label, style = TextStyle(color = TextPrimary, fontSize = 15.sp))
-                            BasicText("recent", style = TextStyle(color = TextFaint, fontSize = 11.sp))
+                            BasicText(
+                                item.label,
+                                style = TextStyle(color = TextPrimary, fontSize = 15.sp),
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
                         }
+                    }
+                    item(key = "recent-divider") {
+                        Box(
+                            Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                                .height(1.dp)
+                                .background(androidx.compose.ui.graphics.Color(0xFF2A313C)),
+                        )
                     }
                 }
             }

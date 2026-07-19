@@ -93,8 +93,13 @@ object AppSearch {
     fun filter(apps: List<AppEntry>, query: String): List<AppEntry> {
         val q = query.trim().lowercase()
         if (q.isEmpty()) return apps
-        return apps.filter { q in it.label.lowercase() }
+        // Substring OR word-initials ("gc" → Google Calendar) — prefix hits rank first.
+        val matches = apps.filter { q in it.label.lowercase() || initials(it.label).startsWith(q) }
+        return matches.sortedBy { if (it.label.lowercase().startsWith(q) || initials(it.label).startsWith(q)) 0 else 1 }
     }
+
+    private fun initials(label: String): String =
+        label.split(' ', '-', '.').filter { it.isNotEmpty() }.joinToString("") { it.first().lowercase() }
 
     /** Settings destinations matching [query]; hidden when the query is blank. */
     fun settingsMatches(query: String): List<SettingsEntry> {

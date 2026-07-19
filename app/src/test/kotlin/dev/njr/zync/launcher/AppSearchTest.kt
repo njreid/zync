@@ -36,4 +36,15 @@ class AppSearchTest {
         assertEquals(Intent.ACTION_WEB_SEARCH, web.action)
         assertEquals("gtd weekly review", web.getStringExtra(SearchManager.QUERY))
     }
+
+    @Test
+    fun initialsMatchAndRankFirst() {
+        val apps = listOf(
+            AppEntry("Recorder", "r", "R"),
+            AppEntry("Google Calendar", "gc", "GC"),
+            AppEntry("Logcat Viewer", "lv", "LV"),
+        )
+        val hits = AppSearch.filter(apps, "gc")
+        assertEquals("Google Calendar", hits.first().label)
+    }
 }
