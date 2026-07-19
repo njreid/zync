@@ -67,12 +67,13 @@ fun main(args: Array<String>) {
     val agenda = dev.njr.zync.server.agenda.AgendaEndpoint(db, ingestToken = System.getenv("ZYNC_AGENDA_TOKEN"))
     // Newz handoff: a DEDICATED signing key (never the pairing identity). Prefer the
     // env seed (lets ops know the public key without box access); file fallback.
-    val newz = System.getenv("ZYNC_PUBLIC_ADDR")?.let { addr ->
+    val newz = System.getenv("ZYNC_PUBLIC_ADDR")?.let { zyncAddress ->
+        val newzAddress = System.getenv("ZYNC_NEWZ_PUBLIC_ADDR") ?: zyncAddress
         val identity = System.getenv("ZYNC_NEWZ_SIGNING_SEED")
             ?.let(dev.njr.zync.server.pairing.ServerIdentity::fromBase64Seed)
             ?: dev.njr.zync.server.pairing.ServerIdentity.loadOrCreate(System.getenv("ZYNC_NEWZ_KEY_FILE") ?: "newz-signing.key")
         dev.njr.zync.server.integrations.NewzIntegration(
-            db, identity, addr, redeemToken = System.getenv("ZYNC_NEWZ_REDEEM_TOKEN"),
+            db, identity, newzAddress, redeemToken = System.getenv("ZYNC_NEWZ_REDEEM_TOKEN"),
         ).also {
             org.slf4j.LoggerFactory.getLogger("zync.newz")
                 .info("newz handoff signing key: kid={} publicKey={}", it.kid, it.publicKeyBase64)

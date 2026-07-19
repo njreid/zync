@@ -27,8 +27,10 @@ suspend fun mintNewzHandoff(
     }
     response.requireOk("newz handoff")
     val body = json.decodeFromString(NewzHandoffResponse.serializer(), response.bodyAsText())
-    // Trust only the paired origin + the fixed handoff path — never navigate elsewhere.
-    require(body.handoffUrl.startsWith("${paired.address}/newz/handoff?")) {
+    // The paired server is authenticated and chooses this short-lived destination.
+    // Newz may use its own host, but must always be HTTPS and the fixed handoff path.
+    val destination = runCatching { java.net.URI(body.handoffUrl) }.getOrNull()
+    require(destination?.scheme == "https" && destination.path == "/newz/handoff" && !destination.query.isNullOrEmpty()) {
         "unexpected handoff destination"
     }
     return body

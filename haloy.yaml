@@ -73,6 +73,11 @@ env:
   - name: "ZYNC_NEWZ_REDEEM_TOKEN"
     from:
       env: "ZYNC_NEWZ_REDEEM_TOKEN"
+  # Optional separate public origin for Newz when it is host-routed rather than
+  # mounted under the Zync hostname (for example https://newz.dev.choosh.ai).
+  - name: "ZYNC_NEWZ_PUBLIC_ADDR"
+    from:
+      env: "ZYNC_NEWZ_PUBLIC_ADDR"
 
 # Build the JVM distribution the Dockerfile packages, before haloy builds the image.
 pre_deploy:
