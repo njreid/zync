@@ -54,7 +54,14 @@ fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long, co
         if (items.isEmpty()) {
             p("muted") { +"Inbox zero." }
         } else {
-            ul { items.forEach { li { nodeRow(it, reorderable = true) } } }
+            ul {
+                items.forEach {
+                    li("swipe-row") {
+                        attributes["data-node"] = it.id.toString()
+                        nodeRow(it, reorderable = true)
+                    }
+                }
+            }
         }
     } else {
         contextBar(read, context)
@@ -185,6 +192,19 @@ fun FlowContent.nodeRow(node: NodeView, reorderable: Boolean = false) {
             attributes["data-on:click"] = "@post('/node/${node.id}/trash')"
             attributes["title"] = "Trash"
             +"🗑"
+        }
+    } else {
+        // Hidden Datastar-bound triggers the gesture helper .click()s on swipe/keypress
+        // (swipe-right/space = complete, swipe-left/del = trash). No new endpoints.
+        button(classes = "swipe-fire complete") {
+            attributes["data-on:click"] = "@post('/node/${node.id}/complete')"
+            attributes["tabindex"] = "-1"
+            attributes["aria-hidden"] = "true"
+        }
+        button(classes = "swipe-fire trash") {
+            attributes["data-on:click"] = "@post('/node/${node.id}/trash')"
+            attributes["tabindex"] = "-1"
+            attributes["aria-hidden"] = "true"
         }
     }
 }

@@ -48,6 +48,8 @@ fun HTML.page(
         link(rel = "stylesheet", href = "/assets/custom.css")
         // Datastar runtime, vendored + served locally so the phone loopback works offline.
         script(type = "module", src = "/assets/datastar.js") {}
+        // Gesture + keyboard layer (swipe complete/delete, j/k cursor, g-chords).
+        script(type = "module", src = "/assets/zync-gestures.js") {}
     }
     body {
         nav(classes = "topbar") {
@@ -66,6 +68,13 @@ private fun FlowContent.tabBar(active: Tab) {
         listOf(Tab.INBOX, Tab.NEXT, Tab.PROJECTS).forEach { tab ->
             a(href = tab.href, classes = if (tab == active) "tab active" else "tab") {
                 if (tab == active) attributes["aria-current"] = "page"
+                // g-chord key read from the DOM by the gesture helper.
+                attributes["data-key"] = when (tab) {
+                    Tab.INBOX -> "i"
+                    Tab.NEXT -> "n"
+                    Tab.PROJECTS -> "p"
+                    Tab.NONE -> ""
+                }
                 span("tab-icon") { +tab.icon }
                 span("tab-label") { +tab.label }
             }

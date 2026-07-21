@@ -129,6 +129,9 @@ fun Route.webRoutes(
     get("/assets/datastar.js") {
         call.respondText(WebPlatform.datastarRuntime(), ContentType("application", "javascript"))
     }
+    get("/assets/zync-gestures.js") {
+        call.respondText(WebPlatform.asset("zync-gestures.js"), ContentType("application", "javascript"))
+    }
     get("/assets/pico.min.css") {
         call.respondText(WebPlatform.asset("pico.min.css"), ContentType.Text.CSS)
     }

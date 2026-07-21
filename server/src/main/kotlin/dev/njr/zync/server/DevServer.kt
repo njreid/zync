@@ -30,6 +30,8 @@ fun main() {
     content.commands.createTask("Buy milk")
     content.commands.createTask("Read a book")
     content.commands.createTask("CSP probe task") // csp.spec completes this one
+    content.commands.createTask("Swipe me done") // gestures.spec swipes these
+    content.commands.createTask("Swipe me gone")
     val offsite = content.commands.createTask("Plan the offsite")
     seedStubProposal(service, offsite)
     // A context with one tagged task, so the context-pill filter is drivable.
