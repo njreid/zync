@@ -54,6 +54,9 @@ class ContentCommands(private val ops: OpEmitter) {
     fun setPerson(node: Ulid, name: String?) =
         ops.setField(node, Fields.PERSON, name?.trim()?.takeIf { it.isNotEmpty() }?.let(::JsonPrimitive) ?: JsonNull)
     fun move(node: Ulid, newParent: Ulid) = ops.move(node, newParent)
+
+    /** Set a node's sibling-order fractional index (GTD triage §3; computed by the read model). */
+    fun setRank(node: Ulid, rank: String) = ops.setField(node, Fields.RANK, JsonPrimitive(rank))
     fun convertToProject(node: Ulid) = ops.setField(node, "kind", JsonPrimitive("project"))
     fun convertToTask(node: Ulid) = ops.setField(node, "kind", JsonPrimitive("task"))
 

@@ -2,6 +2,7 @@ package dev.njr.zync.web.content
 
 import dev.njr.zync.core.agent.AgentFlow
 import dev.njr.zync.core.content.Fields
+import dev.njr.zync.core.content.FractionalIndex
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.state.EntitySnapshot
@@ -31,10 +32,15 @@ data class NodeView(
     val alive: Boolean,
     /** Agent-authored, awaiting human review — surfaced only in the proposals panel. */
     val proposed: Boolean = false,
+    /** Fractional-index sibling order (GTD triage §3); null = unranked (sorts by ULID/FIFO). */
+    val rank: String? = null,
 )
 
 /** A context/tag as the UI reads it. */
 data class ContextView(val id: Ulid, val name: String?)
+
+/** A one-slot reorder within a sibling list (GTD triage §3, spec Q2 = buttons for v1). */
+enum class Reorder { UP, DOWN, TOP }
 
 /**
  * Reads for the shared content UI, folded from the `core` projection over a [StateStore].
@@ -70,11 +76,39 @@ class ContentReadModel(private val store: StateStore) {
     fun proposals(): List<NodeView> =
         snapshots().filter { it.proposed() }.map { it.toView() }.sortedBy { it.id.toString() }
 
-    /** Inbox: live children of [inbox] that aren't completed/dropped/deferred-out. */
+    /**
+     * Inbox: live children of [inbox] that aren't completed/dropped/deferred-out,
+     * in **triage order** (GTD §3): by fractional-index `rank`, falling back to ULID
+     * for unranked items so capture order is FIFO for free; ties break by ULID.
+     */
     fun inbox(inbox: Ulid?, now: Long = Long.MAX_VALUE): List<NodeView> =
-        children(inbox).filter {
-            it.status != "DONE" && it.status != "DROPPED" && (it.deferUntil == null || it.deferUntil <= now)
+        children(inbox)
+            .filter {
+                it.status != "DONE" && it.status != "DROPPED" && (it.deferUntil == null || it.deferUntil <= now)
+            }
+            .sortedWith(compareBy({ it.effectiveRank() }, { it.id.toString() }))
+
+    /**
+     * The new `rank` to move [id] one slot toward [direction] within its inbox list,
+     * or null if it's a no-op (already at the edge, or not in the list). The caller
+     * writes it via [ContentCommands.setRank]. Reorder targets the displayed inbox
+     * order, so it works whether neighbours are ranked or still FIFO.
+     */
+    fun reorderRank(inbox: Ulid?, id: Ulid, direction: Reorder, now: Long = Long.MAX_VALUE): String? {
+        val items = inbox(inbox, now)
+        val i = items.indexOfFirst { it.id.toString() == id.toString() }
+        if (i < 0) return null
+        return when (direction) {
+            Reorder.TOP -> if (i == 0) null
+                else FractionalIndex.between(null, items[0].effectiveRank())
+            Reorder.UP -> if (i == 0) null
+                else FractionalIndex.between(items.getOrNull(i - 2)?.effectiveRank(), items[i - 1].effectiveRank())
+            Reorder.DOWN -> if (i == items.lastIndex) null
+                else FractionalIndex.between(items[i + 1].effectiveRank(), items.getOrNull(i + 2)?.effectiveRank())
         }
+    }
+
+    private fun NodeView.effectiveRank(): String = rank ?: id.toString().lowercase()
 
     fun node(id: Ulid): NodeView? = store.project()[id]?.takeIf { it.alive }?.toView()
 
@@ -146,6 +180,7 @@ class ContentReadModel(private val store: StateStore) {
         tags = tags,
         alive = alive,
         proposed = proposed(),
+        rank = fields[Fields.RANK].asString(),
     )
 
     // JsonNull IS a JsonPrimitive (content "null") — cleared fields must read as absent.

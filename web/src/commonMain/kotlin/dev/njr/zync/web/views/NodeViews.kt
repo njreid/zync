@@ -54,7 +54,7 @@ fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long, co
         if (items.isEmpty()) {
             p("muted") { +"Inbox zero." }
         } else {
-            ul { items.forEach { li { nodeRow(it) } } }
+            ul { items.forEach { li { nodeRow(it, reorderable = true) } } }
         }
     } else {
         contextBar(read, context)
@@ -135,20 +135,46 @@ fun FlowContent.projectsSection(read: ContentReadModel, now: Long, inbox: Ulid? 
     }
 }
 
-/** A single node as a linked row with its status and inline actions. */
-fun FlowContent.nodeRow(node: NodeView) {
+/**
+ * A single node as a linked row with its status and inline actions. In the inbox
+ * ([reorderable]) it carries send-to-top / move-up / move-down controls that rewrite
+ * the node's fractional `rank` (GTD triage §3, spec Q2 = buttons for v1), and it
+ * drops the complete/trash buttons — swipe-right completes, swipe-left deletes
+ * (spec §4). Other surfaces keep the explicit complete/trash buttons.
+ */
+fun FlowContent.nodeRow(node: NodeView, reorderable: Boolean = false) {
+    if (reorderable) {
+        button(classes = "action reorder") {
+            attributes["data-on:click"] = "@post('/node/${node.id}/rank?dir=top')"
+            attributes["title"] = "Send to top"
+            +"⤒"
+        }
+        button(classes = "action reorder") {
+            attributes["data-on:click"] = "@post('/node/${node.id}/rank?dir=up')"
+            attributes["title"] = "Move up"
+            +"↑"
+        }
+        button(classes = "action reorder") {
+            attributes["data-on:click"] = "@post('/node/${node.id}/rank?dir=down')"
+            attributes["title"] = "Move down"
+            +"↓"
+        }
+    }
     a(href = "/node/${node.id}") { +(node.title ?: "(untitled)") }
     node.person?.let { span("waiting") { +" @$it" } }
     node.status?.let { span("status") { +" · $it" } }
-    button(classes = "action") {
-        attributes["data-on:click"] = "@post('/node/${node.id}/complete')"
-        attributes["title"] = "Complete"
-        +"✓"
-    }
-    button(classes = "action") {
-        attributes["data-on:click"] = "@post('/node/${node.id}/trash')"
-        attributes["title"] = "Trash"
-        +"🗑"
+    if (!reorderable) {
+        // Inbox rows rely on swipes for complete/delete; every other surface keeps buttons.
+        button(classes = "action") {
+            attributes["data-on:click"] = "@post('/node/${node.id}/complete')"
+            attributes["title"] = "Complete"
+            +"✓"
+        }
+        button(classes = "action") {
+            attributes["data-on:click"] = "@post('/node/${node.id}/trash')"
+            attributes["title"] = "Trash"
+            +"🗑"
+        }
     }
 }
 

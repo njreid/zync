@@ -4,6 +4,7 @@ import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.web.content.ContentCommands
 import dev.njr.zync.web.content.ContentReadModel
 import dev.njr.zync.web.content.DueDates
+import dev.njr.zync.web.content.Reorder
 import dev.njr.zync.web.sse.ChangeNotifier
 import dev.njr.zync.web.sse.patch
 import dev.njr.zync.web.sse.patchElementsEvent
@@ -185,6 +186,23 @@ fun Route.webRoutes(
         post("/node/{id}/move") {
             val parent = call.request.queryParameters["parent"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
             if (parent != null) call.nodeId()?.let { id -> call.applied { move(id, parent) } }
+        }
+        // Inbox reorder (GTD triage §3): compute a new fractional rank from the current
+        // order, then write it. A no-op at an edge still re-renders (harmless).
+        post("/node/{id}/rank") {
+            val dir = when (call.request.queryParameters["dir"]) {
+                "up" -> Reorder.UP
+                "down" -> Reorder.DOWN
+                "top" -> Reorder.TOP
+                else -> null
+            }
+            val id = call.nodeId()
+            if (id == null || dir == null) {
+                call.respondText("bad request", status = HttpStatusCode.BadRequest)
+            } else {
+                val newRank = read.reorderRank(inbox(), id, dir, now())
+                call.applied { if (newRank != null) setRank(id, newRank) }
+            }
         }
 
         // Detail-page actions patch #node-detail (not the inbox).
