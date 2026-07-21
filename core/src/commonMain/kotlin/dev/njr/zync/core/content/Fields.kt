@@ -36,6 +36,14 @@ object Fields {
 
     /** Operator-owned one-paragraph summary of a document's OCR text. */
     const val SUMMARY = "summary"
+
+    /**
+     * Fractional-index string giving a node a total order *among its siblings*
+     * (GTD triage spec §3): drives FIFO inbox reorder, project reorder, and
+     * loose-task reorder. Absent = unranked; unranked siblings sort by ULID
+     * ascending (capture order = FIFO for free). See [FractionalIndex].
+     */
+    const val RANK = "rank"
 }
 
 /** OCR lifecycle values for [Fields.OCR_STATUS]. */
