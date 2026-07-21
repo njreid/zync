@@ -202,3 +202,22 @@ span.project { color: var(--pico-muted-color); font-size: .85em; }
   opacity: 0;
   pointer-events: none;
 }
+
+/* Inbox triage panel (GTD triage §4). */
+.triage {
+  flex-basis: 100%;
+  margin: .3rem 0 .1rem;
+  padding: .5rem .2rem;
+  border-top: 1px dashed var(--pico-muted-border-color);
+}
+.size-chips { display: flex; gap: .4rem; }
+.size-badge {
+  font-family: "Iosevka Charon Mono", ui-monospace, monospace;
+  font-weight: 700;
+  font-size: .7em;
+  margin-left: .35rem;
+  padding: 0 .35rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: .4rem;
+}
+button.action.expand { border: none; }

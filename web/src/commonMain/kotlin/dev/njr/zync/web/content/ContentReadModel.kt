@@ -49,6 +49,9 @@ data class NodeView(
 /** One ranked file-location proposal for an inbox item (GTD triage §6). */
 data class FileSuggestion(val targetId: Ulid, val title: String, val tree: String, val score: Double)
 
+/** An attachment as the triage preview reads it (GTD triage §4). */
+data class AttachmentView(val id: Ulid, val type: String?, val filename: String?, val blobHash: String?)
+
 /** A context/tag as the UI reads it. */
 data class ContextView(val id: Ulid, val name: String?)
 
@@ -239,6 +242,46 @@ class ContentReadModel(private val store: StateStore) {
             .map { it.toView() }
             .filter { it.status != "DONE" && it.status != "DROPPED" && (it.deferUntil == null || it.deferUntil <= now) }
             .sortedBy { it.title ?: "" }
+
+    /** Attachments linked to [node] (payload.nodeId == node), for triage preview (spec §4). */
+    fun attachments(node: Ulid): List<AttachmentView> =
+        store.project().values
+            .filter { it.alive }
+            .mapNotNull { snap ->
+                val payload = snap.fields["@attachment"] as? JsonObject ?: return@mapNotNull null
+                if ((payload["nodeId"] as? JsonPrimitive)?.content != node.toString()) return@mapNotNull null
+                AttachmentView(
+                    id = snap.entityId,
+                    type = (payload["type"] as? JsonPrimitive)?.content,
+                    filename = (payload["relativePath"] as? JsonPrimitive)?.content,
+                    blobHash = (payload["blobHash"] as? JsonPrimitive)?.content,
+                )
+            }
+            .sortedBy { it.id.toString() }
+
+    /** 1-based depth: a root-parented node = 1, its child = 2, … Cycle-guarded, bounded. */
+    fun depthOf(id: Ulid, max: Int = 8): Int {
+        var depth = 1 // the node itself sits at level 1 when root-parented
+        var current = store.project()[id]?.parent
+        val seen = HashSet<String>()
+        while (current != null && depth <= max + 2 && seen.add(current.toString())) {
+            depth++
+            current = store.project()[current]?.parent
+        }
+        return depth
+    }
+
+    /** Tallest descendant chain below [id]; a leaf = 0. Bounded to guard corrupt cycles. */
+    fun subtreeHeight(id: Ulid, budget: Int = 12): Int {
+        if (budget <= 0) return 0
+        val kids = children(id)
+        if (kids.isEmpty()) return 0
+        return 1 + kids.maxOf { subtreeHeight(it.id, budget - 1) }
+    }
+
+    /** True iff moving [node] under [newParent] would push any node past [max] levels (spec §8, Q8). */
+    fun moveWouldExceedDepth(node: Ulid, newParent: Ulid, max: Int = 4): Boolean =
+        depthOf(newParent) + 1 + subtreeHeight(node) > max
 
     private fun EntitySnapshot.kind(): String? = fields["kind"].asString()
 

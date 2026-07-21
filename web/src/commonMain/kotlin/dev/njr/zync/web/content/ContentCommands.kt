@@ -2,6 +2,7 @@ package dev.njr.zync.web.content
 
 import dev.njr.zync.core.agent.AgentFlow
 import dev.njr.zync.core.content.Fields
+import dev.njr.zync.core.content.Size
 import dev.njr.zync.core.content.Status
 import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.id.Ulid
@@ -60,8 +61,19 @@ class ContentCommands(private val ops: OpEmitter) {
     /** Set a node's sibling-order fractional index (GTD triage §3; computed by the read model). */
     fun setRank(node: Ulid, rank: String) = ops.setField(node, Fields.RANK, JsonPrimitive(rank))
 
-    /** Set a node's coarse effort size (GTD triage §4): one of [dev.njr.zync.core.content.Size]. */
-    fun setSize(node: Ulid, size: String) = ops.setField(node, Fields.SIZE, JsonPrimitive(size))
+    /** Set a node's coarse effort size (GTD triage §4): S|M|L; null/invalid clears. */
+    fun setSize(node: Ulid, size: String?) =
+        ops.setField(node, Fields.SIZE, size?.takeIf { it in Size.ALL }?.let(::JsonPrimitive) ?: JsonNull)
+
+    /**
+     * Split during triage (spec §4: "add a subtask ⇒ it becomes a project"): add the
+     * child and make the parent a project. Returns the new child id.
+     */
+    fun split(parent: Ulid, childTitle: String): Ulid {
+        val child = addSubtask(parent, childTitle)
+        convertToProject(parent)
+        return child
+    }
 
     /** File a node into the Reference tree (GTD triage §7): status FILED + Move under the root. */
     fun file(node: Ulid) {

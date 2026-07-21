@@ -1,5 +1,6 @@
 package dev.njr.zync.web.views
 
+import dev.njr.zync.core.content.Size
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.web.content.ContentReadModel
 import dev.njr.zync.web.content.DueDates
@@ -59,6 +60,7 @@ fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long, co
                     li("swipe-row") {
                         attributes["data-node"] = it.id.toString()
                         nodeRow(it, reorderable = true)
+                        triagePanel(read, it)
                     }
                 }
             }
@@ -162,6 +164,12 @@ fun FlowContent.projectsSection(read: ContentReadModel, now: Long, inbox: Ulid? 
  */
 fun FlowContent.nodeRow(node: NodeView, reorderable: Boolean = false) {
     if (reorderable) {
+        // Toggle the inline triage panel (one open at a time via the $exp signal).
+        button(classes = "action expand") {
+            attributes["data-on:click"] = "\$exp = (\$exp === '${node.id}' ? '' : '${node.id}')"
+            attributes["title"] = "Expand"
+            +"▸"
+        }
         button(classes = "action reorder") {
             attributes["data-on:click"] = "@post('/node/${node.id}/rank?dir=top')"
             attributes["title"] = "Send to top"
@@ -180,6 +188,7 @@ fun FlowContent.nodeRow(node: NodeView, reorderable: Boolean = false) {
     }
     a(href = "/node/${node.id}") { +(node.title ?: "(untitled)") }
     node.person?.let { span("waiting") { +" @$it" } }
+    node.size?.let { span("size-badge") { +it } }
     node.status?.let { span("status") { +" · $it" } }
     if (!reorderable) {
         // Inbox rows rely on swipes for complete/delete; every other surface keeps buttons.
@@ -205,6 +214,95 @@ fun FlowContent.nodeRow(node: NodeView, reorderable: Boolean = false) {
             attributes["data-on:click"] = "@post('/node/${node.id}/trash')"
             attributes["tabindex"] = "-1"
             attributes["aria-hidden"] = "true"
+        }
+    }
+}
+
+/**
+ * The inline triage panel (spec §4), rendered collapsed inside each inbox `li`. Open
+ * state is the Datastar signal `$exp` (holds the expanded node id) so it survives the
+ * SSE morph and only one panel is open at a time. All controls are Datastar posts to
+ * inbox-scoped routes that re-render `#inbox`. CSP-safe (no inline script/style).
+ */
+private fun FlowContent.triagePanel(read: ContentReadModel, node: NodeView) {
+    div(classes = "triage") {
+        attributes["data-show"] = "\$exp === '${node.id}'"
+
+        // Rename.
+        div(classes = "org-row") {
+            input(type = InputType.text) {
+                attributes["data-bind:t_${node.id}"] = ""
+                attributes["placeholder"] = node.title ?: "Title"
+            }
+            button(classes = "action") {
+                attributes["data-on:click"] = "@post('/node/${node.id}/rename?title=' + encodeURIComponent(\$t_${node.id}))"
+                +"Rename"
+            }
+        }
+
+        // Size: S/M/L chips (current highlighted) + clear.
+        div(classes = "org-row size-chips") {
+            Size.ALL.forEach { s ->
+                button(classes = if (node.size == s) "action chip-on" else "action") {
+                    attributes["data-on:click"] = "@post('/node/${node.id}/size?size=$s')"
+                    +s
+                }
+            }
+            button(classes = "action") {
+                attributes["data-on:click"] = "@post('/node/${node.id}/size?size=')"
+                +"clear"
+            }
+        }
+
+        // Split: add a subtask (⇒ the item becomes a project).
+        div(classes = "org-row") {
+            input(type = InputType.text) {
+                attributes["data-bind:s_${node.id}"] = ""
+                attributes["placeholder"] = "Add subtask (splits into a project)"
+            }
+            button(classes = "action") {
+                attributes["data-on:click"] = "@post('/node/${node.id}/split?title=' + encodeURIComponent(\$s_${node.id}))"
+                +"Split"
+            }
+        }
+
+        // Link / description (folded into notes for v1).
+        div(classes = "org-row") {
+            input(type = InputType.text) {
+                attributes["data-bind:n_${node.id}"] = ""
+                attributes["placeholder"] = node.notes ?: "Link or description"
+            }
+            button(classes = "action") {
+                attributes["data-on:click"] = "@post('/node/${node.id}/notes?notes=' + encodeURIComponent(\$n_${node.id}))"
+                +"Save"
+            }
+        }
+
+        // Attachment preview (filename + type; no thumbnail — no blob route yet).
+        val atts = read.attachments(node.id)
+        if (atts.isNotEmpty()) {
+            div(classes = "org-row") {
+                span("muted") { +"Attachments: " }
+                atts.forEach { att ->
+                    a(href = "/node/${node.id}/read") { +(att.filename ?: att.type ?: "file") }
+                    +" "
+                }
+            }
+        }
+        node.ocrStatus?.let { div(classes = "org-row") { span("muted") { +ocrLabel(it) } } }
+
+        // Suggested file locations (spec §6; empty until the suggestion operator lands).
+        div(classes = "org-row chips-row") {
+            if (node.fileSuggestions.isEmpty()) {
+                span("muted") { +"No file suggestions yet" }
+            } else {
+                node.fileSuggestions.forEach { sug ->
+                    button(classes = "action") {
+                        attributes["data-on:click"] = "@post('/node/${node.id}/move?parent=${sug.targetId}')"
+                        +"→ ${sug.title}"
+                    }
+                }
+            }
         }
     }
 }

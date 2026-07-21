@@ -57,7 +57,12 @@ fun HTML.page(
             // Server-only (the phone loopback has no pairing page to link to).
             settingsHref?.let { a(classes = "settings-link", href = it) { +"Pairing" } }
         }
-        main(classes = "container") { content() }
+        main(classes = "container") {
+            // The inbox triage-panel open state (spec §4). Declared on <main> — which never
+            // morphs — so it persists across #inbox SSE patches (the panel stays open).
+            attributes["data-signals-exp"] = "''"
+            content()
+        }
         tabBar(activeTab)
     }
 }

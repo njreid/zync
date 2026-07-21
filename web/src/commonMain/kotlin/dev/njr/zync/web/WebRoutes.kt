@@ -199,7 +199,42 @@ fun Route.webRoutes(
         }
         post("/node/{id}/move") {
             val parent = call.request.queryParameters["parent"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
-            if (parent != null) call.nodeId()?.let { id -> call.applied { move(id, parent) } }
+            val id = call.nodeId()
+            when {
+                id == null || parent == null -> call.respondText("bad request", status = HttpStatusCode.BadRequest)
+                read.moveWouldExceedDepth(id, parent) ->
+                    call.respondText("move would exceed 4 levels", status = HttpStatusCode.Conflict)
+                else -> call.applied { move(id, parent) }
+            }
+        }
+        // --- Inbox triage panel (spec §4): size / rename / split / link-description ---
+        post("/node/{id}/size") {
+            val size = call.request.queryParameters["size"]
+            val id = call.nodeId()
+            when {
+                id == null -> call.respondText("bad request", status = HttpStatusCode.BadRequest)
+                !size.isNullOrEmpty() && size !in dev.njr.zync.core.content.Size.ALL ->
+                    call.respondText("size must be S|M|L", status = HttpStatusCode.BadRequest)
+                else -> call.applied { setSize(id, size?.ifEmpty { null }) }
+            }
+        }
+        post("/node/{id}/rename") {
+            val title = call.request.queryParameters["title"]?.trim().orEmpty()
+            val id = call.nodeId()
+            if (id != null && title.isNotEmpty()) call.applied { rename(id, title) }
+            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
+        post("/node/{id}/split") {
+            val title = call.request.queryParameters["title"]?.trim().orEmpty()
+            val id = call.nodeId()
+            if (id != null && title.isNotEmpty()) call.applied { split(id, title) }
+            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
+        post("/node/{id}/notes") {
+            val notes = call.request.queryParameters["notes"].orEmpty().trim()
+            val id = call.nodeId()
+            if (id != null) call.applied { setNotes(id, notes) }
+            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
         }
         // Inbox reorder (GTD triage §3): compute a new fractional rank from the current
         // order, then write it. A no-op at an edge still re-renders (harmless).
@@ -243,8 +278,12 @@ fun Route.webRoutes(
         post("/node/{id}/move-detail") {
             val parent = call.request.queryParameters["parent"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
             val id = call.nodeId()
-            if (id != null && parent != null) call.appliedDetail(id) { move(id, parent) }
-            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+            when {
+                id == null || parent == null -> call.respondText("bad request", status = HttpStatusCode.BadRequest)
+                read.moveWouldExceedDepth(id, parent) ->
+                    call.respondText("move would exceed 4 levels", status = HttpStatusCode.Conflict)
+                else -> call.appliedDetail(id) { move(id, parent) }
+            }
         }
         post("/node/{id}/tag") {
             val context = call.request.queryParameters["context"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
