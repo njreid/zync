@@ -65,6 +65,7 @@ class OperatorRuntime(
     scopes: ReadScopeResolver,
     private val llm: LlmClient,
     private val emit: (Op) -> Op,
+    private val blobText: (String) -> String? = { null },
     private val clock: Clock = Clock { System.currentTimeMillis() },
     private val random: Random = Random.Default,
     private val executor: Executor = defaultExecutor(),
@@ -167,7 +168,7 @@ class OperatorRuntime(
         ) return emptyList()
 
         // Typed-output loop: schema-validation failure is the ONLY retried condition.
-        val request = LlmRequest(m.id, OperatorPrompt.system(m), OperatorPrompt.user(snapshot, reg.scope.reads), m.output)
+        val request = LlmRequest(m.id, OperatorPrompt.system(m), OperatorPrompt.user(snapshot, reg.scope.reads, blobText), m.output)
         val attempts = mutableListOf<JsonElement>()
         var outcome: OperatorOutcome = OperatorOutcome.Rejected(0, emptyList())
         while (attempts.size < m.retries + 1) {

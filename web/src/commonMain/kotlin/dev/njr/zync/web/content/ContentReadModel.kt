@@ -20,6 +20,12 @@ data class NodeView(
     val deferUntil: Long?,
     val dueDate: Long?,
     val person: String?,
+    /** OCR lifecycle on a scanned/photo attachment: PENDING/RUNNING/DONE/FAILED. */
+    val ocrStatus: String?,
+    /** `blob-<sha256>` key of the OCR text, once it has landed. */
+    val ocrBlobHash: String?,
+    /** Operator-written document summary, once summarize has run. */
+    val summary: String?,
     val parent: Ulid?,
     val tags: Set<Ulid>,
     val alive: Boolean,
@@ -133,6 +139,9 @@ class ContentReadModel(private val store: StateStore) {
         deferUntil = (fields[Fields.DEFER_UNTIL] as? JsonPrimitive)?.content?.toLongOrNull(),
         dueDate = (fields[Fields.DUE_DATE] as? JsonPrimitive)?.content?.toLongOrNull(),
         person = fields[Fields.PERSON].asString(),
+        ocrStatus = fields[Fields.OCR_STATUS].asString(),
+        ocrBlobHash = fields[Fields.OCR_BLOB_HASH].asString(),
+        summary = fields[Fields.SUMMARY].asString(),
         parent = parent,
         tags = tags,
         alive = alive,

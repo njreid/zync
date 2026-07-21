@@ -1,5 +1,6 @@
 package dev.njr.zync.server.operator
 
+import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.operator.ReadScopeHandle
 import dev.njr.zync.core.state.EntitySnapshot
 import kotlinx.serialization.json.JsonElement
@@ -29,13 +30,15 @@ class ReadScopeResolver(scopes: List<ReadScope>) {
 
     companion object {
         /** The built-in scopes every deployment knows. */
-        fun default(): ReadScopeResolver = ReadScopeResolver(listOf(ReadScopes.inboxTask))
+        fun default(): ReadScopeResolver =
+            ReadScopeResolver(listOf(ReadScopes.inboxTask, ReadScopes.scannedDoc))
     }
 }
 
 /** Built-in named read scopes. */
 object ReadScopes {
     const val INBOX_TASK_REF = "inbox-task"
+    const val SCANNED_DOC_REF = "scanned-doc"
 
     /**
      * The reference scope from the spec: `kind=task AND parent=INBOX AND tags=∅`.
@@ -51,6 +54,20 @@ object ReadScopes {
             s.tags.isEmpty() &&
             s.fields["kind"].asString() == "task" &&
             (s.fields["status"].asString() ?: "ACTIVE") == "ACTIVE"
+    }
+
+    /**
+     * A scanned/photo document whose OCR text has landed: `ocrBlobHash` is set.
+     * The operator reads the document title (context) and the OCR blob key, which
+     * [OperatorPrompt] expands to the decoded text. Uses
+     * [dev.njr.zync.core.operator.TriggerKind.EntityChangesInScope] so a re-scan
+     * (new blob hash) re-summarizes, while redelivery of the same hash does not.
+     */
+    val scannedDoc: ReadScope = ReadScope(
+        ref = SCANNED_DOC_REF,
+        reads = setOf(Fields.OCR_BLOB_HASH, Fields.TITLE),
+    ) { s ->
+        s.alive && !s.fields[Fields.OCR_BLOB_HASH].asString().isNullOrBlank()
     }
 
     private fun JsonElement?.asString(): String? =

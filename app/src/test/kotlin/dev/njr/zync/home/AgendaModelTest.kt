@@ -13,7 +13,7 @@ import kotlin.random.Random
 class AgendaModelTest {
     private fun task(title: String): NodeView {
         val id = Ulid.generate(Clock { 1L }, Random(title.hashCode()))
-        return NodeView(id, "task", title, null, "ACTIVE", null, null, null, null, emptySet(), true)
+        return NodeView(id, "task", title, null, "ACTIVE", null, null, null, null, null, null, null, emptySet(), true)
     }
 
     private fun event(title: String, begin: Long, end: Long, allDay: Boolean = false) =

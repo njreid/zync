@@ -20,4 +20,28 @@ object Fields {
 
     /** A person's display name (any contact link stays device-local, never synced). */
     const val PERSON = "person"
+
+    /**
+     * OCR lifecycle on a scanned/photo attachment node (device-owned):
+     * one of PENDING | RUNNING | DONE | FAILED, written by the phone OcrWorker.
+     */
+    const val OCR_STATUS = "ocrStatus"
+
+    /**
+     * Content-addressed `blob-<sha256>` key of the full OCR text (rides the blob
+     * pipeline via a paired `ocr_text` attachment). Setting it triggers the
+     * server `summarize` operator.
+     */
+    const val OCR_BLOB_HASH = "ocrBlobHash"
+
+    /** Operator-owned one-paragraph summary of a document's OCR text. */
+    const val SUMMARY = "summary"
+}
+
+/** OCR lifecycle values for [Fields.OCR_STATUS]. */
+object OcrStatus {
+    const val PENDING = "PENDING"
+    const val RUNNING = "RUNNING"
+    const val DONE = "DONE"
+    const val FAILED = "FAILED"
 }

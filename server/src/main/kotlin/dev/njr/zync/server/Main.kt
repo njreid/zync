@@ -59,7 +59,6 @@ fun main(args: Array<String>) {
     val changes = ChangeNotifier()
     val ingestHook = SettableIngestHook()
     val service = SyncService(db, onIngest = { changes.notifyChanged() }, hook = ingestHook)
-    wireOperators(db, service, ingestHook)
     val registry = SqlDeviceRegistry(db)
     val auth = ServerConfig.buildAuth(registry)
     val webauthn = auth.sessions?.let { ServerConfig.buildWebAuthn(db, it) }
@@ -82,6 +81,9 @@ fun main(args: Array<String>) {
     val blobs = System.getenv("ZYNC_BLOB_BUCKET")?.let { bucket ->
         BlobService(S3BlobStore(S3Client.create(), bucket))
     }
+    // The summarize operator reads OCR text from the blob store; wired here now
+    // that blobs exist. Degrades to disabled without ANTHROPIC_API_KEY.
+    wireOperators(db, service, ingestHook, blobs)
     val hardening = Hardening(TokenBucketRateLimiter(capacity = 240, refillPerSecond = 4.0))
     val content = ServerContent(service, changes)
 
@@ -126,7 +128,7 @@ fun main(args: Array<String>) {
  * Wire the M8 operator runtime onto the ingest hook — or degrade gracefully to
  * disabled when no `ANTHROPIC_API_KEY` is configured.
  */
-private fun wireOperators(db: ZyncDatabase, service: SyncService, hook: SettableIngestHook) {
+private fun wireOperators(db: ZyncDatabase, service: SyncService, hook: SettableIngestHook, blobs: BlobService?) {
     val log = org.slf4j.LoggerFactory.getLogger("zync.operators")
     val llm = AnthropicLlmClient.fromEnv()
     if (llm == null) {
@@ -140,6 +142,7 @@ private fun wireOperators(db: ZyncDatabase, service: SyncService, hook: Settable
         scopes = ReadScopeResolver.default(),
         llm = llm,
         emit = service::ingestLocal,
+        blobText = blobs?.let { svc -> { key -> svc.fetch(key)?.toString(Charsets.UTF_8) } } ?: { null },
     )
     log.info("operators enabled")
 }

@@ -1,5 +1,6 @@
 package dev.njr.zync.server.operator
 
+import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.operator.FieldType
 import dev.njr.zync.core.operator.Fuel
 import dev.njr.zync.core.operator.OperatorManifest
@@ -43,6 +44,26 @@ object OperatorManifests {
         fuel = Fuel(maxOpsPerFiring = 2, maxOpsPerCascade = 16),
     )
 
+    /**
+     * The first real content operator (spec 2026-07-16-scan-ocr-summary §3):
+     * when a scanned/photo document's OCR text lands (`ocrBlobHash` set), read
+     * the OCR text and write a one-paragraph `summary`. Owns only the operator
+     * field `summary`; re-fires on a re-scan ([TriggerKind.EntityChangesInScope]).
+     */
+    fun summarize(): OperatorManifest = OperatorManifest(
+        id = "summarize",
+        name = "Summarize document",
+        readScope = ReadScopeHandle(ReadScopes.SCANNED_DOC_REF),
+        writeScope = WriteScope(fields = setOf(Fields.SUMMARY)),
+        trigger = TriggerKind.EntityChangesInScope,
+        output = OutputSchema(
+            fields = mapOf(Fields.SUMMARY to FieldType.String),
+            required = setOf(Fields.SUMMARY),
+        ),
+        retries = 2,
+        fuel = Fuel(maxOpsPerFiring = 1, maxOpsPerCascade = 16),
+    )
+
     /** Parse every `*.json` file in [dir] as an [OperatorManifest]. */
     fun load(dir: Path, json: Json = Json): List<OperatorManifest> {
         if (!Files.isDirectory(dir)) return emptyList()
@@ -58,6 +79,6 @@ object OperatorManifests {
     /** Built-ins plus any manifests configured via `ZYNC_OPERATORS_DIR`. */
     fun fromEnv(env: (String) -> String? = System::getenv, json: Json = Json): List<OperatorManifest> {
         val extra = env("ZYNC_OPERATORS_DIR")?.let { load(Path.of(it), json) }.orEmpty()
-        return listOf(autoClarifyInbox()) + extra
+        return listOf(autoClarifyInbox(), summarize()) + extra
     }
 }

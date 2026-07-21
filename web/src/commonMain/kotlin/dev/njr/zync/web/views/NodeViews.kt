@@ -173,6 +173,14 @@ fun FlowContent.nodeDetail(read: ContentReadModel, node: NodeView) {
         +"${node.kind ?: "node"} · ${node.status ?: ""}"
         node.dueDate?.let { +" · due ${DueDates.format(it)}" }
         node.person?.let { +" · @$it" }
+        node.ocrStatus?.let { +" · ${ocrLabel(it)}" }
+    }
+    // Operator-written summary of a scanned document's OCR text (labeled as such).
+    node.summary?.let { s ->
+        div(classes = "summary") {
+            span("summary-label") { +"Summary" }
+            p { +s }
+        }
     }
     node.notes?.let { p { +it } }
     a(href = "/node/${node.id}/read") { +"Read" }
@@ -265,11 +273,25 @@ private fun FlowContent.organizeSection(read: ContentReadModel, node: NodeView) 
     }
 }
 
-/** A long-form reading view: title + notes as prose. */
+/** A long-form reading view: title + summary + notes as prose. */
 fun FlowContent.readingView(node: NodeView) {
     h2 { +(node.title ?: "(untitled)") }
+    node.summary?.let { s ->
+        div(classes = "summary") {
+            span("summary-label") { +"Summary" }
+            p { +s }
+        }
+    }
     node.notes?.split("\n\n")?.forEach { para -> p { +para } }
     a(href = "/node/${node.id}") { +"Back" }
+}
+
+/** Human-readable OCR lifecycle label for the detail meta line. */
+private fun ocrLabel(status: String): String = when (status) {
+    "PENDING", "RUNNING" -> "OCR pending…"
+    "DONE" -> "OCR done"
+    "FAILED" -> "OCR failed"
+    else -> "OCR $status"
 }
 
 /** A Datastar-bound text input + submit button that posts the signal as a query param. */

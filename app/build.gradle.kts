@@ -151,6 +151,8 @@ dependencies {
 
   // On-device document scanning for capture (no camera permission required)
   implementation(libs.play.services.mlkit.document.scanner)
+  // Drive-file OAuth (Identity Authorization API) for scanned-doc OCR (drive.file scope).
+  implementation(libs.play.services.auth)
 
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)

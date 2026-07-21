@@ -11,9 +11,12 @@ import dev.njr.zync.core.operator.OutputSchema
 import dev.njr.zync.core.operator.ReadScopeHandle
 import dev.njr.zync.core.operator.TriggerKind
 import dev.njr.zync.core.operator.WriteScope
+import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.sync.PushRequest
 import dev.njr.zync.data.JvmZyncDatabase
 import dev.njr.zync.server.Ops
+import dev.njr.zync.server.blob.BlobService
+import dev.njr.zync.server.blob.InMemoryBlobStore
 import dev.njr.zync.server.hlc
 import dev.njr.zync.server.str
 import dev.njr.zync.server.sync.SettableIngestHook
@@ -33,6 +36,7 @@ class OperatorHarness(
     val db = JvmZyncDatabase.inMemory()
     private val hook = SettableIngestHook()
     val service = SyncService(db, hook = hook)
+    val blobs = BlobService(InMemoryBlobStore())
     val runtime = OperatorRuntime(
         db = db,
         store = service.stateStore,
@@ -40,6 +44,7 @@ class OperatorHarness(
         scopes = scopes,
         llm = llm,
         emit = service::ingestLocal,
+        blobText = { key -> blobs.fetch(key)?.toString(Charsets.UTF_8) },
         clock = Clock { 1_000_000L },
         executor = Executor { it.run() },
     )
@@ -66,6 +71,20 @@ class OperatorHarness(
         ops.setField(entity, "kind", str("task"), hlc(at)),
         ops.setField(entity, "title", str(title), hlc(at, 1)),
         ops.setField(entity, "status", str("ACTIVE"), hlc(at, 2)),
+    )
+
+    /** Store [text] as an OCR text blob and return its content-addressed key. */
+    fun putOcrText(text: String): String = blobs.store(text.toByteArray())
+
+    /**
+     * The ops the phone OcrWorker emits once OCR text lands: a titled node whose
+     * `ocrBlobHash` points at the (already-uploaded) OCR text blob. Triggers the
+     * summarize scope.
+     */
+    fun scannedDoc(entity: Ulid, at: Long, ocrBlobHash: String, title: String = "Scanned document"): List<Op> = listOf(
+        ops.setField(entity, Fields.TITLE, str(title), hlc(at)),
+        ops.setField(entity, Fields.OCR_STATUS, str("DONE"), hlc(at, 1)),
+        ops.setField(entity, Fields.OCR_BLOB_HASH, str(ocrBlobHash), hlc(at, 2)),
     )
 }
 

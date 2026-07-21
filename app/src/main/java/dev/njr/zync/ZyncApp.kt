@@ -46,6 +46,12 @@ class ZyncApp : Application() {
         OpWriter(opDatabase, opStore, localHlc, deviceId, opClock, Random.Default)
     }
     val replicaCapture: ReplicaCapture by lazy { ReplicaCapture(opWriter, localBlobs, inbox = { null }) }
+
+    /** Scanned-doc OCR: Drive transport + the WorkManager-free pipeline the OcrWorker drives. */
+    val driveOcr: dev.njr.zync.replica.DriveOcr by lazy { dev.njr.zync.replica.GoogleDriveOcr(this) }
+    val ocrProcessor: dev.njr.zync.replica.OcrProcessor by lazy {
+        dev.njr.zync.replica.OcrProcessor(localBlobs, opWriter, driveOcr, onChanged = { contentChanges.notifyChanged() })
+    }
     val contentChanges: ChangeNotifier = ChangeNotifier()
     val contentRead: ContentReadModel by lazy { ContentReadModel(opStore) }
     val contentCommands: ContentCommands by lazy {
@@ -65,6 +71,11 @@ class ZyncApp : Application() {
         extension: String,
     ): dev.njr.zync.core.id.Ulid {
         val node = replicaCapture.captureAttachment(title, bytes, type.name.lowercase(java.util.Locale.US), "capture.$extension")
+        // Scans/photos get async OCR: mark PENDING immediately, enqueue the OCR leg.
+        if (type == dev.njr.zync.data.AttachmentType.PDF) {
+            opWriter.setField(node, dev.njr.zync.core.content.Fields.OCR_STATUS, kotlinx.serialization.json.JsonPrimitive(dev.njr.zync.core.content.OcrStatus.PENDING))
+            dev.njr.zync.sync.OcrScheduler.enqueue(this, node, dev.njr.zync.replica.blobKeyOf(bytes), dev.njr.zync.sync.OcrScheduler.mimeForExtension(extension))
+        }
         contentChanges.notifyChanged()
         dev.njr.zync.sync.SyncScheduler.requestSync(this)
         return node
@@ -176,6 +187,9 @@ class ZyncApp : Application() {
         // Activate background sync: a connectivity-gated periodic sweep (prompt pushes come
         // from captures + local :web mutations via SyncScheduler.requestSync). No-op unpaired.
         dev.njr.zync.sync.SyncScheduler.schedulePeriodic(this)
+        // Backfill OCR for scans captured before OCR existed (or that never finished).
+        Thread { runCatching { dev.njr.zync.sync.OcrScheduler.enqueueMissing(this) } }
+            .apply { name = "zync-ocr-backfill"; start() }
         // Launcher niceties: warm the app-search cache so the overlay opens instantly,
         // and seed the standard GTD contexts on a fresh install.
         dev.njr.zync.launcher.AppSearch.warm(this)

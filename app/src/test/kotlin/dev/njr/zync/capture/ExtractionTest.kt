@@ -20,7 +20,7 @@ class ExtractionTest {
         ContextView(id(3), "@errands"), ContextView(id(4), "@calls"),
     )
     private fun project(seed: Int, title: String) =
-        NodeView(id(seed), "project", title, null, "ACTIVE", null, null, null, null, emptySet(), true)
+        NodeView(id(seed), "project", title, null, "ACTIVE", null, null, null, null, null, null, null, emptySet(), true)
 
     private val wednesday = LocalDate.of(2026, 7, 15) // a Wednesday
 
