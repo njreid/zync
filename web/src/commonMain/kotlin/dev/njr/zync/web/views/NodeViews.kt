@@ -14,6 +14,7 @@ import kotlinx.html.div
 import kotlinx.html.summary
 import kotlinx.html.h2
 import kotlinx.html.h3
+import kotlinx.html.id
 import kotlinx.html.input
 import kotlinx.html.li
 import kotlinx.html.option
@@ -307,6 +308,35 @@ private fun FlowContent.triagePanel(read: ContentReadModel, node: NodeView) {
     }
 }
 
+/**
+ * The Reference surface (GTD triage §7): a keyword search box over ALL content plus
+ * the filed tree. Search debounces a GET that patches #reference-results (Datastar v1
+ * COLON syntax; no inline script — CSP-safe).
+ */
+fun FlowContent.referenceSection(read: ContentReadModel, query: String? = null) {
+    h2 { +"Reference" }
+    input(type = InputType.search) {
+        id = "search"
+        attributes["data-bind:q"] = ""
+        attributes["placeholder"] = "Search everything…"
+        attributes["data-on:input__debounce.300ms"] = "@get('/reference/search?q=' + encodeURIComponent(\$q))"
+    }
+    div {
+        id = "reference-results"
+        referenceResults(read, query)
+    }
+}
+
+fun FlowContent.referenceResults(read: ContentReadModel, query: String?) {
+    if (!query.isNullOrBlank()) {
+        val hits = read.search(query)
+        if (hits.isEmpty()) p("muted") { +"No matches." } else ul { hits.forEach { li { nodeRow(it) } } }
+    } else {
+        val filed = read.reference()
+        if (filed.isEmpty()) p("muted") { +"Nothing filed yet." } else ul { filed.forEach { li { nodeRow(it) } } }
+    }
+}
+
 /** The tree under [parent] (null = root), rendered recursively. */
 fun FlowContent.treeSection(read: ContentReadModel, parent: Ulid?) {
     val children = read.children(parent)
@@ -339,6 +369,14 @@ fun FlowContent.nodeDetail(read: ContentReadModel, node: NodeView) {
     }
     node.notes?.let { p { +it } }
     a(href = "/node/${node.id}/read") { +"Read" }
+    // File into Reference (GTD triage §7): archive + move under the reference root.
+    if (node.status != "FILED") {
+        button(classes = "action") {
+            attributes["data-on:click"] = "@post('/node/${node.id}/file')"
+            attributes["title"] = "File to Reference"
+            +"File"
+        }
+    }
 
     organizeSection(read, node)
 

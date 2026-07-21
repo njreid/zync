@@ -23,6 +23,7 @@ enum class Tab(val href: String, val label: String, val icon: String) {
     INBOX("/", "Inbox", "📥"),      // 📥
     NEXT("/next", "Next", "→"),           // →
     PROJECTS("/projects", "Projects", "🗂"), // 🗂
+    REFERENCE("/reference", "Reference", "📁"), // 📁
     NONE("", "", ""),
 }
 
@@ -70,7 +71,7 @@ fun HTML.page(
 /** Fixed bottom navigation exposing the three GTD categories, active tab highlighted. */
 private fun FlowContent.tabBar(active: Tab) {
     nav(classes = "tabbar") {
-        listOf(Tab.INBOX, Tab.NEXT, Tab.PROJECTS).forEach { tab ->
+        listOf(Tab.INBOX, Tab.NEXT, Tab.PROJECTS, Tab.REFERENCE).forEach { tab ->
             a(href = tab.href, classes = if (tab == active) "tab active" else "tab") {
                 if (tab == active) attributes["aria-current"] = "page"
                 // g-chord key read from the DOM by the gesture helper.
@@ -78,6 +79,7 @@ private fun FlowContent.tabBar(active: Tab) {
                     Tab.INBOX -> "i"
                     Tab.NEXT -> "n"
                     Tab.PROJECTS -> "p"
+                    Tab.REFERENCE -> "r"
                     Tab.NONE -> ""
                 }
                 span("tab-icon") { +tab.icon }

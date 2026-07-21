@@ -39,6 +39,8 @@ fun main() {
     // A project with an open next-action, so the Projects tab is drivable.
     val project = content.commands.createProject("Launch website")
     content.commands.addSubtask(project, "Draft the launch copy")
+    // A filed item so the Reference tab + search have content.
+    content.commands.file(content.commands.createTask("Old tax return 2024"))
 
     embeddedServer(Netty, port = port) {
         // Optionally apply a CSP header to test the phone loopback's policy against Datastar.

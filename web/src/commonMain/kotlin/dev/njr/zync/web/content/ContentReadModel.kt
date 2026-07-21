@@ -5,6 +5,7 @@ import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.content.FractionalIndex
 import dev.njr.zync.core.content.Size
 import dev.njr.zync.core.content.Status
+import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.state.EntitySnapshot
@@ -107,7 +108,7 @@ class ContentReadModel(private val store: StateStore) {
     fun inbox(inbox: Ulid?, now: Long = Long.MAX_VALUE): List<NodeView> =
         children(inbox)
             .filter {
-                it.status != "DONE" && it.status != "DROPPED" && (it.deferUntil == null || it.deferUntil <= now)
+                it.status != "DONE" && it.status != "DROPPED" && it.status != Status.FILED && (it.deferUntil == null || it.deferUntil <= now)
             }
             .sortedWith(compareBy({ it.effectiveRank() }, { it.id.toString() }))
 
@@ -132,6 +133,18 @@ class ContentReadModel(private val store: StateStore) {
     }
 
     private fun NodeView.effectiveRank(): String = rank ?: id.toString().lowercase()
+
+    /** The Reference tree (GTD triage §7): live children of the well-known reference root. */
+    fun reference(root: Ulid = WellKnownNodes.REFERENCE_ROOT): List<NodeView> = children(root)
+
+    /**
+     * Keyword search across all content (GTD triage §7): matches on title/notes/summary
+     * via the store's search index. Trashed hits are excluded; FILED items stay findable.
+     */
+    fun search(query: String, limit: Int = 50): List<NodeView> {
+        if (query.isBlank()) return emptyList()
+        return store.search(query, limit).mapNotNull { node(it) }.filter { it.status != "DROPPED" }
+    }
 
     /**
      * Next Action list for context [context] (null = "any"), spec §5. Returns the top
@@ -210,7 +223,7 @@ class ContentReadModel(private val store: StateStore) {
         snapshots()
             .filter { it.kind() == "task" && !it.proposed() }
             .map { it.toView() }
-            .filter { it.status != "DONE" && it.status != "DROPPED" && (it.deferUntil == null || it.deferUntil <= now) }
+            .filter { it.status != "DONE" && it.status != "DROPPED" && it.status != Status.FILED && (it.deferUntil == null || it.deferUntil <= now) }
             .sortedBy { it.title ?: "" }
 
     /** Live active tasks waiting on a person (the Waiting tile). */
@@ -222,14 +235,14 @@ class ContentReadModel(private val store: StateStore) {
         snapshots()
             .filter { it.kind() == "task" && !it.proposed() }
             .map { it.toView() }
-            .filter { it.status != "DONE" && it.status != "DROPPED" && it.dueDate != null && it.dueDate <= byMillis }
+            .filter { it.status != "DONE" && it.status != "DROPPED" && it.status != Status.FILED && it.dueDate != null && it.dueDate <= byMillis }
             .sortedBy { it.dueDate }
 
     /** Live projects — the move targets for organizing tasks into the tree. */
     fun projects(): List<NodeView> =
         snapshots().filter { it.kind() == "project" && !it.proposed() }
             .map { it.toView() }
-            .filter { it.status != "DROPPED" }
+            .filter { it.status != "DROPPED" && it.status != Status.FILED }
             .sortedBy { it.title ?: "" }
 
     /**
@@ -240,7 +253,7 @@ class ContentReadModel(private val store: StateStore) {
         snapshots()
             .filter { it.kind() == "task" && !it.proposed() && it.tags.any { t -> t.toString() == context.toString() } }
             .map { it.toView() }
-            .filter { it.status != "DONE" && it.status != "DROPPED" && (it.deferUntil == null || it.deferUntil <= now) }
+            .filter { it.status != "DONE" && it.status != "DROPPED" && it.status != Status.FILED && (it.deferUntil == null || it.deferUntil <= now) }
             .sortedBy { it.title ?: "" }
 
     /** Attachments linked to [node] (payload.nodeId == node), for triage preview (spec §4). */

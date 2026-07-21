@@ -16,6 +16,8 @@ import dev.njr.zync.web.views.nodeDetail
 import dev.njr.zync.web.views.page
 import dev.njr.zync.web.views.projectsSection
 import dev.njr.zync.web.views.readingView
+import dev.njr.zync.web.views.referenceResults
+import dev.njr.zync.web.views.referenceSection
 import dev.njr.zync.web.views.treeSection
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -110,6 +112,22 @@ fun Route.webRoutes(
             }
         }
     }
+    get("/reference") {
+        call.respondHtml {
+            page("Reference", settingsHref, Tab.REFERENCE) {
+                div {
+                    id = "reference"
+                    attributes["data-on:load"] = "@get('/updates/reference')"
+                    referenceSection(read, null)
+                }
+            }
+        }
+    }
+    get("/reference/search") {
+        // A read (works even without the commands block); patches #reference-results.
+        val q = call.request.queryParameters["q"]
+        call.respondDatastar(patchElementsEvent(WebPlatform.renderFragment("reference-results") { referenceResults(read, q) }))
+    }
     get("/tree") {
         call.respondHtml { page("Tree", settingsHref, Tab.PROJECTS) { h2 { +"Tree" }; treeSection(read, null) } }
     }
@@ -170,6 +188,13 @@ fun Route.webRoutes(
             )
             pushProjects()
             changes.changes.collect { pushProjects() }
+        }
+        sse("/updates/reference") {
+            suspend fun pushReference() = patch(
+                patchElementsEvent(WebPlatform.renderFragment("reference") { referenceSection(read, null) }),
+            )
+            pushReference()
+            changes.changes.collect { pushReference() }
         }
     }
 
@@ -303,6 +328,10 @@ fun Route.webRoutes(
                     call.respondText("invalid date: expected YYYY-MM-DD", status = HttpStatusCode.BadRequest)
                 else -> call.appliedDetail(id) { setDueDate(id, millis) }
             }
+        }
+        post("/node/{id}/file") {
+            call.nodeId()?.let { id -> call.appliedDetail(id) { file(id) } }
+                ?: call.respondText("bad request", status = HttpStatusCode.BadRequest)
         }
         post("/node/{id}/person") {
             val name = call.request.queryParameters["name"]
