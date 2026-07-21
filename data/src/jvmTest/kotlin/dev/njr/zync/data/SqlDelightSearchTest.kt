@@ -60,6 +60,15 @@ class SqlDelightSearchTest {
     }
 
     @Test
+    fun droppedItemsAreNotSearchable() {
+        val s = store()
+        s.set(id, "kind", "task"); s.set(id, "title", "trashable widget")
+        assertEquals(listOf(id), s.search("widget"))
+        s.set(id, "status", "DROPPED")
+        assertTrue(s.search("widget").isEmpty(), "trashed items must drop out of search")
+    }
+
+    @Test
     fun nonSearchableKindsAreNotIndexed() {
         val s = store()
         s.set(id, "kind", "context"); s.set(id, "name", "errands")

@@ -50,7 +50,7 @@ class ZyncApp : Application() {
     /** Scanned-doc OCR: Drive transport + the WorkManager-free pipeline the OcrWorker drives. */
     val driveOcr: dev.njr.zync.replica.DriveOcr by lazy { dev.njr.zync.replica.GoogleDriveOcr(this) }
     val ocrProcessor: dev.njr.zync.replica.OcrProcessor by lazy {
-        dev.njr.zync.replica.OcrProcessor(localBlobs, opWriter, driveOcr, onChanged = { contentChanges.notifyChanged() })
+        dev.njr.zync.replica.OcrProcessor(localBlobs, opWriter, driveOcr, opStore, onChanged = { contentChanges.notifyChanged() })
     }
     val contentChanges: ChangeNotifier = ChangeNotifier()
     val contentRead: ContentReadModel by lazy { ContentReadModel(opStore) }

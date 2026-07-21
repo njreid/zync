@@ -81,7 +81,7 @@ class OcrProcessorTest {
         val f = fixture()
         val (node, scanHash) = captureScan(f)
         val drive = FakeDriveOcr(text = "Invoice due March.")
-        val processor = OcrProcessor(f.blobs, f.writer, drive)
+        val processor = OcrProcessor(f.blobs, f.writer, drive, f.store)
 
         val outcome = processor.process(node, scanHash, "application/pdf")
         assertEquals(OcrProcessor.Outcome.DONE, outcome)
@@ -104,7 +104,7 @@ class OcrProcessorTest {
         val f = fixture()
         val (node, scanHash) = captureScan(f)
         val drive = FakeDriveOcr(error = DriveOcrException(permanent = false, "network"))
-        val processor = OcrProcessor(f.blobs, f.writer, drive)
+        val processor = OcrProcessor(f.blobs, f.writer, drive, f.store)
 
         assertEquals(OcrProcessor.Outcome.RETRY, processor.process(node, scanHash, "application/pdf"))
         val snap = f.store.project().getValue(node)
@@ -117,7 +117,7 @@ class OcrProcessorTest {
         val f = fixture()
         val (node, scanHash) = captureScan(f)
         val drive = FakeDriveOcr(error = DriveOcrException(permanent = true, "consent"))
-        val processor = OcrProcessor(f.blobs, f.writer, drive)
+        val processor = OcrProcessor(f.blobs, f.writer, drive, f.store)
 
         assertEquals(OcrProcessor.Outcome.FAILED, processor.process(node, scanHash, "application/pdf"))
         assertEquals(JsonPrimitive(OcrStatus.FAILED), f.store.project().getValue(node).fields[Fields.OCR_STATUS])
@@ -136,5 +136,38 @@ class OcrProcessorTest {
         assertFalse(refs.any { it.nodeId == done })
         // and the pending ref carries the scan blob to feed Drive
         assertEquals(pendingHash, refs.first { it.nodeId == pending }.scanBlobHash)
+    }
+
+    @Test
+    fun stuckRunningScanIsReEnqueuedByBackfill() {
+        val f = fixture()
+        val (running, _) = captureScan(f)
+        f.writer.setField(running, Fields.OCR_STATUS, JsonPrimitive(OcrStatus.RUNNING)) // stuck after a failed retry
+        val (failed, _) = captureScan(f)
+        f.writer.setField(failed, Fields.OCR_STATUS, JsonPrimitive(OcrStatus.FAILED))
+
+        val refs = OcrProcessor.pendingScans(f.store)
+        assertTrue("a stuck RUNNING scan must be re-enqueued", refs.any { it.nodeId == running })
+        assertFalse("a permanently FAILED scan is not re-enqueued", refs.any { it.nodeId == failed })
+    }
+
+    @Test
+    fun reRunIsIdempotentWhenOcrAlreadyLanded() = runBlocking {
+        val f = fixture()
+        val (node, scanHash) = captureScan(f)
+        val drive = FakeDriveOcr(text = "Once.")
+        val processor = OcrProcessor(f.blobs, f.writer, drive, f.store)
+        assertEquals(OcrProcessor.Outcome.DONE, processor.process(node, scanHash, "application/pdf"))
+        val attachmentsAfterFirst = f.store.project().values.count {
+            (it.fields["@attachment"]?.jsonObject?.get("type") as? JsonPrimitive)?.content == "ocr_text"
+        }
+
+        // A WorkManager re-run must NOT re-OCR or mint a second ocr_text attachment.
+        assertEquals(OcrProcessor.Outcome.DONE, processor.process(node, scanHash, "application/pdf"))
+        assertEquals("Drive should not be called again", 1, drive.calls.size)
+        val attachmentsAfterSecond = f.store.project().values.count {
+            (it.fields["@attachment"]?.jsonObject?.get("type") as? JsonPrimitive)?.content == "ocr_text"
+        }
+        assertEquals(attachmentsAfterFirst, attachmentsAfterSecond)
     }
 }

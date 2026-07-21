@@ -72,13 +72,22 @@ document.addEventListener('pointerup', (e) => {
   if (committed) fire(row, dx > 0 ? 'complete' : 'trash');
   if (moved) {
     // Any horizontal swipe (committed or not) was a gesture, not a tap — swallow the
-    // trailing click so the row's <a> never navigates.
-    document.addEventListener('click', function swallow(ev) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      document.removeEventListener('click', swallow, true);
-    }, true);
+    // trailing click so the row's <a> never navigates. On touch a swipe often fires NO
+    // trailing click, so auto-disarm shortly after rather than eating the user's next tap.
+    const swallow = (ev) => { ev.preventDefault(); ev.stopPropagation(); disarm(); };
+    const disarm = () => { document.removeEventListener('click', swallow, true); clearTimeout(t); };
+    document.addEventListener('click', swallow, true);
+    const t = setTimeout(disarm, 400);
   }
+});
+
+// A cancelled pointer (OS gesture, scroll takeover, contextmenu) leaves no pointerup —
+// reset so the row isn't stuck mid-swipe.
+document.addEventListener('pointercancel', (e) => {
+  if (!active || e.pointerId !== active.pointerId) return;
+  active.row.classList.remove('swiping');
+  active.row.style.removeProperty('--swipe-dx');
+  active = null;
 });
 
 // --- Keyboard ---

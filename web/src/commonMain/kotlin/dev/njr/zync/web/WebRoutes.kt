@@ -274,8 +274,8 @@ fun Route.webRoutes(
             if (id == null || dir == null) {
                 call.respondText("bad request", status = HttpStatusCode.BadRequest)
             } else {
-                val newRank = read.reorderRank(inbox(), id, dir, now())
-                call.applied { if (newRank != null) setRank(id, newRank) }
+                val writes = read.reorder(inbox(), id, dir, now())
+                call.applied { writes.forEach { (node, rank) -> setRank(node, rank) } }
             }
         }
 
@@ -330,8 +330,13 @@ fun Route.webRoutes(
             }
         }
         post("/node/{id}/file") {
-            call.nodeId()?.let { id -> call.appliedDetail(id) { file(id) } }
-                ?: call.respondText("bad request", status = HttpStatusCode.BadRequest)
+            val id = call.nodeId()
+            when {
+                id == null -> call.respondText("bad request", status = HttpStatusCode.BadRequest)
+                read.moveWouldExceedDepth(id, dev.njr.zync.core.content.WellKnownNodes.REFERENCE_ROOT) ->
+                    call.respondText("filing would exceed 4 levels", status = HttpStatusCode.Conflict)
+                else -> call.appliedDetail(id) { file(id) }
+            }
         }
         // File-location suggestion chips (spec §6): accept (Move) / dismiss. Inbox-scoped.
         post("/node/{id}/accept-file") {
@@ -352,8 +357,12 @@ fun Route.webRoutes(
         post("/node/{id}/file-done") {
             val target = call.request.queryParameters["target"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
             val id = call.nodeId()
-            if (id != null && target != null) call.appliedDetail(id) { acceptProposedFile(id, target) }
-            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+            when {
+                id == null || target == null -> call.respondText("bad request", status = HttpStatusCode.BadRequest)
+                read.moveWouldExceedDepth(id, target) ->
+                    call.respondText("filing would exceed 4 levels", status = HttpStatusCode.Conflict)
+                else -> call.appliedDetail(id) { acceptProposedFile(id, target) }
+            }
         }
         post("/node/{id}/file-done-reject") {
             call.nodeId()?.let { id -> call.appliedDetail(id) { rejectProposedFile(id) } }

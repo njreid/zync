@@ -188,8 +188,9 @@ span.project { color: var(--pico-muted-color); font-size: .85em; }
 .swipe-row.swiping { transition: none; }
 .swipe-row.swiping a { -webkit-user-drag: none; user-select: none; }
 .swipe-row.cursor { outline: 2px solid var(--pico-primary); outline-offset: -2px; }
-/* Hidden gesture triggers, fired by zync-gestures.js. Visually hidden but kept in
-   layout (not display:none) so Datastar binds them and .click() dispatches. */
+/* Gesture triggers fired by zync-gestures.js. Visually hidden but kept in layout (not
+   display:none) so Datastar binds them and .click() dispatches — and FOCUSABLE, so
+   keyboard/screen-reader users can reach complete/delete. Revealed on focus. */
 .swipe-fire {
   position: absolute;
   width: 1px;
@@ -200,7 +201,15 @@ span.project { color: var(--pico-muted-color); font-size: .85em; }
   clip: rect(0 0 0 0);
   border: 0;
   opacity: 0;
-  pointer-events: none;
+}
+.swipe-fire:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  opacity: 1;
 }
 
 /* Inbox triage panel (GTD triage §4). */

@@ -113,22 +113,32 @@ class ContentReadModel(private val store: StateStore) {
             .sortedWith(compareBy({ it.effectiveRank() }, { it.id.toString() }))
 
     /**
-     * The new `rank` to move [id] one slot toward [direction] within its inbox list,
-     * or null if it's a no-op (already at the edge, or not in the list). The caller
-     * writes it via [ContentCommands.setRank]. Reorder targets the displayed inbox
-     * order, so it works whether neighbours are ranked or still FIFO.
+     * The `rank` writes to move [id] one slot toward [direction] within its inbox list;
+     * empty = no-op (already at the edge, or not present). The caller applies each via
+     * [ContentCommands.setRank]. Normally a single `{id -> rank}`; if the two neighbours
+     * bracketing the new slot have **collided ranks** (a cross-device merge tie — see
+     * [FractionalIndex]), it rebalances the whole sibling list to fresh evenly-spaced
+     * ranks instead of throwing on `between(equal, equal)`.
      */
-    fun reorderRank(inbox: Ulid?, id: Ulid, direction: Reorder, now: Long = Long.MAX_VALUE): String? {
-        val items = inbox(inbox, now)
+    fun reorder(inbox: Ulid?, id: Ulid, direction: Reorder, now: Long = Long.MAX_VALUE): Map<Ulid, String> {
+        val items = inbox(inbox, now).toMutableList()
         val i = items.indexOfFirst { it.id.toString() == id.toString() }
-        if (i < 0) return null
-        return when (direction) {
-            Reorder.TOP -> if (i == 0) null
-                else FractionalIndex.between(null, items[0].effectiveRank())
-            Reorder.UP -> if (i == 0) null
-                else FractionalIndex.between(items.getOrNull(i - 2)?.effectiveRank(), items[i - 1].effectiveRank())
-            Reorder.DOWN -> if (i == items.lastIndex) null
-                else FractionalIndex.between(items[i + 1].effectiveRank(), items.getOrNull(i + 2)?.effectiveRank())
+        if (i < 0) return emptyMap()
+        val newIndex = when (direction) {
+            Reorder.TOP -> 0
+            Reorder.UP -> i - 1
+            Reorder.DOWN -> i + 1
+        }
+        if (newIndex == i || newIndex < 0 || newIndex > items.lastIndex) return emptyMap()
+        val moved = items.removeAt(i)
+        items.add(newIndex, moved)
+        val lower = items.getOrNull(newIndex - 1)?.effectiveRank()
+        val upper = items.getOrNull(newIndex + 1)?.effectiveRank()
+        return if (lower == null || upper == null || lower < upper) {
+            mapOf(moved.id to FractionalIndex.between(lower, upper))
+        } else {
+            // Neighbour ranks collided; rewrite the whole sibling list to a clean order.
+            items.zip(FractionalIndex.rebalance(items.size)).associate { (n, r) -> n.id to r }
         }
     }
 
@@ -261,7 +271,7 @@ class ContentReadModel(private val store: StateStore) {
         store.project().values
             .filter { it.alive }
             .mapNotNull { snap ->
-                val payload = snap.fields["@attachment"] as? JsonObject ?: return@mapNotNull null
+                val payload = snap.fields[dev.njr.zync.core.merge.ATTACHMENT_FIELD] as? JsonObject ?: return@mapNotNull null
                 if ((payload["nodeId"] as? JsonPrimitive)?.content != node.toString()) return@mapNotNull null
                 AttachmentView(
                     id = snap.entityId,
@@ -272,29 +282,40 @@ class ContentReadModel(private val store: StateStore) {
             }
             .sortedBy { it.id.toString() }
 
-    /** 1-based depth: a root-parented node = 1, its child = 2, … Cycle-guarded, bounded. */
+    /** 1-based depth via the O(1) parent index (no projection fold): root-parented = 1. */
     fun depthOf(id: Ulid, max: Int = 8): Int {
         var depth = 1 // the node itself sits at level 1 when root-parented
-        var current = store.project()[id]?.parent
+        var current = store.getParent(id)
         val seen = HashSet<String>()
         while (current != null && depth <= max + 2 && seen.add(current.toString())) {
             depth++
-            current = store.project()[current]?.parent
+            current = store.getParent(current)
         }
         return depth
     }
 
     /** Tallest descendant chain below [id]; a leaf = 0. Bounded to guard corrupt cycles. */
-    fun subtreeHeight(id: Ulid, budget: Int = 12): Int {
+    fun subtreeHeight(id: Ulid, budget: Int = 12): Int =
+        heightIn(childrenIndex(store.project()), id, budget)
+
+    private fun childrenIndex(snaps: Map<Ulid, EntitySnapshot>): Map<String, List<Ulid>> =
+        snaps.values
+            .filter {
+                it.alive && it.kind() != "context" && it.kind() != "comment" &&
+                    it.kind() !in AgentFlow.INTERNAL_KINDS && !it.proposed()
+            }
+            .groupBy({ it.parent?.toString() ?: "" }, { it.entityId })
+
+    private fun heightIn(index: Map<String, List<Ulid>>, id: Ulid, budget: Int): Int {
         if (budget <= 0) return 0
-        val kids = children(id)
+        val kids = index[id.toString()].orEmpty()
         if (kids.isEmpty()) return 0
-        return 1 + kids.maxOf { subtreeHeight(it.id, budget - 1) }
+        return 1 + kids.maxOf { heightIn(index, it, budget - 1) }
     }
 
     /** True iff moving [node] under [newParent] would push any node past [max] levels (spec §8, Q8). */
     fun moveWouldExceedDepth(node: Ulid, newParent: Ulid, max: Int = 4): Boolean =
-        depthOf(newParent) + 1 + subtreeHeight(node) > max
+        depthOf(newParent) + 1 + heightIn(childrenIndex(store.project()), node, 12) > max
 
     private fun EntitySnapshot.kind(): String? = fields["kind"].asString()
 

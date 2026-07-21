@@ -59,9 +59,10 @@ fun HTML.page(
             settingsHref?.let { a(classes = "settings-link", href = it) { +"Pairing" } }
         }
         main(classes = "container") {
-            // The inbox triage-panel open state (spec §4). Declared on <main> — which never
-            // morphs — so it persists across #inbox SSE patches (the panel stays open).
-            attributes["data-signals-exp"] = "''"
+            // The inbox triage-panel open state is the Datastar `$exp` signal (holds the
+            // expanded node id). It is created lazily on the first expand toggle and then
+            // lives in Datastar's signal store — NOT the DOM — so it survives every #inbox
+            // SSE morph (the open panel stays open). No `data-signals` declaration needed.
             content()
         }
         tabBar(activeTab)

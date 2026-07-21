@@ -204,17 +204,18 @@ fun FlowContent.nodeRow(node: NodeView, reorderable: Boolean = false) {
             +"🗑"
         }
     } else {
-        // Hidden Datastar-bound triggers the gesture helper .click()s on swipe/keypress
-        // (swipe-right/space = complete, swipe-left/del = trash). No new endpoints.
+        // Visually-hidden but FOCUSABLE + labeled Datastar triggers: the gesture helper
+        // .click()s them on swipe/keypress (swipe-right/space = complete, swipe-left/del =
+        // trash), and keyboard/screen-reader users can tab to and activate them directly.
         button(classes = "swipe-fire complete") {
             attributes["data-on:click"] = "@post('/node/${node.id}/complete')"
-            attributes["tabindex"] = "-1"
-            attributes["aria-hidden"] = "true"
+            attributes["aria-label"] = "Complete"
+            +"Complete"
         }
         button(classes = "swipe-fire trash") {
             attributes["data-on:click"] = "@post('/node/${node.id}/trash')"
-            attributes["tabindex"] = "-1"
-            attributes["aria-hidden"] = "true"
+            attributes["aria-label"] = "Delete"
+            +"Delete"
         }
     }
 }

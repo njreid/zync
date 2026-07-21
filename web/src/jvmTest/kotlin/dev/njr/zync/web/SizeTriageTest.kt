@@ -75,7 +75,7 @@ class SizeTriageTest {
         commands.createTask("triage me", inbox)
         val home = client.get("/").bodyAsText()
         assertTrue(home.contains("class=\"triage\""), "triage panel missing: $home")
-        assertTrue(home.contains("data-signals-exp"))
+        assertTrue(home.contains("data-show=") && home.contains("\$exp ==="), "expand wiring present")
         assertTrue(home.contains("size-chips"))
         assertTrue(home.contains("No file suggestions yet")) // wired stub slot
     }

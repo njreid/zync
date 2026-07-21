@@ -49,13 +49,13 @@ class InMemoryStateStore : StateStore {
         val tokens = FtsQuery.tokens(query)
         if (tokens.isEmpty()) return emptyList()
         return project().values.asSequence()
-            .filter { it.alive && text(it.fields["kind"]) in SEARCHABLE_KINDS }
+            .filter { it.alive && text(it.fields["kind"]) in SEARCHABLE_KINDS && text(it.fields["status"]) != "DROPPED" }
             .filter { snap ->
-                val words = listOf("title", "notes", "summary")
+                // Substring AND-match over the joined body — mirrors the durable store's LIKE.
+                val body = listOf("title", "notes", "summary")
                     .mapNotNull { text(snap.fields[it]) }
                     .joinToString(" ").lowercase()
-                    .split(WORD).filter { it.isNotBlank() }
-                tokens.all { tok -> words.any { it.startsWith(tok) } }
+                tokens.all { body.contains(it) }
             }
             .map { it.entityId }
             .take(limit)
@@ -67,6 +67,5 @@ class InMemoryStateStore : StateStore {
 
     private companion object {
         val SEARCHABLE_KINDS = setOf("task", "project", "attachment")
-        val WORD = Regex("\\s+")
     }
 }

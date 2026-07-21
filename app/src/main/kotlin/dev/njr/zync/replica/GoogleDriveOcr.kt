@@ -76,7 +76,9 @@ class GoogleDriveOcr(
         result.accessToken ?: throw DriveOcrException(permanent = false, "no Drive access token")
     }
 
-    private suspend fun createDoc(http: HttpClient, token: String, bytes: ByteArray, sourceMime: String): String {
+    private suspend fun createDoc(http: HttpClient, token: String, bytes: ByteArray, sourceMimeRaw: String): String {
+        // Strip CR/LF so the mime can't inject extra multipart headers into the body.
+        val sourceMime = sourceMimeRaw.filterNot { it == '\r' || it == '\n' }
         val boundary = "zync-ocr-boundary"
         val metadata = """{"name":"zync-ocr","mimeType":"application/vnd.google-apps.document"}"""
         val body = ByteArrayOutputStream().apply {

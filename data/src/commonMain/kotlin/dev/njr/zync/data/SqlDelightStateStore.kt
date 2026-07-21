@@ -32,10 +32,19 @@ class SqlDelightStateStore(
 ) : StateStore {
 
     init {
-        // One-time backfill for DBs migrated to v6 with an empty FTS index (spec §7 §2d):
+        // One-time backfill for DBs migrated to v6 with an empty search index (spec §7 §2d):
         // if the index is empty but content exists, rebuild it from the register table.
+        // (One-time post-migration cost; runs on the constructing thread.)
         if (db.searchIndexQueries.countDocs().executeAsOne() == 0L) {
-            db.searchIndexQueries.allDocEntityIds().executeAsList().forEach { reindex(it) }
+            val ids = db.searchIndexQueries.allDocEntityIds().executeAsList()
+            if (ids.isNotEmpty()) {
+                ids.forEach { reindex(it) }
+                // If nothing was indexable (e.g. contexts/comments only), write a sentinel
+                // so countDocs stays > 0 and the scan doesn't re-run on every construction.
+                if (db.searchIndexQueries.countDocs().executeAsOne() == 0L) {
+                    db.searchIndexQueries.insertDoc(SENTINEL_ID, "")
+                }
+            }
         }
     }
 
@@ -178,6 +187,7 @@ class SqlDelightStateStore(
         val fields = db.searchIndexQueries.docFields(id).executeAsList()
             .associate { it.field_name to jsonString(it.field_value) }
         if (fields["kind"] !in SEARCHABLE_KINDS) return
+        if (fields["status"] == "DROPPED") return // trashed items drop out of search
         val body = listOf(fields["title"], fields["notes"], fields["summary"])
             .filter { !it.isNullOrBlank() }
             .joinToString(" ")
@@ -194,5 +204,8 @@ class SqlDelightStateStore(
     private companion object {
         val SEARCHABLE_KINDS = setOf("task", "project", "attachment")
         val REINDEX_TRIGGERS = setOf("kind", "title", "notes", "summary", "status")
+
+        /** Reserved non-ULID key so a content-only-but-unindexable DB doesn't re-scan each open. */
+        const val SENTINEL_ID = "search-index-sentinel"
     }
 }

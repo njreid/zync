@@ -3,7 +3,9 @@ package dev.njr.zync.replica
 import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.content.OcrStatus
 import dev.njr.zync.core.id.Ulid
+import dev.njr.zync.core.merge.ATTACHMENT_FIELD
 import dev.njr.zync.core.merge.project
+import dev.njr.zync.core.state.RegisterKey
 import dev.njr.zync.core.state.StateStore
 import dev.njr.zync.data.AttachmentType
 import kotlinx.serialization.json.JsonObject
@@ -23,12 +25,19 @@ class OcrProcessor(
     private val blobs: LocalBlobStore,
     private val opWriter: OpWriter,
     private val drive: DriveOcr,
+    private val store: StateStore,
     private val onChanged: () -> Unit = {},
 ) {
     /** What the worker should do with the WorkManager result. */
     enum class Outcome { DONE, RETRY, FAILED }
 
     suspend fun process(nodeId: Ulid, scanBlobHash: String, sourceMime: String): Outcome {
+        // Idempotent across WorkManager re-runs: if OCR text already landed, don't create
+        // a second ocr_text attachment or re-fire summarize.
+        val existing = (store.getRegister(RegisterKey(nodeId, Fields.OCR_BLOB_HASH))?.value as? JsonPrimitive)
+            ?.takeIf { it.isString }?.content
+        if (!existing.isNullOrBlank()) return Outcome.DONE
+
         val bytes = blobs.get(scanBlobHash)
         if (bytes == null) {
             // The scan bytes vanished (should not happen) — nothing to OCR.
@@ -68,13 +77,12 @@ class OcrProcessor(
     data class ScanRef(val nodeId: Ulid, val scanBlobHash: String, val sourceMime: String)
 
     companion object {
-        // Mirrors core's internal ATTACHMENT_FIELD (dev.njr.zync.core.merge.Apply).
-        private const val ATTACHMENT_FIELD = "@attachment"
-
         /**
-         * Scanned/photo attachments whose node has no OCR status yet — the
-         * retroactive backfill set (scans captured before OCR existed). Source
-         * mime is unknown here, so it defaults to PDF (Drive still OCRs images);
+         * Scanned/photo attachments still needing OCR — the retroactive backfill set
+         * (scans captured before OCR existed, or that never finished). Skips only nodes
+         * that are DONE or permanently FAILED, so a scan stuck in PENDING/RUNNING (e.g. a
+         * retry that never completed after a prolonged outage) is re-enqueued on next open.
+         * Source mime is unknown here, so it defaults to PDF (Drive still OCRs images);
          * live captures pass the exact mime.
          */
         fun pendingScans(store: StateStore): List<ScanRef> {
@@ -88,7 +96,8 @@ class OcrProcessor(
                 val blobHash = (payload["blobHash"] as? JsonPrimitive)?.content ?: return@mapNotNull null
                 val nodeId = runCatching { Ulid.parse(nodeStr) }.getOrNull() ?: return@mapNotNull null
                 val node = snapshots[nodeId] ?: return@mapNotNull null
-                if (node.fields[Fields.OCR_STATUS] != null) return@mapNotNull null // already handled/queued
+                val status = (node.fields[Fields.OCR_STATUS] as? JsonPrimitive)?.content
+                if (status == OcrStatus.DONE || status == OcrStatus.FAILED) return@mapNotNull null
                 ScanRef(nodeId, blobHash, "application/pdf")
             }
         }

@@ -42,9 +42,10 @@ interface StateStore {
     fun allParents(): Map<Ulid, Ulid>
 
     /**
-     * Keyword search over content nodes (GTD triage §7): entity ids of alive
-     * task/project nodes whose title/notes/summary match [query] (prefix, AND-ed),
-     * best-first. Backed by SQLite FTS5 in the durable store; a naive scan in-memory.
+     * Keyword search over content nodes (GTD triage §7): entity ids of alive, non-trashed
+     * task/project nodes whose title/notes/summary contain every [query] token (substring,
+     * AND-ed). Backed by a LIKE index in the durable store; a naive scan in-memory (same
+     * semantics). FILED items stay searchable; DROPPED (trashed) do not.
      */
     fun search(query: String, limit: Int = 50): List<Ulid>
 }

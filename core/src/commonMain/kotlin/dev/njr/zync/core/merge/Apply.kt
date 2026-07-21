@@ -10,7 +10,7 @@ import dev.njr.zync.core.state.TagKey
 import dev.njr.zync.core.state.TagValue
 
 /** Register field under which an [Op.AddAttachment] immutable payload is stored. */
-internal const val ATTACHMENT_FIELD: String = "@attachment"
+const val ATTACHMENT_FIELD: String = "@attachment"
 
 /**
  * Apply one op to [store], deterministically (spec §5). Idempotent (dedupe by

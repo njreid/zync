@@ -45,9 +45,15 @@ class ReferenceIndex(
     }
 
     private fun candidate(snap: EntitySnapshot): Candidate? {
+        // Skip unreviewed proposals and trashed nodes — they aren't valid filing targets.
+        if ((snap.fields[dev.njr.zync.core.agent.AgentFlow.FIELD_PROPOSED] as? JsonPrimitive)?.content == "true") return null
+        val status = asString(snap.fields[Fields.STATUS])
+        if (status == "DROPPED") return null
         val underReference = snap.parent?.toString() == referenceRoot.toString()
         val isProject = asString(snap.fields[Fields.KIND]) == "project"
         if (!isProject && !underReference) return null
+        // An archived (FILED) project is not an active Projects-tree target.
+        if (isProject && !underReference && status == "FILED") return null
         return Candidate(
             nodeId = snap.entityId,
             title = asString(snap.fields[Fields.TITLE]) ?: "(untitled)",
@@ -55,11 +61,16 @@ class ReferenceIndex(
         )
     }
 
+    /**
+     * Fraction of the CANDIDATE's tokens covered by the query — length-independent of the
+     * item text, so a long item (or one with OCR text folded in) doesn't dilute the score
+     * below the floor. A candidate whose words all appear in the item scores 1.0.
+     */
     private fun score(queryTokens: Set<String>, snap: EntitySnapshot): Double {
         val candText = listOf(Fields.TITLE, Fields.NOTES).mapNotNull { asString(snap.fields[it]) }.joinToString(" ")
         val candTokens = FtsQuery.tokens(candText).toSet()
         if (candTokens.isEmpty()) return 0.0
-        return queryTokens.count { it in candTokens }.toDouble() / queryTokens.size
+        return candTokens.count { it in queryTokens }.toDouble() / candTokens.size
     }
 
     private fun asString(value: kotlinx.serialization.json.JsonElement?): String? =

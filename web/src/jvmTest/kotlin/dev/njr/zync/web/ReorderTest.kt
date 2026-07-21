@@ -44,16 +44,18 @@ class ReorderTest {
         val c = commands.createTask("c", inbox)
         assertEquals(listOf("a", "b", "c"), titles(inbox))
 
+        fun apply(m: Map<dev.njr.zync.core.id.Ulid, String>) = m.forEach { (n, r) -> commands.setRank(n, r) }
+
         // Send c to the top.
-        commands.setRank(c, read.reorderRank(inbox, c, Reorder.TOP)!!)
+        apply(read.reorder(inbox, c, Reorder.TOP))
         assertEquals(listOf("c", "a", "b"), titles(inbox))
 
         // Move a down one slot (past b).
-        commands.setRank(a, read.reorderRank(inbox, a, Reorder.DOWN)!!)
+        apply(read.reorder(inbox, a, Reorder.DOWN))
         assertEquals(listOf("c", "b", "a"), titles(inbox))
 
         // Move a back up one slot.
-        commands.setRank(a, read.reorderRank(inbox, a, Reorder.UP)!!)
+        apply(read.reorder(inbox, a, Reorder.UP))
         assertEquals(listOf("c", "a", "b"), titles(inbox))
     }
 
@@ -62,9 +64,30 @@ class ReorderTest {
         val inbox = commands.createProject("Inbox")
         val a = commands.createTask("a", inbox)
         val b = commands.createTask("b", inbox)
-        assertNull(read.reorderRank(inbox, a, Reorder.UP))    // already top
-        assertNull(read.reorderRank(inbox, a, Reorder.TOP))   // already top
-        assertNull(read.reorderRank(inbox, b, Reorder.DOWN))  // already bottom
+        assertTrue(read.reorder(inbox, a, Reorder.UP).isEmpty())    // already top
+        assertTrue(read.reorder(inbox, a, Reorder.TOP).isEmpty())   // already top
+        assertTrue(read.reorder(inbox, b, Reorder.DOWN).isEmpty())  // already bottom
+    }
+
+    @Test
+    fun collidedRanksRebalanceInsteadOfCrashing() {
+        val inbox = commands.createProject("Inbox")
+        val a = commands.createTask("a", inbox)
+        val b = commands.createTask("b", inbox)
+        val c = commands.createTask("c", inbox)
+        // Force a cross-device-style tie: a and b get the SAME rank ("m"); c stays FIFO
+        // (ULID rank sorts before "m"), so the list is [c, a, b].
+        commands.setRank(a, "m")
+        commands.setRank(b, "m")
+        assertEquals(listOf("c", "a", "b"), titles(inbox))
+
+        // Move c down → its new slot is bracketed by the tied a and b → between("m","m")
+        // would throw; instead the whole list rebalances. Must not crash.
+        val writes = read.reorder(inbox, c, Reorder.DOWN)
+        assertTrue(writes.isNotEmpty())
+        writes.forEach { (n, r) -> commands.setRank(n, r) }
+        assertEquals(listOf("a", "c", "b"), titles(inbox))
+        assertEquals(3, read.inbox(inbox).mapNotNull { it.rank }.toSet().size) // distinct ranks
     }
 
     @Test
