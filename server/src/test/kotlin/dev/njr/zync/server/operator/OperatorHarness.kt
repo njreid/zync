@@ -32,6 +32,7 @@ class OperatorHarness(
     operators: List<OperatorManifest>,
     val llm: FakeLlmClient = FakeLlmClient(),
     scopes: ReadScopeResolver = ReadScopeResolver.default(),
+    completersFor: (dev.njr.zync.core.state.StateStore) -> Map<String, CompletionSource> = { emptyMap() },
 ) {
     val db = JvmZyncDatabase.inMemory()
     private val hook = SettableIngestHook()
@@ -45,6 +46,7 @@ class OperatorHarness(
         llm = llm,
         emit = service::ingestLocal,
         blobText = { key -> blobs.fetch(key)?.toString(Charsets.UTF_8) },
+        completers = completersFor(service.stateStore),
         clock = Clock { 1_000_000L },
         executor = Executor { it.run() },
     )

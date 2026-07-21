@@ -224,3 +224,13 @@ button.action.expand { border: none; }
 
 /* Reference search box (GTD triage §7). */
 #reference input[type=search] { width: 100%; margin: .2rem 0 .8rem; min-height: 2.6rem; }
+
+/* File-location suggestions + DONE→Reference banner (GTD triage §6/§7). */
+button.action.suggest-chip { border-style: dashed; }
+.file-banner {
+  margin: .5rem 0;
+  padding: .4rem .7rem;
+  border: 1px solid var(--pico-primary);
+  border-radius: var(--pico-border-radius);
+  font-size: .9rem;
+}

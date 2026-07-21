@@ -31,7 +31,7 @@ class ReadScopeResolver(scopes: List<ReadScope>) {
     companion object {
         /** The built-in scopes every deployment knows. */
         fun default(): ReadScopeResolver =
-            ReadScopeResolver(listOf(ReadScopes.inboxTask, ReadScopes.scannedDoc))
+            ReadScopeResolver(listOf(ReadScopes.inboxTask, ReadScopes.scannedDoc, ReadScopes.inboxTriage, ReadScopes.doneTask))
     }
 }
 
@@ -39,6 +39,8 @@ class ReadScopeResolver(scopes: List<ReadScope>) {
 object ReadScopes {
     const val INBOX_TASK_REF = "inbox-task"
     const val SCANNED_DOC_REF = "scanned-doc"
+    const val INBOX_TRIAGE_REF = "inbox-triage"
+    const val DONE_TASK_REF = "done-task"
 
     /**
      * The reference scope from the spec: `kind=task AND parent=INBOX AND tags=∅`.
@@ -68,6 +70,26 @@ object ReadScopes {
         reads = setOf(Fields.OCR_BLOB_HASH, Fields.TITLE),
     ) { s ->
         s.alive && !s.fields[Fields.OCR_BLOB_HASH].asString().isNullOrBlank()
+    }
+
+    /** Inbox items awaiting a filing suggestion (GTD §6): root, still-ACTIVE task. */
+    val inboxTriage: ReadScope = ReadScope(
+        ref = INBOX_TRIAGE_REF,
+        reads = setOf(Fields.KIND, Fields.STATUS, Fields.TITLE, Fields.NOTES, Fields.SUMMARY),
+    ) { s ->
+        s.alive && s.parent == null &&
+            s.fields[Fields.KIND].asString() == "task" &&
+            (s.fields[Fields.STATUS].asString() ?: "ACTIVE") == "ACTIVE"
+    }
+
+    /** A task just marked DONE (GTD §7): propose a Reference filing home. */
+    val doneTask: ReadScope = ReadScope(
+        ref = DONE_TASK_REF,
+        reads = setOf(Fields.KIND, Fields.STATUS, Fields.TITLE, Fields.NOTES, Fields.SUMMARY),
+    ) { s ->
+        s.alive &&
+            s.fields[Fields.KIND].asString() == "task" &&
+            s.fields[Fields.STATUS].asString() == "DONE"
     }
 
     private fun JsonElement?.asString(): String? =

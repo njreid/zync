@@ -292,16 +292,20 @@ private fun FlowContent.triagePanel(read: ContentReadModel, node: NodeView) {
         }
         node.ocrStatus?.let { div(classes = "org-row") { span("muted") { +ocrLabel(it) } } }
 
-        // Suggested file locations (spec §6; empty until the suggestion operator lands).
+        // Suggested file locations (spec §6): accept a chip = the human Move.
         div(classes = "org-row chips-row") {
             if (node.fileSuggestions.isEmpty()) {
                 span("muted") { +"No file suggestions yet" }
             } else {
                 node.fileSuggestions.forEach { sug ->
-                    button(classes = "action") {
-                        attributes["data-on:click"] = "@post('/node/${node.id}/move?parent=${sug.targetId}')"
+                    button(classes = "action suggest-chip") {
+                        attributes["data-on:click"] = "@post('/node/${node.id}/accept-file?target=${sug.targetId}')"
                         +"→ ${sug.title}"
                     }
+                }
+                button(classes = "action") {
+                    attributes["data-on:click"] = "@post('/node/${node.id}/dismiss-file')"
+                    +"✕ dismiss"
                 }
             }
         }
@@ -368,6 +372,21 @@ fun FlowContent.nodeDetail(read: ContentReadModel, node: NodeView) {
         }
     }
     node.notes?.let { p { +it } }
+    // Operator proposal to file a DONE task into Reference (GTD §7, Q5).
+    node.proposedFileParent?.let { target ->
+        val area = read.node(target)
+        div(classes = "file-banner") {
+            +"File to ${area?.title ?: "Reference"}? "
+            button(classes = "action") {
+                attributes["data-on:click"] = "@post('/node/${node.id}/file-done?target=$target')"
+                +"Accept"
+            }
+            button(classes = "action") {
+                attributes["data-on:click"] = "@post('/node/${node.id}/file-done-reject')"
+                +"No"
+            }
+        }
+    }
     a(href = "/node/${node.id}/read") { +"Read" }
     // File into Reference (GTD triage §7): archive + move under the reference root.
     if (node.status != "FILED") {

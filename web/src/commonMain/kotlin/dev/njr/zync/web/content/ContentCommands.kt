@@ -80,6 +80,25 @@ class ContentCommands(private val ops: OpEmitter) {
         ops.setField(node, Fields.STATUS, JsonPrimitive(Status.FILED))
         ops.move(node, WellKnownNodes.REFERENCE_ROOT)
     }
+
+    /** Accept a file-location suggestion chip (GTD §6): the human Move, then clear the field. */
+    fun acceptFileSuggestion(node: Ulid, target: Ulid) {
+        ops.move(node, target)
+        ops.setField(node, Fields.FILE_SUGGESTIONS, JsonNull)
+    }
+
+    /** Dismiss the file-location suggestions without filing. */
+    fun dismissFileSuggestions(node: Ulid) = ops.setField(node, Fields.FILE_SUGGESTIONS, JsonNull)
+
+    /** Accept the DONE→Reference proposal (GTD §7, Q5): Move under it + status FILED + clear. */
+    fun acceptProposedFile(node: Ulid, target: Ulid) {
+        ops.move(node, target)
+        ops.setField(node, Fields.STATUS, JsonPrimitive(Status.FILED))
+        ops.setField(node, Fields.PROPOSED_FILE_PARENT, JsonNull)
+    }
+
+    /** Reject the DONE→Reference proposal (clear the operator field). */
+    fun rejectProposedFile(node: Ulid) = ops.setField(node, Fields.PROPOSED_FILE_PARENT, JsonNull)
     fun convertToProject(node: Ulid) = ops.setField(node, "kind", JsonPrimitive("project"))
     fun convertToTask(node: Ulid) = ops.setField(node, "kind", JsonPrimitive("task"))
 

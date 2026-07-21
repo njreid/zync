@@ -125,24 +125,39 @@ fun main(args: Array<String>) {
 }
 
 /**
- * Wire the M8 operator runtime onto the ingest hook — or degrade gracefully to
- * disabled when no `ANTHROPIC_API_KEY` is configured.
+ * Wire the M8 operator runtime onto the ingest hook. LLM operators (auto-clarify,
+ * summarize) need `ANTHROPIC_API_KEY`; the retrieval operators (suggest-file,
+ * auto-file-done) are deterministic keyword scorers and run regardless.
  */
 private fun wireOperators(db: ZyncDatabase, service: SyncService, hook: SettableIngestHook, blobs: BlobService?) {
     val log = org.slf4j.LoggerFactory.getLogger("zync.operators")
     val llm = AnthropicLlmClient.fromEnv()
-    if (llm == null) {
-        log.info("operators disabled: ANTHROPIC_API_KEY not set")
-        return
-    }
+    val blobText: (String) -> String? =
+        blobs?.let { svc -> { key -> svc.fetch(key)?.toString(Charsets.UTF_8) } } ?: { null }
+
+    // Retrieval operators (keyword file-location suggestions) work without an LLM.
+    val index = dev.njr.zync.server.operator.ReferenceIndex(service.stateStore)
+    val completers = mapOf(
+        "suggest-file" to dev.njr.zync.server.operator.SuggestFileCompletionSource(index, blobText),
+        "auto-file-done" to dev.njr.zync.server.operator.AutoFileCompletionSource(index, blobText),
+    )
+    val operators = if (llm != null) OperatorManifests.fromEnv() else OperatorManifests.retrievalOnly()
+
     hook.delegate = OperatorRuntime(
         db = db,
         store = service.stateStore,
-        operators = OperatorManifests.fromEnv(),
+        operators = operators,
         scopes = ReadScopeResolver.default(),
-        llm = llm,
+        llm = llm ?: DisabledLlmClient,
         emit = service::ingestLocal,
-        blobText = blobs?.let { svc -> { key -> svc.fetch(key)?.toString(Charsets.UTF_8) } } ?: { null },
+        blobText = blobText,
+        completers = completers,
     )
-    log.info("operators enabled")
+    log.info(if (llm != null) "operators enabled (LLM + retrieval)" else "operators enabled (retrieval-only; no ANTHROPIC_API_KEY)")
+}
+
+/** A no-op [dev.njr.zync.server.operator.LlmClient] for LLM-free (retrieval-only) operation. */
+private object DisabledLlmClient : dev.njr.zync.server.operator.LlmClient {
+    override fun complete(request: dev.njr.zync.server.operator.LlmRequest) =
+        dev.njr.zync.server.operator.LlmReply.Unavailable("LLM disabled")
 }

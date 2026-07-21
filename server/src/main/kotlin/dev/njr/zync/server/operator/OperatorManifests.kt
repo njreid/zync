@@ -64,6 +64,46 @@ object OperatorManifests {
         fuel = Fuel(maxOpsPerFiring = 1, maxOpsPerCascade = 16),
     )
 
+    /**
+     * Suggest up to 3 file locations for an inbox item (GTD triage §6). Deterministic
+     * keyword retrieval (via a [SuggestFileCompletionSource]); no LLM. Re-fires on text
+     * edits. Owns only `fileSuggestions`; accepting a chip is the human Move.
+     */
+    fun suggestFileLocations(): OperatorManifest = OperatorManifest(
+        id = "suggest-file",
+        name = "Suggest file locations",
+        readScope = ReadScopeHandle(ReadScopes.INBOX_TRIAGE_REF),
+        writeScope = WriteScope(fields = setOf(Fields.FILE_SUGGESTIONS)),
+        trigger = TriggerKind.EntityChangesInScope,
+        output = OutputSchema(
+            fields = mapOf(Fields.FILE_SUGGESTIONS to FieldType.Array),
+            required = setOf(Fields.FILE_SUGGESTIONS), // empty array is valid (nothing cleared the floor)
+        ),
+        retries = 0,
+        fuel = Fuel(maxOpsPerFiring = 1, maxOpsPerCascade = 8),
+    )
+
+    /**
+     * When a task is marked DONE, propose a Reference-area filing parent (GTD triage §7,
+     * RESOLVED Q5 = operator proposes, human accepts). Owns only `proposedFileParent`.
+     */
+    fun autoFileDone(): OperatorManifest = OperatorManifest(
+        id = "auto-file-done",
+        name = "File completed task to Reference",
+        readScope = ReadScopeHandle(ReadScopes.DONE_TASK_REF),
+        writeScope = WriteScope(fields = setOf(Fields.PROPOSED_FILE_PARENT)),
+        trigger = TriggerKind.EntityChangesInScope,
+        output = OutputSchema(
+            fields = mapOf(Fields.PROPOSED_FILE_PARENT to FieldType.String),
+            required = emptySet(), // absent = below floor, no proposal
+        ),
+        retries = 0,
+        fuel = Fuel(maxOpsPerFiring = 1, maxOpsPerCascade = 8),
+    )
+
+    /** The retrieval operators that need no LLM — registered even without ANTHROPIC_API_KEY. */
+    fun retrievalOnly(): List<OperatorManifest> = listOf(suggestFileLocations(), autoFileDone())
+
     /** Parse every `*.json` file in [dir] as an [OperatorManifest]. */
     fun load(dir: Path, json: Json = Json): List<OperatorManifest> {
         if (!Files.isDirectory(dir)) return emptyList()
@@ -79,6 +119,6 @@ object OperatorManifests {
     /** Built-ins plus any manifests configured via `ZYNC_OPERATORS_DIR`. */
     fun fromEnv(env: (String) -> String? = System::getenv, json: Json = Json): List<OperatorManifest> {
         val extra = env("ZYNC_OPERATORS_DIR")?.let { load(Path.of(it), json) }.orEmpty()
-        return listOf(autoClarifyInbox(), summarize()) + extra
+        return listOf(autoClarifyInbox(), summarize()) + retrievalOnly() + extra
     }
 }

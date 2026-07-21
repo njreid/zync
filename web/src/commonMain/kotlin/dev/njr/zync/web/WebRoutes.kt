@@ -333,6 +333,32 @@ fun Route.webRoutes(
             call.nodeId()?.let { id -> call.appliedDetail(id) { file(id) } }
                 ?: call.respondText("bad request", status = HttpStatusCode.BadRequest)
         }
+        // File-location suggestion chips (spec §6): accept (Move) / dismiss. Inbox-scoped.
+        post("/node/{id}/accept-file") {
+            val target = call.request.queryParameters["target"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+            val id = call.nodeId()
+            when {
+                id == null || target == null -> call.respondText("bad request", status = HttpStatusCode.BadRequest)
+                read.moveWouldExceedDepth(id, target) ->
+                    call.respondText("move would exceed 4 levels", status = HttpStatusCode.Conflict)
+                else -> call.applied { acceptFileSuggestion(id, target) }
+            }
+        }
+        post("/node/{id}/dismiss-file") {
+            call.nodeId()?.let { id -> call.applied { dismissFileSuggestions(id) } }
+                ?: call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
+        // DONE→Reference proposal (spec §7): accept files under it / reject clears. Detail-scoped.
+        post("/node/{id}/file-done") {
+            val target = call.request.queryParameters["target"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+            val id = call.nodeId()
+            if (id != null && target != null) call.appliedDetail(id) { acceptProposedFile(id, target) }
+            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
+        post("/node/{id}/file-done-reject") {
+            call.nodeId()?.let { id -> call.appliedDetail(id) { rejectProposedFile(id) } }
+                ?: call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
         post("/node/{id}/person") {
             val name = call.request.queryParameters["name"]
             val id = call.nodeId()

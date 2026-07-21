@@ -66,6 +66,8 @@ class OperatorRuntime(
     private val llm: LlmClient,
     private val emit: (Op) -> Op,
     private val blobText: (String) -> String? = { null },
+    /** Per-operator-id completion override (retrieval operators); default = the LLM. */
+    private val completers: Map<String, CompletionSource> = emptyMap(),
     private val clock: Clock = Clock { System.currentTimeMillis() },
     private val random: Random = Random.Default,
     private val executor: Executor = defaultExecutor(),
@@ -169,10 +171,11 @@ class OperatorRuntime(
 
         // Typed-output loop: schema-validation failure is the ONLY retried condition.
         val request = LlmRequest(m.id, OperatorPrompt.system(m), OperatorPrompt.user(snapshot, reg.scope.reads, blobText), m.output)
+        val source = completers[m.id] ?: LlmCompletionSource(llm)
         val attempts = mutableListOf<JsonElement>()
         var outcome: OperatorOutcome = OperatorOutcome.Rejected(0, emptyList())
         while (attempts.size < m.retries + 1) {
-            when (val reply = llm.complete(request)) {
+            when (val reply = source.complete(request, snapshot)) {
                 is LlmReply.Unavailable -> {
                     // Transient: abort without recording, so the next trigger retries.
                     log.warn("operator {} entity {}: llm unavailable: {}", m.id, entity, reply.message)
