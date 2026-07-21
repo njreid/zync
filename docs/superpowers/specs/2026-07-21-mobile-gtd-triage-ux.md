@@ -161,27 +161,27 @@ current flat "all active tasks" list, which is wrong per the model.
 
 Each step is shippable and independently testable (JVM read-model tests + Playwright).
 
-## Open questions
+## Open questions — RESOLVED 2026-07-21
 
-1. **Tier labels for loose root tasks.** With depth-derived levels (§2), what is a
-   loose `ACTIVE` task at the root called — just "Task", or is the root a tacit Pillar
-   so its children are "Initiatives"? Proposed: loose root items are plain Tasks; the
-   Pillar→Task ladder only labels nodes *inside* an explicit hierarchy. Confirm.
-2. **Reorder gesture on touch.** Drag-to-reorder in a WebView vs. an explicit
-   "move up/down / send to top" affordance (the Next-Action-to-top action). Drag is
-   nicer but heavier under CSP; the button set is trivial. Which for v1?
-3. **Next Action ordering key.** Within a project, is the Next Action the top by
-   `rank` (manual) only, or do `dueDate`/`size` influence it? Spec assumes pure `rank`.
-4. **Suggestion count & mix.** Always 3 chips? Fixed 2-projects-1-reference, or ranked
-   purely by score regardless of tree? And a confidence floor below which we show none.
-5. **Completed tasks in Reference.** On `DONE`, does a task auto-file into Reference
-   (operator-proposed) or stay in its project until explicitly archived? Affects how
-   fast projects "empty out".
-6. **Context definition for Next.** Is "current context" always a manual pick (launcher
-   L4), or can it be inferred (time-of-day / location / device) later? Model supports
-   both; v1 = manual.
-7. **Embedding model & storage.** Which embedding model server-side, and do we store
-   vectors in SQLite (blob + brute-force cosine, fine at personal scale) or a dedicated
-   index? Brute-force is likely enough — confirm the scale ceiling.
-8. **4-level cap enforcement UX.** When a move would exceed depth 4, do we reject, or
-   auto-offer "promote target to a project / merge levels"? Reject is simplest for v1.
+1. **Tier labels for loose root tasks.** → **Plain Tasks.** Loose root items are plain
+   Tasks; the Pillar→Initiative→Project→Task ladder only labels nodes *inside* an
+   explicit hierarchy. The root is not a tacit Pillar.
+2. **Reorder gesture on touch.** → **Both, phased.** Ship explicit "move up/down / send
+   to top" buttons for v1 (trivial under CSP, identical touch + desktop); add
+   drag-to-reorder later on top of the same `rank` primitive.
+3. **Next Action ordering key.** → **Rank + dueDate/size.** Manual `rank` is the base
+   order, but `dueDate` and `size` may bump an action ahead when picking a project's
+   Next Action (not pure `rank`).
+4. **Suggestion count & mix.** → **Up to 3, any mix.** Score-ranked across Projects +
+   Reference (no fixed 2+1 split), with a confidence floor below which fewer/none show;
+   count varies 0–3.
+5. **Completed tasks in Reference.** → **Auto-file (proposed).** On `DONE`, an operator
+   *proposes* filing the task into Reference (accept/reject UX); projects empty out fast.
+6. **Context definition for Next.** → **Manual pick (v1).** Always a manual launcher-L4
+   context pick for v1; the model still supports inferred context (time/location/device)
+   later.
+7. **Embedding model & storage.** → **SQLite blob + brute-force cosine.** Store vectors
+   in SQLite and cosine-scan at query time (fine at personal scale); no dedicated vector
+   index for v1. (Embedding model TBD.)
+8. **4-level cap enforcement UX.** → **Reject (v1).** A `Move` that would exceed depth 4
+   is rejected at move-time; no auto-promote/merge offer for v1.
