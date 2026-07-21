@@ -10,9 +10,12 @@ import dev.njr.zync.core.state.RegisterValue
 import dev.njr.zync.core.state.StateStore
 import dev.njr.zync.core.state.TagKey
 import dev.njr.zync.core.state.TagValue
+import dev.njr.zync.core.content.FtsQuery
 import dev.njr.zync.data.db.ZyncDatabase
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * SQLDelight-backed [StateStore] — the durable implementation of `core`'s port,
@@ -27,6 +30,14 @@ class SqlDelightStateStore(
     private val db: ZyncDatabase,
     private val json: Json = Json,
 ) : StateStore {
+
+    init {
+        // One-time backfill for DBs migrated to v6 with an empty FTS index (spec §7 §2d):
+        // if the index is empty but content exists, rebuild it from the register table.
+        if (db.searchIndexQueries.countDocs().executeAsOne() == 0L) {
+            db.searchIndexQueries.allDocEntityIds().executeAsList().forEach { reindex(it) }
+        }
+    }
 
     override fun isApplied(opId: Ulid): Boolean =
         db.appliedOpQueries.isApplied(opId.toString()).executeAsOne() > 0L
@@ -54,6 +65,7 @@ class SqlDelightStateStore(
             hlc_device = value.hlc.deviceId,
             actor = json.encodeToString(Actor.serializer(), value.actor),
         )
+        if (key.field in REINDEX_TRIGGERS) reindex(key.entityId.toString())
     }
 
     override fun getTombstone(entityId: Ulid): Hlc? =
@@ -63,6 +75,7 @@ class SqlDelightStateStore(
 
     override fun putTombstone(entityId: Ulid, hlc: Hlc) {
         db.tombstoneQueries.putTombstone(entityId.toString(), hlc.physical, hlc.counter.toLong(), hlc.deviceId)
+        reindex(entityId.toString()) // now dead → drop from the search index
     }
 
     override fun getTag(key: TagKey): TagValue? =
@@ -141,4 +154,45 @@ class SqlDelightStateStore(
         db.moveParentQueries.allParents().executeAsList().associate {
             Ulid.parse(it.node_id) to Ulid.parse(it.parent_id)
         }
+
+    override fun search(query: String, limit: Int): List<Ulid> {
+        val tokens = FtsQuery.tokens(query)
+        if (tokens.isEmpty()) return emptyList()
+        // Candidate rows via the most selective (longest) token; AND the rest in Kotlin.
+        val pivot = tokens.maxByOrNull { it.length }!!
+        return db.searchIndexQueries.searchByToken(pivot).executeAsList().asSequence()
+            .filter { row -> tokens.all { it in row.body } }
+            .map { Ulid.parse(it.entity_id) }
+            .take(limit)
+            .toList()
+    }
+
+    /**
+     * Rebuild one entity's search row from its registers (spec §7 D1): DELETE then, if the
+     * entity is alive and a searchable kind with text, INSERT its lowercased body. Runs
+     * inside the caller's ingest transaction so the index commits atomically with the write.
+     */
+    private fun reindex(id: String) {
+        db.searchIndexQueries.deleteDoc(id)
+        if (db.tombstoneQueries.getTombstone(id).executeAsOneOrNull() != null) return
+        val fields = db.searchIndexQueries.docFields(id).executeAsList()
+            .associate { it.field_name to jsonString(it.field_value) }
+        if (fields["kind"] !in SEARCHABLE_KINDS) return
+        val body = listOf(fields["title"], fields["notes"], fields["summary"])
+            .filter { !it.isNullOrBlank() }
+            .joinToString(" ")
+            .lowercase()
+        if (body.isBlank()) return
+        db.searchIndexQueries.insertDoc(id, body)
+    }
+
+    // JsonNull / cleared fields read as absent (mirrors ContentReadModel.asString()).
+    private fun jsonString(raw: String): String? =
+        (json.decodeFromString(JsonElement.serializer(), raw) as? JsonPrimitive)
+            ?.takeIf { it !is JsonNull }?.content
+
+    private companion object {
+        val SEARCHABLE_KINDS = setOf("task", "project", "attachment")
+        val REINDEX_TRIGGERS = setOf("kind", "title", "notes", "summary", "status")
+    }
 }

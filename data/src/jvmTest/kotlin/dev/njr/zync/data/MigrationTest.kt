@@ -44,4 +44,42 @@ class MigrationTest {
         assertEquals("pk", row.public_key)
         assertNull(row.replica_id, "pre-binding pairings migrate with a NULL replica id")
     }
+
+    @Test
+    fun v5MigratesToV6WithSearchIndexAndBackfill() {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        // Minimal v5 register table with a searchable node (kind=task + title).
+        driver.execute(
+            null,
+            """CREATE TABLE register (
+                 entity_id TEXT NOT NULL, field TEXT NOT NULL, value TEXT NOT NULL,
+                 hlc_physical INTEGER NOT NULL, hlc_counter INTEGER NOT NULL, hlc_device TEXT NOT NULL,
+                 actor TEXT NOT NULL, PRIMARY KEY (entity_id, field)
+               )""",
+            0,
+        )
+        // Backfill also consults the tombstone table (empty here).
+        driver.execute(
+            null,
+            """CREATE TABLE tombstone (
+                 entity_id TEXT NOT NULL PRIMARY KEY,
+                 hlc_physical INTEGER NOT NULL, hlc_counter INTEGER NOT NULL, hlc_device TEXT NOT NULL
+               )""",
+            0,
+        )
+        val e = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+        driver.execute(null, "INSERT INTO register VALUES ('$e','kind','\"task\"',1,0,'d','\"x\"')", 0)
+        driver.execute(null, "INSERT INTO register VALUES ('$e','title','\"Quarterly budget\"',1,1,'d','\"x\"')", 0)
+        driver.execute(null, "PRAGMA user_version = 5", 0)
+
+        val db = dev.njr.zync.data.JvmZyncDatabase.open(driver)
+        assertEquals(listOf(ZyncDatabase.Schema.version.toString()), query(driver, "PRAGMA user_version"))
+        // search_doc created by 5.sqm; backfill (store init) indexes the pre-existing row.
+        val store = SqlDelightStateStore(db)
+        assertEquals(
+            listOf(dev.njr.zync.core.id.Ulid.parse(e)),
+            store.search("budget"),
+            "post-migration backfill should index existing content",
+        )
+    }
 }

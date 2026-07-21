@@ -1,0 +1,9 @@
+-- v5 → v6: keyword search index over content nodes (GTD triage spec §7). A plain
+-- lowercased-text table queried with LIKE (not FTS5 — see SearchIndex.sq). Existing
+-- DBs migrate with an empty index; SqlDelightStateStore backfills it once on first open
+-- (search_doc empty but register non-empty).
+CREATE TABLE search_doc (
+  entity_id TEXT NOT NULL PRIMARY KEY,
+  body TEXT NOT NULL
+);
+CREATE INDEX search_doc_body ON search_doc(body);

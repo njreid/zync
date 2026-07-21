@@ -1,0 +1,35 @@
+-- Keyword search index over content nodes (GTD triage spec §7). A plain table of
+-- lowercased searchable text per entity, queried with LIKE. Chosen over FTS5 because
+-- SQLDelight's SQLite-3.18 dialect can't compile FTS5 MATCH/rank, and FTS5 isn't
+-- guaranteed on all Android system SQLite builds — LIKE works everywhere and is fine
+-- at personal scale. Kept in sync by SqlDelightStateStore.reindex() on register/tombstone
+-- writes. `body` folds title/notes/summary (and later OCR text), lowercased.
+CREATE TABLE search_doc (
+  entity_id TEXT NOT NULL PRIMARY KEY,
+  body TEXT NOT NULL
+);
+
+CREATE INDEX search_doc_body ON search_doc(body);
+
+-- Text fields of one entity, for rebuild-on-write (values are JSON text; decoded in Kotlin).
+docFields:
+SELECT field AS field_name, value AS field_value FROM register
+WHERE entity_id = ? AND field IN ('kind', 'title', 'notes', 'summary', 'status');
+
+deleteDoc:
+DELETE FROM search_doc WHERE entity_id = ?;
+
+insertDoc:
+INSERT OR REPLACE INTO search_doc(entity_id, body) VALUES (?, ?);
+
+-- Candidate rows for one token (substring, case-insensitive on lowercased body); the
+-- caller AND-filters the remaining tokens in Kotlin (variable token count).
+searchByToken:
+SELECT entity_id, body FROM search_doc WHERE body LIKE ('%' || ? || '%');
+
+countDocs:
+SELECT COUNT(*) FROM search_doc;
+
+-- Distinct entity ids in the register table, for the one-time post-migration backfill.
+allDocEntityIds:
+SELECT DISTINCT entity_id FROM register;
