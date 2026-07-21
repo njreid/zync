@@ -25,12 +25,65 @@ html { color-scheme: dark; }
 /* Pure black surface for AMOLED (cards/inputs keep pico's elevated tones). */
 :root:not([data-theme=light]) { --pico-background-color: #000; }
 body { padding-top: max(.75rem, env(safe-area-inset-top)); }
-nav { padding: 0 1rem; }
+
+/* Slim top bar: brand on the left, optional Pairing link on the right. The primary
+   navigation lives in the bottom tab bar, so this stays out of the way. */
+nav.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .1rem 1rem .4rem;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+nav.topbar strong a { text-decoration: none; letter-spacing: .02em; }
+nav.topbar .settings-link { font-size: .85rem; }
+
+/* Keep page content clear of the fixed bottom tab bar (+ safe-area inset). */
+main.container { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom)); }
+
+/* Fixed bottom tab bar: the three fixed GTD categories, thumb-reachable. */
+nav.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  padding-bottom: env(safe-area-inset-bottom);
+  background: color-mix(in srgb, var(--pico-background-color) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--pico-muted-border-color);
+}
+nav.tabbar .tab {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .1rem;
+  padding: .5rem .25rem;
+  text-decoration: none;
+  color: var(--pico-muted-color);
+}
+nav.tabbar .tab .tab-icon { font-size: 1.35rem; line-height: 1; }
+nav.tabbar .tab .tab-label {
+  font-family: "Iosevka Charon Mono", ui-monospace, monospace;
+  font-weight: 700;
+  font-size: .7rem;
+  letter-spacing: .02em;
+}
+nav.tabbar .tab.active { color: var(--pico-primary); }
+nav.tabbar .tab:active { background: var(--pico-card-background-color); }
 
 main h2 { margin-bottom: .6rem; font-size: 1.15rem; }
 
 .muted { color: var(--pico-muted-color); font-size: .85em; }
 .status { color: var(--pico-muted-color); font-size: .8em; }
+.waiting {
+  font-family: "Iosevka Charon Mono", ui-monospace, monospace;
+  font-weight: 700;
+  font-size: .8em;
+  color: var(--pico-primary);
+}
 .proposed { font-style: italic; }
 
 /* List rows (inbox, proposals, tree nodes): flat rows with hairline separators. */

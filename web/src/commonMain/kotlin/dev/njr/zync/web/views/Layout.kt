@@ -5,22 +5,39 @@ import kotlinx.html.HTML
 import kotlinx.html.a
 import kotlinx.html.body
 import kotlinx.html.head
-import kotlinx.html.li
 import kotlinx.html.link
 import kotlinx.html.main
 import kotlinx.html.meta
 import kotlinx.html.nav
 import kotlinx.html.script
+import kotlinx.html.span
 import kotlinx.html.strong
 import kotlinx.html.title
-import kotlinx.html.ul
 
 /**
- * The shared page shell: Pico-styled nav + a `<main>` for the view content.
- * Dark theme is forced (`data-theme="dark"`, the v0.2 look); styles come from
- * vendored stylesheet FILES because the loopback CSP has no inline-style carve-out.
+ * The fixed GTD surfaces (spec: "some fixed categories which need to be easily
+ * accessible"). Rendered as a thumb-reachable bottom tab bar on every page so
+ * Inbox / Next / Projects are one tap away from anywhere in the app.
  */
-fun HTML.page(pageTitle: String, settingsHref: String? = null, content: FlowContent.() -> Unit) {
+enum class Tab(val href: String, val label: String, val icon: String) {
+    INBOX("/", "Inbox", "📥"),      // 📥
+    NEXT("/next", "Next", "→"),           // →
+    PROJECTS("/projects", "Projects", "🗂"), // 🗂
+    NONE("", "", ""),
+}
+
+/**
+ * The shared page shell: a slim top bar (brand + optional Pairing), a `<main>` for the
+ * view content, and a fixed bottom tab bar for the fixed GTD categories. Dark theme is
+ * forced (`data-theme="dark"`, the v0.2 look); styles come from vendored stylesheet
+ * FILES because the loopback CSP has no inline-style carve-out.
+ */
+fun HTML.page(
+    pageTitle: String,
+    settingsHref: String? = null,
+    activeTab: Tab = Tab.NONE,
+    content: FlowContent.() -> Unit,
+) {
     attributes["lang"] = "en"
     attributes["data-theme"] = "dark"
     head {
@@ -33,15 +50,25 @@ fun HTML.page(pageTitle: String, settingsHref: String? = null, content: FlowCont
         script(type = "module", src = "/assets/datastar.js") {}
     }
     body {
-        nav {
-            ul { li { strong { a(href = "/") { +"zync" } } } }
-            ul {
-                li { a(href = "/") { +"Inbox" } }
-                li { a(href = "/tree") { +"Tree" } }
-                // Server-only (the phone loopback has no pairing page to link to).
-                settingsHref?.let { li { a(href = it) { +"Pairing" } } }
-            }
+        nav(classes = "topbar") {
+            strong { a(href = "/") { +"zync" } }
+            // Server-only (the phone loopback has no pairing page to link to).
+            settingsHref?.let { a(classes = "settings-link", href = it) { +"Pairing" } }
         }
         main(classes = "container") { content() }
+        tabBar(activeTab)
+    }
+}
+
+/** Fixed bottom navigation exposing the three GTD categories, active tab highlighted. */
+private fun FlowContent.tabBar(active: Tab) {
+    nav(classes = "tabbar") {
+        listOf(Tab.INBOX, Tab.NEXT, Tab.PROJECTS).forEach { tab ->
+            a(href = tab.href, classes = if (tab == active) "tab active" else "tab") {
+                if (tab == active) attributes["aria-current"] = "page"
+                span("tab-icon") { +tab.icon }
+                span("tab-label") { +tab.label }
+            }
+        }
     }
 }

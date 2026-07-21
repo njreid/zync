@@ -8,9 +8,12 @@ import dev.njr.zync.web.sse.ChangeNotifier
 import dev.njr.zync.web.sse.patch
 import dev.njr.zync.web.sse.patchElementsEvent
 import dev.njr.zync.web.sse.respondDatastar
+import dev.njr.zync.web.views.Tab
 import dev.njr.zync.web.views.inboxSection
+import dev.njr.zync.web.views.nextSection
 import dev.njr.zync.web.views.nodeDetail
 import dev.njr.zync.web.views.page
+import dev.njr.zync.web.views.projectsSection
 import dev.njr.zync.web.views.readingView
 import dev.njr.zync.web.views.treeSection
 import io.ktor.http.ContentType
@@ -63,7 +66,7 @@ fun Route.webRoutes(
         }
         val context = call.selectedContext()
         call.respondHtml {
-            page("Inbox", settingsHref) {
+            page("Inbox", settingsHref, Tab.INBOX) {
                 div {
                     id = "inbox"
                     // Datastar: open the SSE stream on load; the server patches #inbox on change.
@@ -73,21 +76,44 @@ fun Route.webRoutes(
             }
         }
     }
+    get("/next") {
+        call.respondHtml {
+            page("Next", settingsHref, Tab.NEXT) {
+                div {
+                    id = "next"
+                    // Live-refresh this surface as tasks complete/defer elsewhere.
+                    attributes["data-on:load"] = "@get('/updates/next')"
+                    nextSection(read, now())
+                }
+            }
+        }
+    }
+    get("/projects") {
+        call.respondHtml {
+            page("Projects", settingsHref, Tab.PROJECTS) {
+                div {
+                    id = "projects"
+                    attributes["data-on:load"] = "@get('/updates/projects')"
+                    projectsSection(read, now(), inbox())
+                }
+            }
+        }
+    }
     get("/tree") {
-        call.respondHtml { page("Tree", settingsHref) { h2 { +"Tree" }; treeSection(read, null) } }
+        call.respondHtml { page("Tree", settingsHref, Tab.PROJECTS) { h2 { +"Tree" }; treeSection(read, null) } }
     }
     get("/node/{id}") {
         val node = call.parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }?.let(read::node)
         if (node == null) {
             call.respondText("not found", status = HttpStatusCode.NotFound)
         } else {
-            call.respondHtml { page(node.title ?: "Node", settingsHref) { div { id = "node-detail"; nodeDetail(read, node) } } }
+            call.respondHtml { page(node.title ?: "Node", settingsHref, Tab.NONE) { div { id = "node-detail"; nodeDetail(read, node) } } }
         }
     }
     get("/node/{id}/read") {
         val node = call.parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }?.let(read::node)
         if (node == null) call.respondText("not found", status = HttpStatusCode.NotFound)
-        else call.respondHtml { page(node.title ?: "Read", settingsHref) { readingView(node) } }
+        else call.respondHtml { page(node.title ?: "Read", settingsHref, Tab.NONE) { readingView(node) } }
     }
     get("/assets/datastar.js") {
         call.respondText(WebPlatform.datastarRuntime(), ContentType("application", "javascript"))
@@ -115,6 +141,20 @@ fun Route.webRoutes(
             )
             pushInbox()
             changes.changes.collect { pushInbox() }
+        }
+        sse("/updates/next") {
+            suspend fun pushNext() = patch(
+                patchElementsEvent(WebPlatform.renderFragment("next") { nextSection(read, now()) }),
+            )
+            pushNext()
+            changes.changes.collect { pushNext() }
+        }
+        sse("/updates/projects") {
+            suspend fun pushProjects() = patch(
+                patchElementsEvent(WebPlatform.renderFragment("projects") { projectsSection(read, now(), inbox()) }),
+            )
+            pushProjects()
+            changes.changes.collect { pushProjects() }
         }
     }
 

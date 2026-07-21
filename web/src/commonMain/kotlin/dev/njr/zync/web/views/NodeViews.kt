@@ -97,9 +97,48 @@ fun FlowContent.proposalsSection(read: ContentReadModel) {
     }
 }
 
+/**
+ * The Next Actions list (GTD "Next"): every live, active, non-deferred task across
+ * the whole tree, regardless of project or context — the flat "what can I do now"
+ * pool. A person tag renders as a `@waiting` marker so delegated items are visible.
+ */
+fun FlowContent.nextSection(read: ContentReadModel, now: Long) {
+    h2 { +"Next" }
+    val items = read.activeTasks(now)
+    if (items.isEmpty()) {
+        p("muted") { +"No next actions. Clarify the inbox to add some." }
+    } else {
+        ul { items.forEach { li { nodeRow(it) } } }
+    }
+}
+
+/**
+ * The Projects list (GTD "Projects"): every live project, each a link into its detail
+ * (subtasks, tree, organize controls) with a count of its open direct next-actions.
+ */
+fun FlowContent.projectsSection(read: ContentReadModel, now: Long, inbox: Ulid? = null) {
+    h2 { +"Projects" }
+    // The inbox is a project node under the hood; it has its own tab, so keep it out here.
+    val projects = read.projects().filter { it.id.toString() != inbox?.toString() }
+    if (projects.isEmpty()) {
+        p("muted") { +"No projects yet. Convert an inbox item into a project to start one." }
+        return
+    }
+    ul {
+        projects.forEach { project ->
+            li {
+                a(href = "/node/${project.id}") { +(project.title ?: "(untitled project)") }
+                val open = read.inbox(project.id, now).size
+                span("status") { +(if (open == 0) "· done" else "· $open open") }
+            }
+        }
+    }
+}
+
 /** A single node as a linked row with its status and inline actions. */
 fun FlowContent.nodeRow(node: NodeView) {
     a(href = "/node/${node.id}") { +(node.title ?: "(untitled)") }
+    node.person?.let { span("waiting") { +" @$it" } }
     node.status?.let { span("status") { +" · $it" } }
     button(classes = "action") {
         attributes["data-on:click"] = "@post('/node/${node.id}/complete')"

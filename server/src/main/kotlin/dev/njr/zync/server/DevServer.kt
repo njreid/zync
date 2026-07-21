@@ -34,6 +34,9 @@ fun main() {
     seedStubProposal(service, offsite)
     // A context with one tagged task, so the context-pill filter is drivable.
     content.commands.addTag(offsite, content.commands.createContext("@errands"))
+    // A project with an open next-action, so the Projects tab is drivable.
+    val project = content.commands.createProject("Launch website")
+    content.commands.addSubtask(project, "Draft the launch copy")
 
     embeddedServer(Netty, port = port) {
         // Optionally apply a CSP header to test the phone loopback's policy against Datastar.
