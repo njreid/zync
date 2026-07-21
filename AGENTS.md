@@ -45,6 +45,14 @@ client) and the old Room content layer / vanilla-JS UI have been **retired**.
 - Keep changes scoped to the subsystem being modified (`core`/`data`/`web`/
   `server`/`app`/`webtest`).
 
+## Version Control
+
+- **Commit and push each increment.** When a self-contained increment is done and
+  its tests pass (a build-order step, a fix, a feature slice), commit it with a
+  descriptive message and `git push` — don't batch several increments into one
+  uncommitted pile. Small, green, pushed commits are the default rhythm.
+- Run the relevant tests green before committing (see below); never commit a red tree.
+
 ## Build And Test Commands
 
 Use the narrowest command that covers the change, then broaden when touching
