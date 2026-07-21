@@ -174,3 +174,6 @@ button.action.chip-on { background: var(--pico-primary); color: var(--pico-prima
   margin-bottom: .2rem;
 }
 .summary p { margin: 0; }
+
+/* Next-surface project label (GTD triage §5). */
+span.project { color: var(--pico-muted-color); font-size: .85em; }

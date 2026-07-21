@@ -78,13 +78,23 @@ fun Route.webRoutes(
         }
     }
     get("/next") {
+        // ?context= selects a context (persisted in a cookie), mirroring "/".
+        call.request.queryParameters["context"]?.let { chosen ->
+            call.response.cookies.append(
+                "zync_context",
+                if (chosen == "none") "" else chosen,
+                path = "/",
+                maxAge = 365L * 24 * 60 * 60,
+            )
+        }
+        val context = call.selectedContext()
         call.respondHtml {
             page("Next", settingsHref, Tab.NEXT) {
                 div {
                     id = "next"
                     // Live-refresh this surface as tasks complete/defer elsewhere.
                     attributes["data-on:load"] = "@get('/updates/next')"
-                    nextSection(read, now())
+                    nextSection(read, inbox(), now(), context)
                 }
             }
         }
@@ -144,8 +154,9 @@ fun Route.webRoutes(
             changes.changes.collect { pushInbox() }
         }
         sse("/updates/next") {
+            val context = call.selectedContext()
             suspend fun pushNext() = patch(
-                patchElementsEvent(WebPlatform.renderFragment("next") { nextSection(read, now()) }),
+                patchElementsEvent(WebPlatform.renderFragment("next") { nextSection(read, inbox(), now(), context) }),
             )
             pushNext()
             changes.changes.collect { pushNext() }

@@ -35,11 +35,13 @@ class NavTabsTest {
         // Active tab is marked on the current surface.
         assertTrue(home.contains("aria-current=\"page\""))
 
-        // Next = flat next-actions across the whole tree (tasks, not projects).
+        // Next (spec §5) = each project's first completable action, grouped under the
+        // project label; untriaged inbox items are excluded (triage them first).
         val next = client.get("/next").bodyAsText()
         assertTrue(next.contains("<h2>Next</h2>"))
-        assertTrue(next.contains("Buy milk") && next.contains("Draft copy"), "next should list active tasks: $next")
-        assertTrue(!next.contains("Launch website"), "next lists tasks, not projects")
+        assertTrue(next.contains("Draft copy"), "next should list the project's next action: $next")
+        assertTrue(next.contains("Launch website"), "next groups actions under their project label: $next")
+        assertTrue(!next.contains("Buy milk"), "untriaged inbox items do not appear in Next: $next")
 
         // Projects = the project list, each drilling into its detail.
         val projects = client.get("/projects").bodyAsText()

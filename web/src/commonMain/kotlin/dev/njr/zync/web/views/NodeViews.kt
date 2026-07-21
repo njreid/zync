@@ -98,17 +98,28 @@ fun FlowContent.proposalsSection(read: ContentReadModel) {
 }
 
 /**
- * The Next Actions list (GTD "Next"): every live, active, non-deferred task across
- * the whole tree, regardless of project or context — the flat "what can I do now"
- * pool. A person tag renders as a `@waiting` marker so delegated items are visible.
+ * The Next Actions surface (spec §5, context-scoped): the top loose root action, then
+ * each project's first completable action (one row per project). Context is a manual
+ * pick (RESOLVED Q6) via the same ?context= cookie the inbox uses; null = "any".
  */
-fun FlowContent.nextSection(read: ContentReadModel, now: Long) {
+fun FlowContent.nextSection(read: ContentReadModel, inbox: Ulid?, now: Long, context: Ulid? = null) {
     h2 { +"Next" }
-    val items = read.activeTasks(now)
-    if (items.isEmpty()) {
+    context?.let { contextBar(read, it) }
+    val rows = read.nextActions(context, inbox, now)
+    if (rows.isEmpty()) {
         p("muted") { +"No next actions. Clarify the inbox to add some." }
     } else {
-        ul { items.forEach { li { nodeRow(it) } } }
+        ul {
+            rows.forEach { row ->
+                li {
+                    row.project?.let { proj ->
+                        a(href = "/node/${proj.id}") { span("project") { +(proj.title ?: "(project)") } }
+                        +" · "
+                    }
+                    nodeRow(row.action)
+                }
+            }
+        }
     }
 }
 

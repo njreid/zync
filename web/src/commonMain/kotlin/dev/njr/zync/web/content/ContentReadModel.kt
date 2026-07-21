@@ -3,6 +3,8 @@ package dev.njr.zync.web.content
 import dev.njr.zync.core.agent.AgentFlow
 import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.content.FractionalIndex
+import dev.njr.zync.core.content.Size
+import dev.njr.zync.core.content.Status
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.state.EntitySnapshot
@@ -52,6 +54,13 @@ data class ContextView(val id: Ulid, val name: String?)
 
 /** A one-slot reorder within a sibling list (GTD triage §3, spec Q2 = buttons for v1). */
 enum class Reorder { UP, DOWN, TOP }
+
+/**
+ * One Next-surface row (spec §5): an [action] plus the [project] it belongs to.
+ * [project] == null ⇒ the top loose root action; non-null ⇒ that project's first
+ * completable action (one row per project).
+ */
+data class NextRow(val action: NodeView, val project: NodeView?)
 
 /**
  * Reads for the shared content UI, folded from the `core` projection over a [StateStore].
@@ -120,6 +129,67 @@ class ContentReadModel(private val store: StateStore) {
     }
 
     private fun NodeView.effectiveRank(): String = rank ?: id.toString().lowercase()
+
+    /**
+     * Next Action list for context [context] (null = "any"), spec §5. Returns the top
+     * loose root action (project == null) followed by each project's first completable
+     * action (one [NextRow] per project). [inbox] is excluded so untriaged items don't
+     * leak in. Excludes WAITING/DONE/DROPPED/FILED, defer-hidden, and person-delegated
+     * (today's WAITING bridge). Ordering ([nextOrder]) is rank-based with dueDate/size
+     * bumps (RESOLVED Q3); degrades to rank+dueDate when no sizes are set (build #4).
+     */
+    fun nextActions(context: Ulid?, inbox: Ulid? = null, now: Long = Long.MAX_VALUE): List<NextRow> {
+        val order = nextOrder()
+        val byId = snapshots().associate { it.entityId.toString() to it.toView() }
+
+        val candidates = snapshots()
+            .filter { it.kind() == "task" && !it.proposed() }
+            .map { it.toView() }
+            .filter { completableNow(it, context, now) }
+            .filter { inbox == null || it.parent?.toString() != inbox.toString() }
+
+        val loose = candidates
+            .filter { it.parent == null }
+            .minWithOrNull(order)
+            ?.let { NextRow(it, null) }
+
+        val perProject = candidates
+            .filter { it.parent != null }
+            .groupBy { it.parent!!.toString() }
+            .mapNotNull { (pid, actions) ->
+                val first = actions.minWithOrNull(order) ?: return@mapNotNull null
+                NextRow(first, byId[pid])
+            }
+            .sortedWith(compareBy({ it.project?.effectiveRank() ?: "" }, { it.project?.id?.toString() ?: "" }))
+
+        return listOfNotNull(loose) + perProject
+    }
+
+    /** Completable in [context] now: ACTIVE, not deferred, not delegated, tag-matched. */
+    private fun completableNow(n: NodeView, context: Ulid?, now: Long): Boolean =
+        n.status != Status.WAITING && n.status != Status.DONE &&
+            n.status != Status.DROPPED && n.status != Status.FILED &&
+            n.person == null &&
+            (n.deferUntil == null || n.deferUntil <= now) &&
+            (context == null || n.tags.any { it.toString() == context.toString() })
+
+    /**
+     * Next-action priority (RESOLVED Q3 = rank + dueDate/size). Ascending = higher
+     * priority: dueDate (soonest first, undated last) → size (S<M<L, absent neutral) →
+     * manual rank → ULID. All-absent sizes ⇒ the size term is constant ⇒ pure rank+dueDate.
+     */
+    private fun nextOrder(): Comparator<NodeView> = compareBy(
+        { it.dueDate ?: Long.MAX_VALUE },
+        { sizeOrder(it.size) },
+        { it.effectiveRank() },
+        { it.id.toString() },
+    )
+
+    private fun sizeOrder(size: String?): Int = when (size) {
+        Size.S -> 0
+        Size.L -> 2
+        else -> 1 // M and absent are the neutral middle
+    }
 
     fun node(id: Ulid): NodeView? = store.project()[id]?.takeIf { it.alive }?.toView()
 
