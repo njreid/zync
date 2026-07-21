@@ -2,6 +2,8 @@ package dev.njr.zync.web.content
 
 import dev.njr.zync.core.agent.AgentFlow
 import dev.njr.zync.core.content.Fields
+import dev.njr.zync.core.content.Status
+import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.id.Ulid
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
@@ -57,6 +59,15 @@ class ContentCommands(private val ops: OpEmitter) {
 
     /** Set a node's sibling-order fractional index (GTD triage §3; computed by the read model). */
     fun setRank(node: Ulid, rank: String) = ops.setField(node, Fields.RANK, JsonPrimitive(rank))
+
+    /** Set a node's coarse effort size (GTD triage §4): one of [dev.njr.zync.core.content.Size]. */
+    fun setSize(node: Ulid, size: String) = ops.setField(node, Fields.SIZE, JsonPrimitive(size))
+
+    /** File a node into the Reference tree (GTD triage §7): status FILED + Move under the root. */
+    fun file(node: Ulid) {
+        ops.setField(node, Fields.STATUS, JsonPrimitive(Status.FILED))
+        ops.move(node, WellKnownNodes.REFERENCE_ROOT)
+    }
     fun convertToProject(node: Ulid) = ops.setField(node, "kind", JsonPrimitive("project"))
     fun convertToTask(node: Ulid) = ops.setField(node, "kind", JsonPrimitive("task"))
 

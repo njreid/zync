@@ -7,8 +7,10 @@ import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.state.EntitySnapshot
 import dev.njr.zync.core.state.StateStore
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /** A node as the shared UI reads it — folded from the op-log projection. */
@@ -34,7 +36,16 @@ data class NodeView(
     val proposed: Boolean = false,
     /** Fractional-index sibling order (GTD triage §3); null = unranked (sorts by ULID/FIFO). */
     val rank: String? = null,
+    /** Coarse effort size (GTD triage §4): S/M/L or null. */
+    val size: String? = null,
+    /** Operator-suggested file locations for an inbox item (GTD triage §6); empty until #6. */
+    val fileSuggestions: List<FileSuggestion> = emptyList(),
+    /** Reference node proposed as the filing parent for a DONE task (GTD triage §7); null = none. */
+    val proposedFileParent: Ulid? = null,
 )
+
+/** One ranked file-location proposal for an inbox item (GTD triage §6). */
+data class FileSuggestion(val targetId: Ulid, val title: String, val tree: String, val score: Double)
 
 /** A context/tag as the UI reads it. */
 data class ContextView(val id: Ulid, val name: String?)
@@ -181,7 +192,27 @@ class ContentReadModel(private val store: StateStore) {
         alive = alive,
         proposed = proposed(),
         rank = fields[Fields.RANK].asString(),
+        size = fields[Fields.SIZE].asString(),
+        fileSuggestions = parseFileSuggestions(fields[Fields.FILE_SUGGESTIONS]),
+        proposedFileParent = fields[Fields.PROPOSED_FILE_PARENT].asString()
+            ?.let { runCatching { Ulid.parse(it) }.getOrNull() },
     )
+
+    /** Parse the operator-written `fileSuggestions` JSON array; malformed/absent → empty. */
+    private fun parseFileSuggestions(value: JsonElement?): List<FileSuggestion> {
+        val array = value as? JsonArray ?: return emptyList()
+        return array.mapNotNull { el ->
+            val obj = el as? JsonObject ?: return@mapNotNull null
+            val target = (obj["targetId"] as? JsonPrimitive)?.content?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+                ?: return@mapNotNull null
+            FileSuggestion(
+                targetId = target,
+                title = (obj["title"] as? JsonPrimitive)?.content ?: "",
+                tree = (obj["tree"] as? JsonPrimitive)?.content ?: "",
+                score = (obj["score"] as? JsonPrimitive)?.content?.toDoubleOrNull() ?: 0.0,
+            )
+        }
+    }
 
     // JsonNull IS a JsonPrimitive (content "null") — cleared fields must read as absent.
     private fun JsonElement?.asString(): String? =

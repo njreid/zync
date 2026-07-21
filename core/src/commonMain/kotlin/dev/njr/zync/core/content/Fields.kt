@@ -1,5 +1,7 @@
 package dev.njr.zync.core.content
 
+import dev.njr.zync.core.id.Ulid
+
 /**
  * The shared field-name vocabulary for content nodes (review finding #13, scoped:
  * constants only, no domain framework). One definition for `core` consumers,
@@ -44,6 +46,23 @@ object Fields {
      * ascending (capture order = FIFO for free). See [FractionalIndex].
      */
     const val RANK = "rank"
+
+    /** Coarse effort size (GTD triage §4): one of [Size]. Bigger ⇒ must become a project. */
+    const val SIZE = "size"
+
+    /**
+     * Operator-owned JSON array of ranked file-location proposals for an inbox item
+     * (GTD triage §6). Each element `{"targetId","title","tree","score"}`; empty/absent
+     * = no confident suggestion. Accepting a chip is the human Move; owner Operator("suggest-file").
+     */
+    const val FILE_SUGGESTIONS = "fileSuggestions"
+
+    /**
+     * Operator-owned single Reference-tree node id proposed as the filing parent for a
+     * DONE task (GTD triage §7, RESOLVED Q5). Accepting = Move under it + status FILED;
+     * owner Operator("auto-file-done").
+     */
+    const val PROPOSED_FILE_PARENT = "proposedFileParent"
 }
 
 /** OCR lifecycle values for [Fields.OCR_STATUS]. */
@@ -52,4 +71,29 @@ object OcrStatus {
     const val RUNNING = "RUNNING"
     const val DONE = "DONE"
     const val FAILED = "FAILED"
+}
+
+/** GTD status values for [Fields.STATUS] (spec §1: extends ACTIVE/DONE/DROPPED with WAITING/FILED). */
+object Status {
+    const val ACTIVE = "ACTIVE"
+    const val WAITING = "WAITING"
+    const val DONE = "DONE"
+    const val DROPPED = "DROPPED"
+
+    /** Moved into the Reference tree: archived, out of active lists, still searchable. */
+    const val FILED = "FILED"
+}
+
+/** Coarse effort sizes for [Fields.SIZE] (GTD triage §4): S <2m, M <30m, L <~2h; no XL. */
+object Size {
+    const val S = "S"
+    const val M = "M"
+    const val L = "L"
+    val ALL = listOf(S, M, L)
+}
+
+/** Well-known node ids threaded as config (like the inbox root), not stored as fields. */
+object WellKnownNodes {
+    /** Parent of the Reference tree (GTD triage §7); filing Moves under this subtree. */
+    val REFERENCE_ROOT: Ulid = Ulid.parse("000000000000000000000RFRNC")
 }
