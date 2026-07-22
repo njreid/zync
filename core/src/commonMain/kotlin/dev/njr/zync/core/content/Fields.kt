@@ -39,6 +39,12 @@ object Fields {
     /** Operator-owned one-paragraph summary of a document's OCR text. */
     const val SUMMARY = "summary"
 
+    /** Fetched <title> of a shared URL (preview shown when an inbox item is expanded). */
+    const val LINK_TITLE = "linkTitle"
+
+    /** First text paragraph fetched from a shared URL (preview shown when expanded). */
+    const val LINK_PREVIEW = "linkPreview"
+
     /**
      * Fractional-index string giving a node a total order *among its siblings*
      * (GTD triage spec §3): drives FIFO inbox reorder, project reorder, and

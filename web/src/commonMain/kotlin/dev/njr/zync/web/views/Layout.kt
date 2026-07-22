@@ -1,42 +1,54 @@
 package dev.njr.zync.web.views
 
+import dev.njr.zync.core.id.Ulid
+import dev.njr.zync.web.content.ContextView
 import kotlinx.html.FlowContent
 import kotlinx.html.HTML
 import kotlinx.html.a
 import kotlinx.html.body
+import kotlinx.html.details
 import kotlinx.html.head
+import kotlinx.html.li
 import kotlinx.html.link
 import kotlinx.html.main
 import kotlinx.html.meta
 import kotlinx.html.nav
 import kotlinx.html.script
-import kotlinx.html.span
-import kotlinx.html.strong
+import kotlinx.html.summary
 import kotlinx.html.title
+import kotlinx.html.ul
 
 /**
- * The fixed GTD surfaces (spec: "some fixed categories which need to be easily
- * accessible"). Rendered as a thumb-reachable bottom tab bar on every page so
- * Inbox / Next / Projects are one tap away from anywhere in the app.
+ * The fixed GTD surfaces (spec: "some fixed categories which need to be easily accessible"),
+ * now exposed through the top-bar **View** dropdown (left) rather than a bottom tab bar.
  */
-enum class Tab(val href: String, val label: String, val icon: String) {
-    INBOX("/", "Inbox", "📥"),      // 📥
-    NEXT("/next", "Next", "→"),           // →
-    PROJECTS("/projects", "Projects", "🗂"), // 🗂
-    REFERENCE("/reference", "Reference", "📁"), // 📁
-    NONE("", "", ""),
+enum class Tab(val href: String, val label: String, val key: String) {
+    INBOX("/", "Inbox", "i"),
+    TODAY("/today", "Today", "t"),
+    NEXT("/next", "Next", "n"),
+    PROJECTS("/projects", "Projects", "p"),
+    REFERENCE("/reference", "Reference", "r"),
+    NONE("", "", "");
+
+    companion object {
+        /** The menu order for the View dropdown. */
+        val VIEWS = listOf(INBOX, TODAY, NEXT, PROJECTS, REFERENCE)
+    }
 }
 
 /**
- * The shared page shell: a slim top bar (brand + optional Pairing), a `<main>` for the
- * view content, and a fixed bottom tab bar for the fixed GTD categories. Dark theme is
- * forced (`data-theme="dark"`, the v0.2 look); styles come from vendored stylesheet
- * FILES because the loopback CSP has no inline-style carve-out.
+ * The shared page shell: a slim top bar with a **View** dropdown (left) and a **Context**
+ * dropdown (right, mirroring the home screen's @context), and a `<main>` for the view content.
+ * Dark theme is forced (`data-theme="dark"`, the v0.2 look); styles come from vendored FILES
+ * because the loopback CSP has no inline-style carve-out. Both dropdowns are pure
+ * `<details>`/`<summary>` — no JS, CSP-safe.
  */
 fun HTML.page(
     pageTitle: String,
     settingsHref: String? = null,
     activeTab: Tab = Tab.NONE,
+    contexts: List<ContextView> = emptyList(),
+    selectedContext: Ulid? = null,
     content: FlowContent.() -> Unit,
 ) {
     attributes["lang"] = "en"
@@ -54,37 +66,50 @@ fun HTML.page(
     }
     body {
         nav(classes = "topbar") {
-            strong { a(href = "/") { +"zync" } }
-            // Server-only (the phone loopback has no pairing page to link to).
-            settingsHref?.let { a(classes = "settings-link", href = it) { +"Pairing" } }
+            viewMenu(activeTab, settingsHref)
+            contextMenu(activeTab, contexts, selectedContext)
         }
         main(classes = "container") {
             // The inbox triage-panel open state is the Datastar `$exp` signal (holds the
-            // expanded node id). It is created lazily on the first expand toggle and then
-            // lives in Datastar's signal store — NOT the DOM — so it survives every #inbox
-            // SSE morph (the open panel stays open). No `data-signals` declaration needed.
+            // expanded node id). Created lazily on the first expand toggle and then living in
+            // Datastar's signal store — NOT the DOM — so it survives every #inbox SSE morph.
             content()
         }
-        tabBar(activeTab)
     }
 }
 
-/** Fixed bottom navigation exposing the three GTD categories, active tab highlighted. */
-private fun FlowContent.tabBar(active: Tab) {
-    nav(classes = "tabbar") {
-        listOf(Tab.INBOX, Tab.NEXT, Tab.PROJECTS, Tab.REFERENCE).forEach { tab ->
-            a(href = tab.href, classes = if (tab == active) "tab active" else "tab") {
-                if (tab == active) attributes["aria-current"] = "page"
-                // g-chord key read from the DOM by the gesture helper.
-                attributes["data-key"] = when (tab) {
-                    Tab.INBOX -> "i"
-                    Tab.NEXT -> "n"
-                    Tab.PROJECTS -> "p"
-                    Tab.REFERENCE -> "r"
-                    Tab.NONE -> ""
+/** Left dropdown: the fixed views. Links carry `data-key` so the g-chords still work. */
+private fun FlowContent.viewMenu(active: Tab, settingsHref: String?) {
+    details(classes = "menu view-menu") {
+        summary { +(active.takeIf { it != Tab.NONE }?.label ?: "Views") }
+        ul {
+            Tab.VIEWS.forEach { tab ->
+                li {
+                    a(href = tab.href, classes = if (tab == active) "active" else null) {
+                        attributes["data-key"] = tab.key
+                        +tab.label
+                    }
                 }
-                span("tab-icon") { +tab.icon }
-                span("tab-label") { +tab.label }
+            }
+            // Server-only pairing/settings link (null on the phone loopback).
+            settingsHref?.let { li { a(href = it) { +"Pairing" } } }
+        }
+    }
+}
+
+/**
+ * Right dropdown: the context filter, mirroring the home screen's @context. Selecting a context
+ * navigates the CURRENT view with `?context=` (the server persists it in a cookie).
+ */
+private fun FlowContent.contextMenu(active: Tab, contexts: List<ContextView>, selected: Ulid?) {
+    val base = active.href.ifBlank { "/" }
+    val current = contexts.firstOrNull { it.id.toString() == selected?.toString() }
+    details(classes = "menu context-menu") {
+        summary { +(current?.name ?: "All") }
+        ul {
+            li { a(href = "$base?context=none") { +"All" } }
+            contexts.forEach { c ->
+                li { a(href = "$base?context=${c.id}") { +(c.name ?: "(context)") } }
             }
         }
     }

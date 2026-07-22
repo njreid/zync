@@ -46,9 +46,19 @@ class ShareReceiverActivity : ComponentActivity() {
             // capture → the user's shared item is silently dropped. appScope completes the write.
             app.appScope.launch {
                 runCatching {
-                    app.replicaCapture.captureNote(ShareImport.titleForText(subject, sharedText), notes = sharedText)
+                    val node = app.replicaCapture.captureNote(ShareImport.titleForText(subject, sharedText), notes = sharedText)
                     app.contentChanges.notifyChanged()
                     dev.njr.zync.sync.SyncScheduler.requestSync(app)
+                    // If a URL was shared, fetch a best-effort preview (title + first paragraph)
+                    // shown when the inbox item is expanded. Failure is silent.
+                    LinkPreview.firstUrl(sharedText)?.let { url ->
+                        LinkPreview.fetch(url)?.let { info ->
+                            info.title?.let { app.opWriter.setField(node, dev.njr.zync.core.content.Fields.LINK_TITLE, kotlinx.serialization.json.JsonPrimitive(it)) }
+                            info.paragraph?.let { app.opWriter.setField(node, dev.njr.zync.core.content.Fields.LINK_PREVIEW, kotlinx.serialization.json.JsonPrimitive(it)) }
+                            app.contentChanges.notifyChanged()
+                            dev.njr.zync.sync.SyncScheduler.requestSync(app)
+                        }
+                    }
                 }
                 withContext(Dispatchers.Main) { toastAndFinish("Added to your Inbox") }
             }

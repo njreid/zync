@@ -24,55 +24,59 @@
 html { color-scheme: dark; }
 /* Pure black surface for AMOLED (cards/inputs keep pico's elevated tones). */
 :root:not([data-theme=light]) { --pico-background-color: #000; }
+/* Never scroll horizontally; the inbox and every view are responsive to the phone width. */
+html, body { max-width: 100%; overflow-x: hidden; }
 body { padding-top: max(.75rem, env(safe-area-inset-top)); }
+* { min-width: 0; } /* let flex items shrink instead of forcing overflow */
 
-/* Slim top bar: brand on the left, optional Pairing link on the right. The primary
-   navigation lives in the bottom tab bar, so this stays out of the way. */
+/* Top bar: View dropdown (left) + Context dropdown (right). No brand row, no bottom bar. */
 nav.topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: .5rem;
   padding: .1rem 1rem .4rem;
   border-bottom: 1px solid var(--pico-muted-border-color);
 }
-nav.topbar strong a { text-decoration: none; letter-spacing: .02em; }
-nav.topbar .settings-link { font-size: .85rem; }
-
-/* Keep page content clear of the fixed bottom tab bar (+ safe-area inset). */
-main.container { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom)); }
-
-/* Fixed bottom tab bar: the three fixed GTD categories, thumb-reachable. */
-nav.tabbar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 30;
-  display: flex;
-  padding-bottom: env(safe-area-inset-bottom);
-  background: color-mix(in srgb, var(--pico-background-color) 92%, transparent);
-  backdrop-filter: blur(12px);
-  border-top: 1px solid var(--pico-muted-border-color);
-}
-nav.tabbar .tab {
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
+nav.topbar .menu { position: relative; margin: 0; }
+nav.topbar .menu > summary {
+  display: inline-flex;
   align-items: center;
-  gap: .1rem;
-  padding: .5rem .25rem;
-  text-decoration: none;
-  color: var(--pico-muted-color);
-}
-nav.tabbar .tab .tab-icon { font-size: 1.35rem; line-height: 1; }
-nav.tabbar .tab .tab-label {
+  gap: .3rem;
+  width: auto;
+  padding: .3rem .9rem;
   font-family: "Iosevka Charon Mono", ui-monospace, monospace;
   font-weight: 700;
-  font-size: .7rem;
-  letter-spacing: .02em;
+  font-size: .85rem;
+  color: var(--pico-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 1rem;
+  cursor: pointer;
+  list-style: none;
 }
-nav.tabbar .tab.active { color: var(--pico-primary); }
-nav.tabbar .tab:active { background: var(--pico-card-background-color); }
+nav.topbar .menu > summary::-webkit-details-marker { display: none; }
+nav.topbar .menu > summary::after { content: "▾"; opacity: .6; }
+nav.topbar .menu[open] > summary { background: var(--pico-card-background-color); }
+nav.topbar .context-menu { text-align: right; }
+nav.topbar .menu ul {
+  position: absolute;
+  z-index: 40;
+  margin-top: .3rem;
+  min-width: 10rem;
+  padding: .2rem .8rem;
+  list-style: none;
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  box-shadow: 0 .4rem 1.2rem rgba(0, 0, 0, .35);
+}
+nav.topbar .context-menu ul { right: 0; }
+nav.topbar .menu ul li { display: block; padding: .35rem .1rem; border-bottom: 1px solid var(--pico-muted-border-color); }
+nav.topbar .menu ul li:last-child { border-bottom: none; }
+nav.topbar .menu ul a { text-decoration: none; color: var(--pico-color); }
+nav.topbar .menu ul a.active { font-weight: 700; }
+
+main.container { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
 
 main h2 { margin-bottom: .6rem; font-size: 1.15rem; }
 
@@ -82,9 +86,12 @@ main h2 { margin-bottom: .6rem; font-size: 1.15rem; }
   font-family: "Iosevka Charon Mono", ui-monospace, monospace;
   font-weight: 700;
   font-size: .8em;
-  color: var(--pico-primary);
+  color: var(--pico-color);
 }
 .proposed { font-style: italic; }
+
+/* All item text reads in the normal light colour — no blue links in the lists. */
+main a { color: var(--pico-color); }
 
 /* List rows (inbox, proposals, tree nodes): flat rows with hairline separators. */
 main ul { list-style: none; padding-left: 0; margin: 0; }
@@ -98,23 +105,27 @@ main li {
 }
 main li > a { flex: 1 1 auto; text-decoration: none; }
 main li > a:hover { text-decoration: underline; }
+/* Inbox row title: tap to expand the triage panel (not a link). */
+.row-title { flex: 1 1 auto; cursor: pointer; overflow-wrap: anywhere; }
 
 /* Nested tree levels indent with a guide line. */
 main ul ul { margin-left: 1rem; padding-left: .6rem; border-left: 1px solid var(--pico-muted-border-color); width: 100%; }
 main ul ul li:last-child { border-bottom: none; }
 
 /* Inline row actions render outlined + compact (v0.2 chip pattern). */
-button.action {
+button.action, a.action {
+  display: inline-block;
   width: auto;
   margin: 0;
   padding: .15rem .65rem;
   font-size: .85rem;
+  text-decoration: none;
   background: transparent;
-  color: var(--pico-primary);
-  border: 1px solid var(--pico-primary);
+  color: var(--pico-color);
+  border: 1px solid var(--pico-muted-border-color);
   border-radius: var(--pico-border-radius);
 }
-button.action:hover { background: var(--pico-primary); color: var(--pico-primary-inverse); }
+button.action:hover, a.action:hover { background: var(--pico-card-background-color); }
 
 /* Quick add: input + button on one line. */
 .quick-add { display: flex; gap: .5rem; margin-bottom: .75rem; }
@@ -239,7 +250,29 @@ button.action.suggest-chip { border-style: dashed; }
 .file-banner {
   margin: .5rem 0;
   padding: .4rem .7rem;
-  border: 1px solid var(--pico-primary);
+  border: 1px solid var(--pico-muted-border-color);
   border-radius: var(--pico-border-radius);
   font-size: .9rem;
 }
+
+/* Swipe undo window (GTD §4, device feedback): a committed swipe greys the row for ~3s
+   with an Undo button before the complete/delete actually commits. */
+.swipe-row.pending { opacity: .45; transition: opacity .15s ease; }
+.swipe-row.pending .row-title { text-decoration: line-through; }
+.undo {
+  display: none;
+  width: auto;
+  margin: 0;
+  padding: .1rem .7rem;
+  font-size: .8rem;
+  background: var(--pico-card-background-color);
+  color: var(--pico-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+}
+.swipe-row.pending .undo { display: inline-block; }
+
+/* Fetched URL preview shown in the expanded triage panel. */
+.link-preview { margin: .2rem 0 .4rem; }
+.link-preview .link-title { font-weight: 700; }
+.link-preview p { margin: .15rem 0 0; }

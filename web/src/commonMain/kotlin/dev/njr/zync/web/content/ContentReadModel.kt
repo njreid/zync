@@ -49,6 +49,9 @@ data class NodeView(
     val fileSuggestions: List<FileSuggestion> = emptyList(),
     /** Reference node proposed as the filing parent for a DONE task (GTD triage §7); null = none. */
     val proposedFileParent: Ulid? = null,
+    /** Fetched preview of a shared URL: page title + first paragraph (shown when an item expands). */
+    val linkTitle: String? = null,
+    val linkPreview: String? = null,
 )
 
 /** One ranked file-location proposal for an inbox item (GTD triage §6). */
@@ -376,6 +379,8 @@ class ContentReadModel(private val store: StateStore) {
         ocrStatus = fields[Fields.OCR_STATUS].asString(),
         ocrBlobHash = fields[Fields.OCR_BLOB_HASH].asString(),
         summary = fields[Fields.SUMMARY].asString(),
+        linkTitle = fields[Fields.LINK_TITLE].asString(),
+        linkPreview = fields[Fields.LINK_PREVIEW].asString(),
         parent = parent,
         tags = tags,
         alive = alive,

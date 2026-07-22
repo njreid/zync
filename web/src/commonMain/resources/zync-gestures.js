@@ -30,6 +30,46 @@ function fire(row, kind) {
   if (btn) btn.click();
 }
 
+// --- Swipe undo window (~3s, device feedback) ---
+// A committed swipe greys the row + shows Undo; the complete/delete only fires after the
+// window elapses. Either swipe direction enters this state (left = delete, right = complete).
+const PENDING_MS = 3000;
+const pending = new Map(); // row -> { kind, url, timer }
+
+function pendingUrl(row, kind) {
+  return kind === 'complete' ? row.getAttribute('data-complete') : row.getAttribute('data-trash');
+}
+function startPending(row, kind) {
+  cancelPending(row);
+  row.classList.add('pending', 'pending-' + kind);
+  const timer = setTimeout(() => { pending.delete(row); fire(row, kind); }, PENDING_MS);
+  pending.set(row, { kind, url: pendingUrl(row, kind), timer });
+}
+function cancelPending(row) {
+  const p = pending.get(row);
+  if (!p) return;
+  clearTimeout(p.timer);
+  pending.delete(row);
+  row.classList.remove('pending', 'pending-complete', 'pending-trash');
+}
+
+// Undo tap during the window.
+document.addEventListener('click', (e) => {
+  const u = e.target.closest && e.target.closest('[data-undo]');
+  if (!u) return;
+  e.preventDefault();
+  const row = u.closest('.swipe-row');
+  if (row) cancelPending(row);
+}, true);
+
+// Commit-on-leave (chosen behaviour): a Datastar click can't survive page unload, so POST via
+// sendBeacon; the persistent SSE stream still pushes the resulting #inbox patch to other views.
+function flushPending() {
+  pending.forEach((p) => { clearTimeout(p.timer); if (p.url && navigator.sendBeacon) navigator.sendBeacon(p.url); });
+  pending.clear();
+}
+window.addEventListener('pagehide', flushPending);
+
 // --- Pointer / swipe ---
 
 document.addEventListener('pointerdown', (e) => {
@@ -69,7 +109,7 @@ document.addEventListener('pointerup', (e) => {
   row.classList.remove('swiping');
   row.style.removeProperty('--swipe-dx');
   active = null;
-  if (committed) fire(row, dx > 0 ? 'complete' : 'trash');
+  if (committed) startPending(row, dx > 0 ? 'complete' : 'trash');
   if (moved) {
     // Any horizontal swipe (committed or not) was a gesture, not a tap — swallow the
     // trailing click so the row's <a> never navigates. On touch a swipe often fires NO
@@ -117,7 +157,7 @@ document.addEventListener('keydown', (e) => {
   // g-chord: `g` then a tab letter navigates via the tab bar's data-key links.
   if (pendingG && (Date.now() - pendingG) < CHORD_MS) {
     pendingG = 0;
-    const target = document.querySelector('nav.tabbar a[data-key="' + e.key + '"]');
+    const target = document.querySelector('a[data-key="' + e.key + '"]');
     if (target) { e.preventDefault(); location.href = target.getAttribute('href'); }
     return;
   }

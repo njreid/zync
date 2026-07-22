@@ -60,6 +60,9 @@ fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long, co
                 items.forEach {
                     li("swipe-row") {
                         attributes["data-node"] = it.id.toString()
+                        // URLs the gesture layer commits (via sendBeacon) if you leave mid-undo.
+                        attributes["data-complete"] = "/node/${it.id}/complete"
+                        attributes["data-trash"] = "/node/${it.id}/trash"
                         nodeRow(it, reorderable = true)
                         triagePanel(read, it)
                     }
@@ -67,7 +70,6 @@ fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long, co
             }
         }
     } else {
-        contextBar(read, context)
         val items = read.contextTasks(context, now)
         if (items.isEmpty()) {
             p("muted") { +"No active tasks in this context." }
@@ -146,7 +148,6 @@ fun FlowContent.proposalsSection(read: ContentReadModel) {
  */
 fun FlowContent.nextSection(read: ContentReadModel, inbox: Ulid?, now: Long, context: Ulid? = null) {
     h2 { +"Next" }
-    context?.let { contextBar(read, it) }
     val rows = read.nextActions(context, inbox, now)
     if (rows.isEmpty()) {
         p("muted") { +"No next actions. Clarify the inbox to add some." }
@@ -163,6 +164,19 @@ fun FlowContent.nextSection(read: ContentReadModel, inbox: Ulid?, now: Long, con
             }
         }
     }
+}
+
+/**
+ * The Today surface: tasks due on or before end-of-today (context-filtered when one is picked).
+ * Mirrors the native home "due" tile.
+ */
+fun FlowContent.todaySection(read: ContentReadModel, now: Long, context: Ulid? = null) {
+    h2 { +"Today" }
+    val byMillis = DueDates.parse(DueDates.format(now)) ?: now // today's date → end-of-today cutoff
+    val items = read.dueTasks(byMillis)
+        .let { list -> if (context == null) list else list.filter { n -> n.tags.any { it.toString() == context.toString() } } }
+    if (items.isEmpty()) p("muted") { +"Nothing due today." }
+    else ul { items.forEach { li { nodeRow(it) } } }
 }
 
 /**
@@ -197,29 +211,15 @@ fun FlowContent.projectsSection(read: ContentReadModel, now: Long, inbox: Ulid? 
  */
 fun FlowContent.nodeRow(node: NodeView, reorderable: Boolean = false) {
     if (reorderable) {
-        // Toggle the inline triage panel (one open at a time via the $exp signal).
-        button(classes = "action expand") {
+        // Tap the title to expand the triage panel (no leading decorator); Details in the panel
+        // opens the full editor. Non-triage surfaces keep the title as a link to the node.
+        span(classes = "row-title") {
             attributes["data-on:click"] = "\$exp = (\$exp === '${node.id}' ? '' : '${node.id}')"
-            attributes["title"] = "Expand"
-            +"▸"
+            +(node.title ?: "(untitled)")
         }
-        button(classes = "action reorder") {
-            attributes["data-on:click"] = "@post('/node/${node.id}/rank?dir=top')"
-            attributes["title"] = "Send to top"
-            +"⤒"
-        }
-        button(classes = "action reorder") {
-            attributes["data-on:click"] = "@post('/node/${node.id}/rank?dir=up')"
-            attributes["title"] = "Move up"
-            +"↑"
-        }
-        button(classes = "action reorder") {
-            attributes["data-on:click"] = "@post('/node/${node.id}/rank?dir=down')"
-            attributes["title"] = "Move down"
-            +"↓"
-        }
+    } else {
+        a(href = "/node/${node.id}") { +(node.title ?: "(untitled)") }
     }
-    a(href = "/node/${node.id}") { +(node.title ?: "(untitled)") }
     node.person?.let { span("waiting") { +" @$it" } }
     node.size?.let { span("size-badge") { +it } }
     node.status?.let { span("status") { +" · $it" } }
@@ -249,6 +249,12 @@ fun FlowContent.nodeRow(node: NodeView, reorderable: Boolean = false) {
             attributes["aria-label"] = "Delete"
             +"Delete"
         }
+        // Shown only during a swipe's 3s undo window (CSS: `.pending .undo`); the gesture
+        // layer cancels the pending complete/delete when tapped.
+        button(classes = "undo") {
+            attributes["data-undo"] = ""
+            +"Undo"
+        }
     }
 }
 
@@ -261,6 +267,34 @@ fun FlowContent.nodeRow(node: NodeView, reorderable: Boolean = false) {
 private fun FlowContent.triagePanel(read: ContentReadModel, node: NodeView) {
     div(classes = "triage") {
         attributes["data-show"] = "\$exp === '${node.id}'"
+
+        // Reorder (hidden until expanded, per device feedback) + open the full editor.
+        div(classes = "org-row") {
+            button(classes = "action") {
+                attributes["data-on:click"] = "@post('/node/${node.id}/rank?dir=top')"
+                attributes["title"] = "Send to top"
+                +"⤒"
+            }
+            button(classes = "action") {
+                attributes["data-on:click"] = "@post('/node/${node.id}/rank?dir=up')"
+                attributes["title"] = "Move up"
+                +"↑"
+            }
+            button(classes = "action") {
+                attributes["data-on:click"] = "@post('/node/${node.id}/rank?dir=down')"
+                attributes["title"] = "Move down"
+                +"↓"
+            }
+            a(href = "/node/${node.id}", classes = "action details") { +"Details" }
+        }
+
+        // Fetched preview of a shared URL: page title + first paragraph.
+        if (node.linkTitle != null || node.linkPreview != null) {
+            div(classes = "link-preview") {
+                node.linkTitle?.let { span("link-title") { +it } }
+                node.linkPreview?.let { p("muted") { +it } }
+            }
+        }
 
         // Rename.
         div(classes = "org-row") {
@@ -539,14 +573,20 @@ private fun ocrLabel(status: String): String = when (status) {
     else -> "OCR $status"
 }
 
-/** A Datastar-bound text input + submit button that posts the signal as a query param. */
+/**
+ * A Datastar-bound text input + submit button that posts the signal as a query param. Enter in
+ * the field submits and clears it (so another subtask can be typed straight after); the clear is
+ * an optimistic `$bind = ''` after the post fires.
+ */
 private fun FlowContent.quickAdd(bind: String, param: String, action: String, label: String) {
+    val submit = "@post('$action?$param=' + encodeURIComponent(\$$bind)); \$$bind = ''"
     input(type = InputType.text) {
         attributes["data-bind:$bind"] = ""
         attributes["placeholder"] = label
+        attributes["data-on:keydown"] = "if (evt.key === 'Enter') { $submit }"
     }
     button {
-        attributes["data-on:click"] = "@post('$action?$param=' + encodeURIComponent(\$$bind))"
+        attributes["data-on:click"] = submit
         +label
     }
 }

@@ -18,6 +18,7 @@ import dev.njr.zync.web.views.projectsSection
 import dev.njr.zync.web.views.readingView
 import dev.njr.zync.web.views.referenceResults
 import dev.njr.zync.web.views.referenceSection
+import dev.njr.zync.web.views.todaySection
 import dev.njr.zync.web.views.treeSection
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -69,7 +70,7 @@ fun Route.webRoutes(
         }
         val context = call.selectedContext()
         call.respondHtml {
-            page("Inbox", settingsHref, Tab.INBOX) {
+            page("Inbox", settingsHref, Tab.INBOX, read.contexts(), context) {
                 div {
                     id = "inbox"
                     // Datastar: open the SSE stream on load; the server patches #inbox on change.
@@ -91,7 +92,7 @@ fun Route.webRoutes(
         }
         val context = call.selectedContext()
         call.respondHtml {
-            page("Next", settingsHref, Tab.NEXT) {
+            page("Next", settingsHref, Tab.NEXT, read.contexts(), context) {
                 div {
                     id = "next"
                     // Live-refresh this surface as tasks complete/defer elsewhere.
@@ -101,9 +102,29 @@ fun Route.webRoutes(
             }
         }
     }
+    get("/today") {
+        call.request.queryParameters["context"]?.let { chosen ->
+            call.response.cookies.append(
+                "zync_context",
+                if (chosen == "none") "" else chosen,
+                path = "/",
+                maxAge = 365L * 24 * 60 * 60,
+            )
+        }
+        val context = call.selectedContext()
+        call.respondHtml {
+            page("Today", settingsHref, Tab.TODAY, read.contexts(), context) {
+                div {
+                    id = "today"
+                    attributes["data-on:load"] = "@get('/updates/today')"
+                    todaySection(read, now(), context)
+                }
+            }
+        }
+    }
     get("/projects") {
         call.respondHtml {
-            page("Projects", settingsHref, Tab.PROJECTS) {
+            page("Projects", settingsHref, Tab.PROJECTS, read.contexts(), call.selectedContext()) {
                 div {
                     id = "projects"
                     attributes["data-on:load"] = "@get('/updates/projects')"
@@ -114,7 +135,7 @@ fun Route.webRoutes(
     }
     get("/reference") {
         call.respondHtml {
-            page("Reference", settingsHref, Tab.REFERENCE) {
+            page("Reference", settingsHref, Tab.REFERENCE, read.contexts(), call.selectedContext()) {
                 div {
                     id = "reference"
                     attributes["data-on:load"] = "@get('/updates/reference')"
@@ -129,20 +150,20 @@ fun Route.webRoutes(
         call.respondDatastar(patchElementsEvent(WebPlatform.renderFragment("reference-results") { referenceResults(read, q) }))
     }
     get("/tree") {
-        call.respondHtml { page("Tree", settingsHref, Tab.PROJECTS) { h2 { +"Tree" }; treeSection(read, null) } }
+        call.respondHtml { page("Tree", settingsHref, Tab.PROJECTS, read.contexts(), call.selectedContext()) { h2 { +"Tree" }; treeSection(read, null) } }
     }
     get("/node/{id}") {
         val node = call.parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }?.let(read::node)
         if (node == null) {
             call.respondText("not found", status = HttpStatusCode.NotFound)
         } else {
-            call.respondHtml { page(node.title ?: "Node", settingsHref, Tab.NONE) { div { id = "node-detail"; nodeDetail(read, node) } } }
+            call.respondHtml { page(node.title ?: "Node", settingsHref, Tab.NONE, read.contexts(), call.selectedContext()) { div { id = "node-detail"; nodeDetail(read, node) } } }
         }
     }
     get("/node/{id}/read") {
         val node = call.parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }?.let(read::node)
         if (node == null) call.respondText("not found", status = HttpStatusCode.NotFound)
-        else call.respondHtml { page(node.title ?: "Read", settingsHref, Tab.NONE) { readingView(node) } }
+        else call.respondHtml { page(node.title ?: "Read", settingsHref, Tab.NONE, read.contexts(), call.selectedContext()) { readingView(node) } }
     }
     get("/assets/datastar.js") {
         call.respondText(WebPlatform.datastarRuntime(), ContentType("application", "javascript"))
@@ -181,6 +202,14 @@ fun Route.webRoutes(
             )
             pushNext()
             changes.changes.collect { pushNext() }
+        }
+        sse("/updates/today") {
+            val context = call.selectedContext()
+            suspend fun pushToday() = patch(
+                patchElementsEvent(WebPlatform.renderFragment("today") { todaySection(read, now(), context) }),
+            )
+            pushToday()
+            changes.changes.collect { pushToday() }
         }
         sse("/updates/projects") {
             suspend fun pushProjects() = patch(

@@ -12,12 +12,12 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * The mobile GTD shell: three fixed categories (Inbox / Next / Projects) reachable from
- * a bottom tab bar on every page, each with its own list surface.
+ * The mobile GTD shell: the fixed categories (Inbox / Today / Next / Projects / Reference) live in
+ * a top-bar **View** dropdown (left) with a **Context** dropdown (right) — no bottom tab bar.
  */
 class NavTabsTest {
     @Test
-    fun bottomTabBarAndNextAndProjectsSurfaces() = testApplication {
+    fun topBarViewsAndSurfaces() = testApplication {
         val store = InMemoryStateStore()
         val commands = ContentCommands(RecordingEmitter(store))
         val inbox = commands.createProject("Inbox")
@@ -28,12 +28,16 @@ class NavTabsTest {
 
         application { routing { webRoutes(read, inbox = { inbox }) } }
 
-        // Every page carries the fixed bottom tab bar with all three categories.
+        // Every page carries the top-bar View + Context dropdowns (and NOT the old bottom tab bar).
         val home = client.get("/").bodyAsText()
-        assertTrue(home.contains("class=\"tabbar\""), "home should render the bottom tab bar: $home")
-        assertTrue(home.contains("href=\"/next\"") && home.contains("href=\"/projects\""))
-        // Active tab is marked on the current surface.
-        assertTrue(home.contains("aria-current=\"page\""))
+        assertTrue(home.contains("view-menu"), "home should render the View dropdown: $home")
+        assertTrue(home.contains("context-menu"), "home should render the Context dropdown")
+        assertTrue(!home.contains("class=\"tabbar\""), "the bottom tab bar is gone")
+        assertTrue(
+            home.contains("href=\"/today\"") && home.contains("href=\"/next\"") && home.contains("href=\"/projects\""),
+            "the View menu lists the fixed views: $home",
+        )
+        assertTrue(home.contains("class=\"active\""), "the current view is marked active")
 
         // Next (spec §5) = each project's first completable action, grouped under the
         // project label; untriaged inbox items are excluded (triage them first).
@@ -42,6 +46,10 @@ class NavTabsTest {
         assertTrue(next.contains("Draft copy"), "next should list the project's next action: $next")
         assertTrue(next.contains("Launch website"), "next groups actions under their project label: $next")
         assertTrue(!next.contains("Buy milk"), "untriaged inbox items do not appear in Next: $next")
+
+        // Today = the due-today surface.
+        val today = client.get("/today").bodyAsText()
+        assertTrue(today.contains("<h2>Today</h2>"), "today surface renders: $today")
 
         // Projects = the project list, each drilling into its detail.
         val projects = client.get("/projects").bodyAsText()
