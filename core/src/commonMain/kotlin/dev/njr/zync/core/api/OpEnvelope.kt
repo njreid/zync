@@ -52,3 +52,7 @@ data class IntentResult(
     val status: String,
     val error: String? = null,
 )
+
+/** Response to `PUT /api/blobs`: the content-addressed key to reference in an `attach` intent. */
+@Serializable
+data class BlobKeyResult(val key: String)

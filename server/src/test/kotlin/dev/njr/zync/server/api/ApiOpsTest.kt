@@ -15,6 +15,7 @@ import dev.njr.zync.server.str
 import dev.njr.zync.server.sync.SyncService
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -39,10 +40,11 @@ class ApiOpsTest {
     private fun run(token: String? = "secret", block: suspend (io.ktor.client.HttpClient, SyncService) -> Unit) =
         testApplication {
             val service = SyncService(JvmZyncDatabase.inMemory())
-            val api = ExternalOpApi(service)
+            val blobs = dev.njr.zync.server.blob.BlobService(dev.njr.zync.server.blob.InMemoryBlobStore())
+            val api = ExternalOpApi(service, blobs = blobs)
             application {
                 install(ContentNegotiation) { json() }
-                routing { apiRoutes(api, EnvBotAuth(token, "newz")) }
+                routing { apiRoutes(api, EnvBotAuth(token, "newz"), blobs) }
             }
             block(client, service)
         }
@@ -109,6 +111,44 @@ class ApiOpsTest {
         val second = json.decodeFromString(EnvelopeResult.serializer(), client.submit(env).bodyAsText())
         assertEquals(first.results.single().nodeId, second.results.single().nodeId)
         assertEquals(sizeAfterFirst, service.stateStore.project().size, "retry must not re-ingest")
+    }
+
+    @Test
+    fun uploadBlobThenAttach() = run { client, service ->
+        val put = client.put("/api/blobs") {
+            header(HttpHeaders.Authorization, "Bearer secret")
+            setBody("scanned-pdf-bytes".toByteArray())
+        }
+        assertEquals(HttpStatusCode.OK, put.status)
+        val key = json.decodeFromString(dev.njr.zync.core.api.BlobKeyResult.serializer(), put.bodyAsText()).key
+        assertTrue(key.startsWith("blob-"))
+
+        val node = json.decodeFromString(
+            EnvelopeResult.serializer(),
+            client.submit(OpEnvelope(intents = listOf(OpIntent(op = "create", title = "doc")))).bodyAsText(),
+        ).results.single().nodeId!!
+        val resp = client.submit(OpEnvelope(intents = listOf(
+            OpIntent(op = "attach", target = node, blobRef = key, type = "pdf", name = "scan.pdf"),
+        )))
+        assertEquals(HttpStatusCode.OK, resp.status)
+        // an attachment entity links the blob to the node
+        assertTrue(service.stateStore.project().values.any {
+            val a = it.fields["@attachment"] as? kotlinx.serialization.json.JsonObject
+            a != null && (a["blobHash"] as? JsonPrimitive)?.content == key &&
+                (a["nodeId"] as? JsonPrimitive)?.content == node
+        })
+    }
+
+    @Test
+    fun attachWithMissingBlobIsRejected() = run { client, service ->
+        val node = json.decodeFromString(
+            EnvelopeResult.serializer(),
+            client.submit(OpEnvelope(intents = listOf(OpIntent(op = "create", title = "doc")))).bodyAsText(),
+        ).results.single().nodeId!!
+        val resp = client.submit(OpEnvelope(intents = listOf(
+            OpIntent(op = "attach", target = node, blobRef = "blob-" + "0".repeat(64), type = "pdf"),
+        )))
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
     }
 
     @Test

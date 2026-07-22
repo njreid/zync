@@ -20,6 +20,8 @@ import dev.njr.zync.web.content.OpEmitter
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.random.Random
 
 /**
@@ -35,6 +37,8 @@ class ExternalOpApi(
     private val random: Random = Random.Default,
     /** The well-known inbox root (null = tree root), for the "inbox" parent alias. */
     private val inbox: () -> Ulid? = { null },
+    /** Server blob store, for verifying `attach` blobRefs (uploaded via PUT /api/blobs). */
+    private val blobs: dev.njr.zync.server.blob.BlobService? = null,
 ) {
     fun submit(bot: BotIdentity, env: OpEnvelope): EnvelopeResult {
         // Effective mode: a bot without commit capability, or an envelope asking to propose,
@@ -61,6 +65,14 @@ class ExternalOpApi(
             "setField" -> edit(i, e, target(i), requireNotNull(i.field) { "field required" }, i.value ?: JsonNull, propose)
             "complete" -> edit(i, e, target(i), Fields.STATUS, JsonPrimitive("DONE"), propose)
             "trash" -> edit(i, e, target(i), Fields.STATUS, JsonPrimitive("DROPPED"), propose)
+            "attach" -> {
+                val t = target(i)
+                val blobHash = requireNotNull(i.blobRef) { "blobRef required" }
+                if (blobs?.fetch(blobHash) == null) {
+                    return IntentResult(i.op, null, "error", "blob not found — upload via PUT /api/blobs first")
+                }
+                ok(i, e.attach(t, i.type ?: "pdf", blobHash, i.name ?: "attachment"))
+            }
             "addTag" -> {
                 if (propose) return IntentResult(i.op, null, "error", "addTag is not proposable yet")
                 val t = target(i); c.addTag(t, Ulid.parse(requireNotNull(i.context) { "context required" })); ok(i, t)
@@ -129,5 +141,18 @@ class RecordingBotEmitter(
     }
     override fun tombstone(entity: Ulid) {
         ops += Op.Tombstone(newId(), entity, EntityType.Node, hlc.now(), actor, "server", now())
+    }
+
+    /** Link a (server-stored) blob to [node] as an attachment entity; returns its id. */
+    fun attach(node: Ulid, type: String, blobHash: String, name: String): Ulid {
+        val id = newId()
+        val payload = buildJsonObject {
+            put("nodeId", node.toString())
+            put("type", type)
+            put("blobHash", blobHash)
+            put("relativePath", name)
+        }
+        ops += Op.AddAttachment(newId(), id, EntityType.Attachment, hlc.now(), actor, "server", now(), payload)
+        return id
     }
 }

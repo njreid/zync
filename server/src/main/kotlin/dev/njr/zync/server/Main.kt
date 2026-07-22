@@ -88,7 +88,7 @@ fun main(args: Array<String>) {
     val content = ServerContent(service, changes)
     // External op API (bots/scripts/integrations): env-token auth for now (ZYNC_BOT_TOKEN).
     val botAuth = dev.njr.zync.server.api.EnvBotAuth.fromEnv()
-    val botApi = dev.njr.zync.server.api.ExternalOpApi(service)
+    val botApi = dev.njr.zync.server.api.ExternalOpApi(service, blobs = blobs)
 
     // Op-log compaction: daily by default; 0 disables. Retention via ZYNC_OPLOG_RETAIN_*.
     val compactor = OplogCompactor(db, CompactionPolicy.fromEnv(System::getenv), metrics = hardening.metrics)
