@@ -60,6 +60,21 @@ class BotMergeTest {
     }
 
     @Test
+    fun convergesWhenAnOperatorSitsBetweenHumanAndBotByHlc() {
+        // The tricky case: a non-Human authoritative writer (Operator) whose HLC is BETWEEN the
+        // human's and the bot's. A pairwise "Human-beats-Bot" rule cycles here (Human>Bot by rule,
+        // Bot>Operator by HLC, Operator>Human by HLC) and diverges by apply order. The advisory
+        // rule (any non-Bot outranks a Bot; else HLC) makes the operator the unambiguous winner.
+        val h = ops.setField(T, "title", str("human"), hlc(3), Actor.Human)
+        val op = ops.setField(T, "title", str("operator"), hlc(6), Actor.Operator("summarize"))
+        val b = ops.setField(T, "title", str("bot"), hlc(9), bot)
+        assertEquals("operator", value(h, op, b))
+        assertEquals("operator", value(b, h, op))
+        assertEquals("operator", value(op, b, h))
+        assertEquals("operator", value(b, op, h))
+    }
+
+    @Test
     fun botVsBotStillLww() {
         assertEquals(
             "newer",

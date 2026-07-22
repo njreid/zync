@@ -44,25 +44,28 @@ class ZyncClient(
 
     // --- Convenience verbs (each is a single-intent envelope) ---
 
-    fun create(title: String, parent: String = "inbox", kind: String = "task", fields: Map<String, JsonElement>? = null, tags: List<String>? = null): IntentResult =
-        submit(OpEnvelope(intents = listOf(OpIntent(op = "create", title = title, parent = parent, kind = kind, fields = fields, tags = tags)))).results.single()
+    /** Submit one intent and unwrap its single result — the shared shape of every verb below. */
+    private fun one(intent: OpIntent, mode: String? = null): IntentResult =
+        submit(OpEnvelope(mode = mode, intents = listOf(intent))).results.single()
 
-    fun comment(target: String, text: String): IntentResult =
-        submit(OpEnvelope(intents = listOf(OpIntent(op = "comment", target = target, text = text)))).results.single()
+    fun create(title: String, parent: String = "inbox", kind: String = "task", fields: Map<String, JsonElement>? = null, tags: List<String>? = null): IntentResult =
+        one(OpIntent(op = "create", title = title, parent = parent, kind = kind, fields = fields, tags = tags))
+
+    fun comment(target: String, text: String): IntentResult = one(OpIntent(op = "comment", target = target, text = text))
 
     fun setField(target: String, field: String, value: JsonElement): IntentResult =
-        submit(OpEnvelope(intents = listOf(OpIntent(op = "setField", target = target, field = field, value = value)))).results.single()
+        one(OpIntent(op = "setField", target = target, field = field, value = value))
 
     fun setField(target: String, field: String, value: String): IntentResult = setField(target, field, JsonPrimitive(value))
 
     /** Propose a field edit for a human to accept (does not mutate live state). */
     fun propose(target: String, field: String, value: JsonElement): IntentResult =
-        submit(OpEnvelope(mode = "propose", intents = listOf(OpIntent(op = "setField", target = target, field = field, value = value)))).results.single()
+        one(OpIntent(op = "setField", target = target, field = field, value = value), mode = "propose")
 
-    fun complete(target: String): IntentResult = submit(OpEnvelope(intents = listOf(OpIntent(op = "complete", target = target)))).results.single()
-    fun trash(target: String): IntentResult = submit(OpEnvelope(intents = listOf(OpIntent(op = "trash", target = target)))).results.single()
-    fun move(target: String, parent: String): IntentResult = submit(OpEnvelope(intents = listOf(OpIntent(op = "move", target = target, parent = parent)))).results.single()
-    fun addTag(target: String, context: String): IntentResult = submit(OpEnvelope(intents = listOf(OpIntent(op = "addTag", target = target, context = context)))).results.single()
+    fun complete(target: String): IntentResult = one(OpIntent(op = "complete", target = target))
+    fun trash(target: String): IntentResult = one(OpIntent(op = "trash", target = target))
+    fun move(target: String, parent: String): IntentResult = one(OpIntent(op = "move", target = target, parent = parent))
+    fun addTag(target: String, context: String): IntentResult = one(OpIntent(op = "addTag", target = target, context = context))
 
     /** Upload a blob (content-addressed); returns its key for use in an `attach` intent. */
     fun uploadBlob(bytes: ByteArray): String {
@@ -76,5 +79,5 @@ class ZyncClient(
     }
 
     fun attach(target: String, blobRef: String, type: String = "pdf", name: String = "attachment"): IntentResult =
-        submit(OpEnvelope(intents = listOf(OpIntent(op = "attach", target = target, blobRef = blobRef, type = type, name = name)))).results.single()
+        one(OpIntent(op = "attach", target = target, blobRef = blobRef, type = type, name = name))
 }

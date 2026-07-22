@@ -3,6 +3,7 @@ package dev.njr.zync.server.api
 import dev.njr.zync.core.api.BlobKeyResult
 import dev.njr.zync.core.api.EnvelopeResult
 import dev.njr.zync.core.api.OpEnvelope
+import dev.njr.zync.server.auth.bearerToken
 import dev.njr.zync.server.blob.BlobService
 import dev.njr.zync.server.blob.BlobTooLargeException
 import dev.njr.zync.web.sse.ChangeNotifier
@@ -20,11 +21,13 @@ import io.ktor.server.sse.sse
 
 private const val MAX_INTENTS = 200
 
-/** Resolve the bearer token to a bot, or null. */
-private fun ApplicationCall.bot(auth: BotAuth): BotIdentity? {
-    val token = request.headers[HttpHeaders.Authorization]?.removePrefix("Bearer ")?.trim().orEmpty()
-    return token.takeIf { it.isNotEmpty() }?.let { auth.authenticate(it) }
-}
+/** Resolve the bearer token to a bot, or null. Uses the shared [bearerToken] parser. */
+private fun ApplicationCall.bot(auth: BotAuth): BotIdentity? =
+    bearerToken(request.headers[HttpHeaders.Authorization])?.takeIf { it.isNotEmpty() }?.let { auth.authenticate(it) }
+
+/** HTTP status for an envelope result: any errored intent ⇒ the whole envelope was rejected. */
+private fun EnvelopeResult.httpStatus(): HttpStatusCode =
+    if (results.any { it.status == "error" }) HttpStatusCode.BadRequest else HttpStatusCode.OK
 
 /**
  * The external-op-api write door (spec §6): `POST /api/ops` takes a bearer-authed bot's
@@ -73,21 +76,35 @@ fun Route.apiRoutes(
             return@post call.respondText("intents must be 1..$MAX_INTENTS", status = HttpStatusCode.BadRequest)
         }
 
-        // A cached idempotent retry returns without consuming rate budget.
-        env.idempotencyKey?.let { key -> idem.get(bot.id, key)?.let { return@post call.respond(it) } }
+        // Dedup-check → rate-check → submit → cache, all under a per-key lock so a retry storm
+        // with the SAME idempotencyKey can't both pass the check and double-apply (each submit
+        // mints fresh op ids, so op-id dedupe wouldn't catch it). The block holds no suspension
+        // points; the (suspending) respond happens afterwards. A null key skips the lock — no
+        // dedup is possible or promised for keyless envelopes.
+        val outcome = idem.withKeyLock(bot.id, env.idempotencyKey) {
+            val cached = env.idempotencyKey?.let { idem.get(bot.id, it) }
+            if (cached != null) return@withKeyLock Outcome.Reply(cached.httpStatus(), cached)
 
-        // Per-token, per-verb rate limit (RESOLVED Q5), atomic for the whole envelope.
-        val counts = env.intents.groupingBy { it.op }.eachCount()
-        if (!limiter.tryConsume(bot.id, counts, bot.capabilities)) {
-            return@post call.respondText("rate limit exceeded", status = HttpStatusCode.TooManyRequests)
+            // Per-token, per-verb rate limit (RESOLVED Q5); a cached retry above never reaches here,
+            // so it costs no budget.
+            val counts = env.intents.groupingBy { it.op }.eachCount()
+            if (!limiter.tryConsume(bot.id, counts, bot.capabilities)) return@withKeyLock Outcome.RateLimited
+
+            val result = api.submit(bot, env)
+            env.idempotencyKey?.let { idem.put(bot.id, it, result) }
+            Outcome.Reply(result.httpStatus(), result)
         }
-
-        val result = api.submit(bot, env)
-        env.idempotencyKey?.let { idem.put(bot.id, it, result) }
-
-        val status = if (result.results.any { it.status == "error" }) HttpStatusCode.BadRequest else HttpStatusCode.OK
-        call.respond(status, result)
+        when (outcome) {
+            Outcome.RateLimited -> call.respondText("rate limit exceeded", status = HttpStatusCode.TooManyRequests)
+            is Outcome.Reply -> call.respond(outcome.status, outcome.result)
+        }
     }
+}
+
+/** The result of the /api/ops critical section, respond-able outside the idempotency lock. */
+private sealed interface Outcome {
+    data object RateLimited : Outcome
+    data class Reply(val status: HttpStatusCode, val result: EnvelopeResult) : Outcome
 }
 
 /** Per-`(botId, verb)` fixed-window rate limiter, checked atomically for the whole envelope (spec §7, Q5). */
@@ -119,6 +136,17 @@ private class VerbRateLimiter(private val now: () -> Long = System::currentTimeM
 private class IdempotencyCache(private val max: Int = 1024) {
     private val map = object : LinkedHashMap<String, EnvelopeResult>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, EnvelopeResult>): Boolean = size > max
+    }
+
+    // Striped monitors (bounded, unlike a per-key map that would grow forever): same key ⇒ same
+    // stripe, so concurrent same-key submits serialize; different keys rarely collide.
+    private val stripes = Array(64) { Any() }
+
+    /** Run [block] holding [key]'s stripe (or unlocked when [key] is null). No suspension inside. */
+    fun <T> withKeyLock(botId: String, key: String?, block: () -> T): T {
+        if (key == null) return block()
+        val lock = stripes[(("$botId::$key".hashCode()) and 0x7fffffff) % stripes.size]
+        return synchronized(lock, block)
     }
 
     @Synchronized fun get(botId: String, key: String): EnvelopeResult? = map["$botId::$key"]

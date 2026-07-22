@@ -47,7 +47,17 @@ class ExternalOpApi(
         val emitter = RecordingBotEmitter(bot.id, now, random)
         val commands = ContentCommands(emitter)
         val results = env.intents.map { translate(it, commands, emitter, propose, bot.capabilities) }
-        if (results.none { it.status == "error" }) service.ingestLocalBatch(emitter.ops)
+        if (results.any { it.status == "error" }) {
+            // Atomic (RESOLVED Q3): one bad intent rejects the whole envelope and nothing is
+            // ingested — so the other intents must NOT report a committed/proposed nodeId for an
+            // op that never landed, or a bot would record a phantom id (and cache it under the
+            // idempotency key). Rewrite every non-error result to a rolled-back error.
+            return EnvelopeResult(results.map {
+                if (it.status == "error") it
+                else IntentResult(it.op, null, "error", "rolled back — another intent in the envelope failed")
+            })
+        }
+        service.ingestLocalBatch(emitter.ops)
         return EnvelopeResult(results)
     }
 
@@ -58,14 +68,20 @@ class ExternalOpApi(
         propose: Boolean,
         caps: dev.njr.zync.core.api.BotCapabilities,
     ): IntentResult = try {
-        if (i.op !in caps.verbs) return IntentResult(i.op, null, "error", "verb '${i.op}' not permitted")
+        if (i.op !in caps.verbs) return err(i, "verb '${i.op}' not permitted")
         val allowedFields = caps.fields
         val field = i.field
         if (i.op == "setField" && allowedFields != null && (field == null || field !in allowedFields)) {
-            return IntentResult(i.op, null, "error", "field '$field' not permitted")
+            return err(i, "field '$field' not permitted")
         }
         when (i.op) {
             "create" -> {
+                // The field whitelist and the addTag grant also bind the create path — otherwise a
+                // bot could set non-whitelisted fields or tag via `create.fields`/`create.tags`,
+                // bypassing the caps that are enforced on standalone setField/addTag intents.
+                val badField = i.fields?.keys?.firstOrNull { allowedFields != null && it !in allowedFields }
+                if (badField != null) return err(i, "field '$badField' not permitted")
+                if (!i.tags.isNullOrEmpty() && "addTag" !in caps.verbs) return err(i, "addTag not permitted")
                 val id = if (i.kind == "project") c.createProject(i.title.orEmpty(), resolveParent(i.parent))
                 else c.createTask(i.title.orEmpty(), resolveParent(i.parent))
                 i.fields?.forEach { (f, v) -> e.setField(id, f, v) }
@@ -78,25 +94,28 @@ class ExternalOpApi(
             "complete" -> edit(i, e, target(i), Fields.STATUS, JsonPrimitive("DONE"), propose)
             "trash" -> edit(i, e, target(i), Fields.STATUS, JsonPrimitive("DROPPED"), propose)
             "attach" -> {
+                // Live attachment ops can't be reviewed, so a propose-only bot must not commit
+                // them — reject like the other non-proposable verbs rather than silently committing.
+                if (propose) return err(i, "attach is not proposable yet")
                 val t = target(i)
                 val blobHash = requireNotNull(i.blobRef) { "blobRef required" }
-                if (blobs?.fetch(blobHash) == null) {
-                    return IntentResult(i.op, null, "error", "blob not found — upload via PUT /api/blobs first")
+                if (blobs?.exists(blobHash) != true) {
+                    return err(i, "blob not found — upload via PUT /api/blobs first")
                 }
                 ok(i, e.attach(t, i.type ?: "pdf", blobHash, i.name ?: "attachment"))
             }
             "addTag" -> {
-                if (propose) return IntentResult(i.op, null, "error", "addTag is not proposable yet")
+                if (propose) return err(i, "addTag is not proposable yet")
                 val t = target(i); c.addTag(t, Ulid.parse(requireNotNull(i.context) { "context required" })); ok(i, t)
             }
             "move" -> {
-                if (propose) return IntentResult(i.op, null, "error", "move is not proposable yet")
+                if (propose) return err(i, "move is not proposable yet")
                 val t = target(i); c.move(t, requireNotNull(resolveParent(i.parent)) { "parent required" }); ok(i, t)
             }
-            else -> IntentResult(i.op, null, "error", "unsupported op '${i.op}'")
+            else -> err(i, "unsupported op '${i.op}'")
         }
     } catch (ex: Exception) {
-        IntentResult(i.op, null, "error", ex.message ?: "invalid intent")
+        err(i, ex.message ?: "invalid intent")
     }
 
     /** A field edit: commit the live `SetField`, or (propose) mint a suggestion node (§4). */
@@ -114,6 +133,7 @@ class ExternalOpApi(
 
     private fun ok(i: OpIntent, id: Ulid) = IntentResult(i.op, id.toString(), "committed")
     private fun proposed(i: OpIntent, id: Ulid) = IntentResult(i.op, id.toString(), "proposed")
+    private fun err(i: OpIntent, message: String) = IntentResult(i.op, null, "error", message)
 
     private fun target(i: OpIntent): Ulid = Ulid.parse(requireNotNull(i.target) { "target required" })
 

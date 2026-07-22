@@ -178,6 +178,49 @@ class ApiOpsTest {
     }
 
     @Test
+    fun partialFailureRewritesOtherResultsToRolledBack() = run { client, _ ->
+        val resp = client.submit(OpEnvelope(intents = listOf(
+            OpIntent(op = "create", title = "A"),
+            OpIntent(op = "comment", target = "not-a-ulid", text = "boom"), // invalid → whole envelope rejected
+        )))
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+        val results = json.decodeFromString(EnvelopeResult.serializer(), resp.bodyAsText()).results
+        // The create never landed, so it must NOT report a committed nodeId (would be a phantom id).
+        assertEquals("error", results[0].status)
+        assertNull(results[0].nodeId)
+    }
+
+    @Test
+    fun attachIsRejectedInProposeMode() = run { client, _ ->
+        val put = client.put("/api/blobs") { header(HttpHeaders.Authorization, "Bearer secret"); setBody("bytes".toByteArray()) }
+        val key = json.decodeFromString(dev.njr.zync.core.api.BlobKeyResult.serializer(), put.bodyAsText()).key
+        val node = json.decodeFromString(
+            EnvelopeResult.serializer(),
+            client.submit(OpEnvelope(intents = listOf(OpIntent(op = "create", title = "doc")))).bodyAsText(),
+        ).results.single().nodeId!!
+        val resp = client.submit(OpEnvelope(mode = "propose", intents = listOf(
+            OpIntent(op = "attach", target = node, blobRef = key, type = "pdf"),
+        )))
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+        assertEquals("error", json.decodeFromString(EnvelopeResult.serializer(), resp.bodyAsText()).results.single().status)
+    }
+
+    @Test
+    fun createCannotBypassTheFieldWhitelistOrTagGrant() {
+        val service = SyncService(JvmZyncDatabase.inMemory())
+        val api = ExternalOpApi(service)
+        val bot = BotIdentity("x", dev.njr.zync.core.api.BotCapabilities(verbs = setOf("create"), fields = setOf("notes")))
+        // A field outside the whitelist, and a tag without the addTag grant, are both rejected on create.
+        assertEquals("error", api.submit(bot, OpEnvelope(intents = listOf(
+            OpIntent(op = "create", title = "t", fields = mapOf("secret" to JsonPrimitive("v"))),
+        ))).results.single().status)
+        assertEquals("error", api.submit(bot, OpEnvelope(intents = listOf(
+            OpIntent(op = "create", title = "t", tags = listOf(id(2).toString())),
+        ))).results.single().status)
+        assertEquals(0, service.stateStore.project().size, "nothing should have been ingested")
+    }
+
+    @Test
     fun botDoesNotOverwriteAHumanField() = run { client, service ->
         // A human writes the title directly (Actor.Human), then a bot tries to change it.
         val node = id(1)

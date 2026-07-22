@@ -44,12 +44,15 @@ fun apply(op: Op, store: StateStore) {
 
 private fun lww(store: StateStore, key: RegisterKey, incoming: RegisterValue) {
     val existing = store.getRegister(key) ?: run { store.putRegister(key, incoming); return }
-    // A Human value is never overwritten by a Bot, and always supersedes a Bot, regardless
-    // of HLC (external-op-api spec §1: "bot proposes, human disposes" as a merge guarantee).
-    // Order-independent: the winner of {Human, Bot} is always the Human. Otherwise LWW by HLC.
+    // A Bot value is "advisory": it never beats an authoritative (non-Bot: Human/Operator/Agent)
+    // value, and any authoritative value supersedes a Bot value, regardless of HLC — so a bot can
+    // propose but never clobber a human decision (external-op-api spec §1). This is a TOTAL order
+    // (authoritative outranks advisory; ties broken by HLC), so the merge stays a proper join and
+    // converges regardless of apply order even when a third actor sits between the two by HLC.
+    // A pairwise Human-vs-Bot-only rule would NOT converge in that three-way case.
     val wins = when {
-        existing.actor is Actor.Human && incoming.actor is Actor.Bot -> false
-        existing.actor is Actor.Bot && incoming.actor is Actor.Human -> true
+        existing.actor is Actor.Bot && incoming.actor !is Actor.Bot -> true
+        existing.actor !is Actor.Bot && incoming.actor is Actor.Bot -> false
         else -> incoming.hlc > existing.hlc
     }
     if (wins) store.putRegister(key, incoming)

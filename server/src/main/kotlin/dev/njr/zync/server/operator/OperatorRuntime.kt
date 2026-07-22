@@ -136,8 +136,12 @@ class OperatorRuntime(
                 wave = next
             }
             if (wave.isNotEmpty()) log.warn("cascade halted at depth cap {} with {} pending ops", MAX_CASCADE_DEPTH, wave.size)
-        } catch (t: Throwable) {
-            log.error("operator cascade failed", t)
+        } catch (e: Exception) {
+            // A single operator failure must not kill the runtime — log and drop this cascade. But
+            // do NOT catch Throwable: an Error (OOM, StackOverflow) means the heap/stack is in an
+            // undefined state, so let it propagate to the thread's uncaught handler for supervision
+            // to restart, rather than limping on and silently corrupting later cascades.
+            log.error("operator cascade failed", e)
         }
     }
 

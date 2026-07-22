@@ -26,4 +26,7 @@ class BlobService(
         if (!isValidBlobKey(key)) return null
         return store.get(key)
     }
+
+    /** True iff [key] is well-formed and present — a metadata check (S3 HEAD), no download. */
+    fun exists(key: String): Boolean = isValidBlobKey(key) && store.exists(key)
 }

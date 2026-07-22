@@ -12,6 +12,7 @@ import dev.njr.zync.server.blob.BlobService
 import dev.njr.zync.server.blob.S3BlobStore
 import dev.njr.zync.server.content.ServerContent
 import dev.njr.zync.web.sse.ChangeNotifier
+import dev.njr.zync.server.api.plus
 import dev.njr.zync.server.durability.DbBackupGateway
 import dev.njr.zync.server.durability.LitestreamCli
 import dev.njr.zync.server.durability.StartupSequence
@@ -95,7 +96,7 @@ fun main(args: Array<String>) {
     // External op API (bots/scripts/integrations): the env token AND the registry both work.
     val envBot = dev.njr.zync.server.api.EnvBotAuth.fromEnv()
     val botRegistry = dev.njr.zync.server.api.SqlBotRegistry(db)
-    val botAuth = dev.njr.zync.server.api.BotAuth { t -> envBot.authenticate(t) ?: botRegistry.authenticate(t) }
+    val botAuth = envBot + botRegistry // env token first, then the persisted registry
     val botApi = dev.njr.zync.server.api.ExternalOpApi(service, blobs = blobs)
 
     // Op-log compaction: daily by default; 0 disables. Retention via ZYNC_OPLOG_RETAIN_*.
