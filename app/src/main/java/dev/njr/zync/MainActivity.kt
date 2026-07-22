@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
@@ -79,13 +80,23 @@ class MainActivity : ComponentActivity() {
     private val takePicture =
         registerForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
             val file = photoFile
-            if (ok && file != null && file.exists()) {
-                val app = application as ZyncApp
-                app.captureToInbox("Photo", dev.njr.zync.data.AttachmentType.PDF, file.readBytes(), "jpg")
-                Toast.makeText(this, "Photo captured to Inbox", Toast.LENGTH_SHORT).show()
-            }
-            file?.delete()
             photoFile = null
+            if (ok && file != null && file.exists()) {
+                // A 12MP JPEG is multi-MB: reading + hashing + the blob write + DB ops must not run
+                // on the main thread (the returning home surface would jank / ANR). appScope so the
+                // capture survives even if this activity is torn down on return.
+                val app = application as ZyncApp
+                app.appScope.launch {
+                    val bytes = file.readBytes()
+                    app.captureToInbox("Photo", dev.njr.zync.data.AttachmentType.PDF, bytes, "jpg")
+                    file.delete()
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, "Photo captured to Inbox", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else {
+                file?.delete()
+            }
         }
     private val calendarPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { permissionTick++ }
@@ -273,64 +284,102 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // The build touches the ContentResolver (calendar), several SQLDelight queries, prefs, and
+        // Nano title-cleaning — far too heavy for the composition thread (this is the launcher, so a
+        // stall here ANRs the home surface). Compute it on IO via produceState; the tiles populate a
+        // frame or two after the cheap clock placeholder, then refresh on every trigger key below.
+        val state by produceState(
+            initialValue = loadingHomeState(nowMillis),
+            nowMillis, contentTick, permissionTick, weather, forecast, notifEvents, syncEvents, syncingNow, titleTick,
+        ) {
+            value = withContext(Dispatchers.IO) { buildHomeState(app, nowMillis, weather, forecast, notifEvents) }
+        }
+        return state
+    }
+
+    /** Cheap placeholder shown for the first frame(s), before [buildHomeState] lands (clock only). */
+    private fun loadingHomeState(nowMillis: Long): HomeState {
+        val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
+        return HomeState(
+            clockHours = SimpleDateFormat("HH", Locale.US).format(cal.time),
+            clockMinutes = SimpleDateFormat("mm", Locale.US).format(cal.time),
+            dateLine = SimpleDateFormat("EEEE, MMMM d", Locale.US).format(cal.time),
+            weatherLine = null,
+            contextName = homeContextPrefs().getString("context_name", null),
+            contexts = emptyList(),
+            inboxCount = 0,
+            todayCount = 0,
+            waitingCount = 0,
+            sync = dev.njr.zync.sync.SyncState.Unpaired,
+            agenda = buildAgenda(emptyList(), nowMillis, emptyList(), upcoming = emptyList()),
+            calendarPermission = CalendarSource.hasPermission(this),
+            notificationsEnabled = NotificationEvents.listenerEnabled(this),
+        )
+    }
+
+    /** The full home state. Safe to call OFF the main thread (DB + ContentResolver + prefs reads). */
+    private fun buildHomeState(
+        app: ZyncApp,
+        nowMillis: Long,
+        weather: WeatherNow?,
+        forecast: Map<String, String>,
+        notifEvents: List<dev.njr.zync.home.CalEvent>,
+    ): HomeState {
         val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
         val dayStart = (cal.clone() as Calendar).apply {
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }.timeInMillis
         val dayEnd = dayStart + 24L * 60 * 60_000
         val lookaheadEnd = dayStart + 7L * 24 * 60 * 60_000 // seven-day agenda look-ahead
-
-        return remember(nowMillis, contentTick, permissionTick, weather, forecast, notifEvents, syncEvents, syncingNow, titleTick) {
-            val read = app.contentRead
-            val prefs = homeContextPrefs()
-            val contextId = prefs.getString("context_id", null)?.let { runCatching { Ulid.parse(it) }.getOrNull() }
-            val contextName = prefs.getString("context_name", null)
-            val suggestions = if (contextId != null) read.contextTasks(contextId, nowMillis) else read.activeTasks(nowMillis)
-            val serverEvents = runCatching {
-                app.opDatabase.agendaEventQueries.upcoming(nowMillis - 60 * 60_000).executeAsList().map { row ->
-                    dev.njr.zync.home.CalEvent(
-                        title = row.title,
-                        beginMillis = row.begin_ms,
-                        endMillis = row.end_ms,
-                        profile = if (row.profile == "HOME") dev.njr.zync.home.CalEvent.Profile.HOME else dev.njr.zync.home.CalEvent.Profile.WORK,
-                        calendarName = row.source,
-                        allDay = row.all_day != 0L,
-                        location = row.location,
-                    )
-                }
-            }.getOrDefault(emptyList())
-            val allEvents = (
-                CalendarSource.todaysEvents(this, dayStart, lookaheadEnd) +
-                    notifEvents.filter { it.beginMillis in dayStart until lookaheadEnd } +
-                    serverEvents.filter { it.beginMillis < lookaheadEnd && it.endMillis > dayStart }
-                ).map { dev.njr.zync.home.TitleCleaner.polish(this, it) }
-            val events = allEvents.filter { it.beginMillis < dayEnd && it.endMillis > dayStart }
-            val dayFmt = SimpleDateFormat("EEE d", Locale.US)
-            val isoFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-            val futureDays = (1..6).map { i ->
-                val s = dayStart + i * 24L * 60 * 60_000
-                val cast = forecast[isoFmt.format(java.util.Date(s))]?.let { "  $it" } ?: ""
-                Triple(dayFmt.format(java.util.Date(s)) + cast, s, s + 24L * 60 * 60_000)
+        val read = app.contentRead
+        val prefs = homeContextPrefs()
+        val contextId = prefs.getString("context_id", null)?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+        val contextName = prefs.getString("context_name", null)
+        val suggestions = if (contextId != null) read.contextTasks(contextId, nowMillis) else read.activeTasks(nowMillis)
+        val serverEvents = runCatching {
+            app.opDatabase.agendaEventQueries.upcoming(nowMillis - 60 * 60_000).executeAsList().map { row ->
+                dev.njr.zync.home.CalEvent(
+                    title = row.title,
+                    beginMillis = row.begin_ms,
+                    endMillis = row.end_ms,
+                    profile = if (row.profile == "HOME") dev.njr.zync.home.CalEvent.Profile.HOME else dev.njr.zync.home.CalEvent.Profile.WORK,
+                    calendarName = row.source,
+                    allDay = row.all_day != 0L,
+                    location = row.location,
+                )
             }
-            val dueBy = DueDates.parse(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time))!!
-            val locationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-            HomeState(
-                clockHours = SimpleDateFormat("HH", Locale.US).format(cal.time),
-                clockMinutes = SimpleDateFormat("mm", Locale.US).format(cal.time),
-                dateLine = SimpleDateFormat("EEEE, MMMM d", Locale.US).format(cal.time),
-                weatherLine = weather?.toString() ?: if (locationGranted) "retry weather ↻" else null,
-                contextName = contextName,
-                contexts = read.contexts(),
-                inboxCount = read.inbox(null, nowMillis).size,
-                todayCount = read.dueTasks(dueBy).size,
-                waitingCount = read.waitingTasks(nowMillis).size,
-                sync = dev.njr.zync.sync.SyncMonitor.state(this, paired = app.pairingStore.load() != null),
-                agenda = buildAgenda(events, nowMillis, suggestions, upcoming = upcomingDays(allEvents, futureDays)),
-                calendarPermission = CalendarSource.hasPermission(this),
-                notificationsEnabled = NotificationEvents.listenerEnabled(this),
-            )
+        }.getOrDefault(emptyList())
+        val allEvents = (
+            CalendarSource.todaysEvents(this, dayStart, lookaheadEnd) +
+                notifEvents.filter { it.beginMillis in dayStart until lookaheadEnd } +
+                serverEvents.filter { it.beginMillis < lookaheadEnd && it.endMillis > dayStart }
+            ).map { dev.njr.zync.home.TitleCleaner.polish(this, it) }
+        val events = allEvents.filter { it.beginMillis < dayEnd && it.endMillis > dayStart }
+        val dayFmt = SimpleDateFormat("EEE d", Locale.US)
+        val isoFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val futureDays = (1..6).map { i ->
+            val s = dayStart + i * 24L * 60 * 60_000
+            val cast = forecast[isoFmt.format(java.util.Date(s))]?.let { "  $it" } ?: ""
+            Triple(dayFmt.format(java.util.Date(s)) + cast, s, s + 24L * 60 * 60_000)
         }
+        val dueBy = DueDates.parse(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time))!!
+        val locationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        return HomeState(
+            clockHours = SimpleDateFormat("HH", Locale.US).format(cal.time),
+            clockMinutes = SimpleDateFormat("mm", Locale.US).format(cal.time),
+            dateLine = SimpleDateFormat("EEEE, MMMM d", Locale.US).format(cal.time),
+            weatherLine = weather?.toString() ?: if (locationGranted) "retry weather ↻" else null,
+            contextName = contextName,
+            contexts = read.contexts(),
+            inboxCount = read.inbox(null, nowMillis).size,
+            todayCount = read.dueTasks(dueBy).size,
+            waitingCount = read.waitingTasks(nowMillis).size,
+            sync = dev.njr.zync.sync.SyncMonitor.state(this, paired = app.pairingStore.load() != null),
+            agenda = buildAgenda(events, nowMillis, suggestions, upcoming = upcomingDays(allEvents, futureDays)),
+            calendarPermission = CalendarSource.hasPermission(this),
+            notificationsEnabled = NotificationEvents.listenerEnabled(this),
+        )
     }
 
     private fun homeContextPrefs() = getSharedPreferences("zync_launcher", Context.MODE_PRIVATE)

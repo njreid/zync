@@ -24,6 +24,8 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     override suspend fun doWork(): Result = try {
         (applicationContext as ZyncApp).syncOnce()
         Result.success()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e // worker was cancelled (e.g. a newer sync superseded it); honour it, don't retry
     } catch (e: dev.njr.zync.replica.SyncRequestException) {
         if (e.permanent) {
             Log.w("zync", "sync failed permanently (HTTP ${e.status}); not retrying", e)
@@ -48,7 +50,11 @@ object SyncScheduler {
     /** Request a prompt sync (e.g. after a capture/mutation), when connectivity allows. */
     fun requestSync(context: Context) = ifWorkManager(context) { wm ->
         val work = OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(connected).build()
-        wm.enqueueUniqueWork(ONESHOT, ExistingWorkPolicy.REPLACE, work)
+        // APPEND_OR_REPLACE, not REPLACE: rapid mutations each request a sync, and REPLACE would
+        // cancel the in-flight push mid-flight (livelock — the busier the user, the fewer syncs
+        // finish — and each cancel is mis-recorded as a failure). Appending lets the running sync
+        // complete and schedules one more afterwards to catch the tail of edits.
+        wm.enqueueUniqueWork(ONESHOT, ExistingWorkPolicy.APPEND_OR_REPLACE, work)
     }
 
     /** Ensure a periodic background sync is scheduled. */

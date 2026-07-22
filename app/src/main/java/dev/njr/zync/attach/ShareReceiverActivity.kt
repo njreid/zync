@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
-import androidx.lifecycle.lifecycleScope
 import androidx.activity.ComponentActivity
 import androidx.core.content.IntentCompat
 import dev.njr.zync.ZyncApp
@@ -42,7 +41,10 @@ class ShareReceiverActivity : ComponentActivity() {
             // A shared URL/text becomes a plain Inbox note: title from the subject or
             // a compact form of the URL, the full text preserved in notes.
             val subject = intent?.getStringExtra(Intent.EXTRA_SUBJECT)
-            lifecycleScope.launch(Dispatchers.IO) {
+            // app.appScope (process-lived), NOT lifecycleScope: this invisible receiver can be
+            // destroyed mid-write (screen lock, config change), and lifecycleScope would cancel the
+            // capture → the user's shared item is silently dropped. appScope completes the write.
+            app.appScope.launch {
                 runCatching {
                     app.replicaCapture.captureNote(ShareImport.titleForText(subject, sharedText), notes = sharedText)
                     app.contentChanges.notifyChanged()
@@ -52,7 +54,7 @@ class ShareReceiverActivity : ComponentActivity() {
             }
             return
         }
-        lifecycleScope.launch(Dispatchers.IO) {
+        app.appScope.launch {
             var added = 0
             for (uri in uris) {
                 if (importOne(app, uri)) added++
@@ -67,10 +69,13 @@ class ShareReceiverActivity : ComponentActivity() {
     }
 
     private suspend fun importOne(app: ZyncApp, uri: Uri): Boolean {
-        val mime = contentResolver.getType(uri)
+        // Use the application resolver (not the Activity's): the read can outlive the receiver, and
+        // the sender's URI grant stays valid to the app until this activity's task finishes.
+        val resolver = app.contentResolver
+        val mime = resolver.getType(uri)
         val type: AttachmentType = ShareImport.typeFor(mime) ?: return false
         val bytes = runCatching {
-            contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            resolver.openInputStream(uri)?.use { it.readBytes() }
         }.getOrNull() ?: return false
         if (bytes.size > 25 * 1024 * 1024) return false // shares can be huge; cap them
         app.captureToInbox(
@@ -94,8 +99,8 @@ class ShareReceiverActivity : ComponentActivity() {
     }
 
     private fun toastAndFinish(message: String) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
         setResult(Activity.RESULT_OK)
-        finish()
+        if (!isFinishing && !isDestroyed) finish()
     }
 }

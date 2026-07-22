@@ -27,6 +27,13 @@ private const val TAG = "zync"
 class ZyncApp : Application() {
     val serverToken: String = UUID.randomUUID().toString()
 
+    /**
+     * Process-lived scope for durable background work that must outlive a transient Activity —
+     * e.g. a share import whose invisible receiver can be destroyed mid-write. Not tied to any
+     * Activity lifecycle, so the write completes even if the launching UI goes away.
+     */
+    val appScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+
     // --- Op-log stack (M7): the phone as a replica; the shared :web UI reads/writes this ---
     private val opClock = Clock { System.currentTimeMillis() }
 
@@ -131,6 +138,8 @@ class ZyncApp : Application() {
                 },
             ).syncOnce()
             dev.njr.zync.sync.SyncMonitor.success(this)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e // a superseding sync/worker cancel is not a failure — don't flip the tile to "failed"
         } catch (e: Exception) {
             val reason = when (e) {
                 is dev.njr.zync.replica.SyncRequestException -> "HTTP ${e.status}"

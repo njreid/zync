@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -25,9 +26,13 @@ data class DayForecast(val dateIso: String, val icon: String, val maxC: Int) {
  */
 class OpenMeteo(private val http: HttpClient, private val baseUrl: String = "https://api.open-meteo.com") {
     suspend fun current(latitude: Double, longitude: Double): WeatherNow? {
-        val response = runCatching {
+        val response = try {
             http.get("$baseUrl/v1/forecast?latitude=$latitude&longitude=$longitude&current=temperature_2m,weather_code")
-        }.getOrNull() ?: return null
+        } catch (e: CancellationException) {
+            throw e // caller cancelled (left the home screen / timed out) — don't mask it as "no data"
+        } catch (e: Exception) {
+            return null
+        }
         if (!response.status.isSuccess()) return null
         return runCatching {
             val current = Json.parseToJsonElement(response.bodyAsText()).jsonObject["current"]!!.jsonObject
@@ -42,12 +47,16 @@ class OpenMeteo(private val http: HttpClient, private val baseUrl: String = "htt
 
     /** Seven-day daily forecast (device local dates via timezone=auto); empty on failure. */
     suspend fun daily(latitude: Double, longitude: Double): List<DayForecast> {
-        val response = runCatching {
+        val response = try {
             http.get(
                 "$baseUrl/v1/forecast?latitude=$latitude&longitude=$longitude" +
                     "&daily=weather_code,temperature_2m_max&forecast_days=7&timezone=auto",
             )
-        }.getOrNull() ?: return emptyList()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return emptyList()
+        }
         if (!response.status.isSuccess()) return emptyList()
         return runCatching {
             val daily = Json.parseToJsonElement(response.bodyAsText()).jsonObject["daily"]!!.jsonObject

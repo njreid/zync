@@ -73,6 +73,19 @@ fun SearchOverlay(onDismiss: () -> Unit) {
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
     ) { granted -> contactsGranted = granted }
 
+    // Contacts lookup is a cross-process ContentResolver query (up to two) — never run it inside the
+    // LazyColumn item builder (it re-ran on every keystroke AND every unrelated recompose, janking
+    // the field). Fetch off the main thread, debounced, into state instead.
+    var contacts by remember { mutableStateOf<List<dev.njr.zync.launcher.ContactHit>>(emptyList()) }
+    LaunchedEffect(query, contactsGranted) {
+        contacts = if (contactsGranted && query.trim().length >= 2) {
+            kotlinx.coroutines.delay(120)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ContactSearch.search(context, query) }
+        } else {
+            emptyList()
+        }
+    }
+
     BackHandler(onBack = onDismiss)
 
     fun launchRecent(item: RecentItem) {
@@ -168,6 +181,7 @@ fun SearchOverlay(onDismiss: () -> Unit) {
         }
 
         val usage = remember { SearchHistory.usageCounts(context) }
+        val recents = remember { SearchHistory.recentItems(context) } // prefs decode: once per open, not per recompose
         val appMatches = AppSearch.filter(apps, query, usage)
         val settingsMatches = AppSearch.settingsMatches(query)
         var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -206,7 +220,6 @@ fun SearchOverlay(onDismiss: () -> Unit) {
             }
             // 1. recents: their own labeled section, divider below (device feedback)
             if (query.isBlank()) {
-                val recents = SearchHistory.recentItems(context)
                 if (recents.isNotEmpty()) {
                     item(key = "recent-header") {
                         BasicText(
@@ -299,7 +312,7 @@ fun SearchOverlay(onDismiss: () -> Unit) {
             // 3b. contacts (once granted; an invite row asks the first time)
             if (query.trim().length >= 2) {
                 if (contactsGranted) {
-                    items(ContactSearch.search(context, query), key = { "c:" + it.id }) { hit ->
+                    items(contacts, key = { "c:" + it.id }) { hit ->
                         Row(
                             Modifier.fillMaxWidth()
                                 .clickable { runCatching { context.startActivity(ContactSearch.viewIntent(hit)) }; onDismiss() }

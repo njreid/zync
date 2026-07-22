@@ -70,15 +70,24 @@ class VoiceCaptureActivity : ComponentActivity() {
 
     private fun startRecording() {
         val file = File(cacheDir, "voice-${System.currentTimeMillis()}.m4a")
-        outFile = file
-        recorder = MediaRecorder(this).apply {
-            setAudioSource(MediaRecorder.AudioSource.MIC)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            setOutputFile(file.absolutePath)
-            prepare()
-            start()
+        // prepare()/start() throw (IOException / IllegalStateException) when the mic is busy — on a
+        // call, another recorder, or an assistant. This runs from the global Volume-Up gesture in
+        // any app state, so an uncaught throw would crash the launcher; fail gracefully instead.
+        val rec = MediaRecorder(this)
+        try {
+            rec.setAudioSource(MediaRecorder.AudioSource.MIC)
+            rec.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            rec.setOutputFile(file.absolutePath)
+            rec.prepare()
+            rec.start()
+        } catch (e: Exception) {
+            runCatching { rec.release() }
+            finishWith("Couldn't start recording — is the microphone in use?")
+            return
         }
+        outFile = file
+        recorder = rec
         recording = true
         status.text = "Recording… tap Stop when done"
     }

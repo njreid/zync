@@ -66,7 +66,11 @@ class GoogleDriveOcr(
             .setRequestedScopes(listOf(Scope(DRIVE_FILE_SCOPE)))
             .build()
         val result = try {
-            Tasks.await(Identity.getAuthorizationClient(context).authorize(request))
+            // Bounded wait: the Play Services authorize Task can hang indefinitely (e.g. the auth
+            // UI is dismissed by the system), which would pin this IO thread forever without it.
+            Tasks.await(Identity.getAuthorizationClient(context).authorize(request), 30, java.util.concurrent.TimeUnit.SECONDS)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e // the OCR work was cancelled — propagate, don't repackage as a retryable failure
         } catch (e: Exception) {
             throw DriveOcrException(permanent = false, "Drive authorization failed: ${e.message}", e)
         }

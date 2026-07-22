@@ -66,8 +66,13 @@ suspend fun pairFromUri(
     val invite = runCatching { PairingUri.parse(uri) }.getOrElse {
         return PairingOutcome.Failed("not a zync pairing link")
     }
-    val outcome = runCatching { PairingClient(http, json).pair(invite, Ed25519DeviceSigner.generateSeed(), replicaId) }
-        .getOrElse { return PairingOutcome.Failed(it.message ?: (it::class.simpleName ?: "pairing request failed")) }
+    val outcome = try {
+        PairingClient(http, json).pair(invite, Ed25519DeviceSigner.generateSeed(), replicaId)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e // user backed out / scope torn down — propagate, don't show a bogus "failed"
+    } catch (e: Exception) {
+        return PairingOutcome.Failed(e.message ?: (e::class.simpleName ?: "pairing request failed"))
+    }
     if (outcome is PairingOutcome.Paired) store.save(outcome.server)
     return outcome
 }
