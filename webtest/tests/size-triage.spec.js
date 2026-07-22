@@ -22,6 +22,17 @@ test('expand, set size, and the panel survives the SSE morph', async ({ page }) 
   await expect(panel).toBeVisible();
 });
 
+test('expanding a parent shows its subtasks', async ({ page }) => {
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
+  // "Launch website" is a seeded inbox item with a subtask "Draft the launch copy".
+  const row = page.locator('#inbox li.swipe-row', { hasText: 'Launch website' });
+  await expect(row).toBeVisible();
+  await row.locator('.row-title').click(); // expand
+  const subs = row.locator('.subtasks-list');
+  await expect(subs).toBeVisible();
+  await expect(subs).toContainText('Draft the launch copy');
+});
+
 test('no CSP or JS errors from the triage panel', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));

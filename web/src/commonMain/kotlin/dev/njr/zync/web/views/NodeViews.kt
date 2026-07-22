@@ -296,6 +296,12 @@ private fun FlowContent.triagePanel(read: ContentReadModel, node: NodeView) {
             }
         }
 
+        // Subtasks (children) shown on expand — one per line, nested to the model's 4 levels.
+        if (read.children(node.id).isNotEmpty()) {
+            div(classes = "org-row") { span("muted") { +"Subtasks" } }
+            subtaskTree(read, node.id, levelsLeft = 3) // this item is level 1; show levels 2–4
+        }
+
         // Rename.
         div(classes = "org-row") {
             input(type = InputType.text) {
@@ -405,6 +411,26 @@ fun FlowContent.referenceResults(read: ContentReadModel, query: String?) {
     } else {
         val filed = read.reference()
         if (filed.isEmpty()) p("muted") { +"Nothing filed yet." } else ul { filed.forEach { li { nodeRow(it) } } }
+    }
+}
+
+/**
+ * The descendant task tree under [parent], one row per line and indented per level, capped at
+ * [levelsLeft] more levels (the data model allows 4 levels total, so an inbox item passes 3).
+ */
+private fun FlowContent.subtaskTree(read: ContentReadModel, parent: Ulid, levelsLeft: Int) {
+    if (levelsLeft <= 0) return
+    val children = read.children(parent)
+    if (children.isEmpty()) return
+    ul(classes = "subtasks-list") {
+        children.forEach { child ->
+            li {
+                a(href = "/node/${child.id}") { +(child.title ?: "(untitled)") }
+                child.size?.let { span("size-badge") { +it } }
+                child.status?.let { span("status") { +" · $it" } }
+                subtaskTree(read, child.id, levelsLeft - 1)
+            }
+        }
     }
 }
 
