@@ -33,19 +33,30 @@ reduces to three decisions:
 3. **Provenance is server-assigned and unspoofable.** Every external write is `Agent(botId)`;
    a bot can never author as `Human`. The UI attributes it.
 
-## 1. Actor model — reuse `Agent`, don't fork it
+## 1. Actor model — a distinct `Actor.Bot` with a structural merge rule (RESOLVED Q1)
 
 `core/.../op/Actor.kt` is `sealed interface Actor { Human; Operator(id); Agent(id) }`,
-serialized into every op. External bots map cleanly onto **`Actor.Agent(id)`** where `id` is
-the bot's registered id: the semantics (an automated, reviewable writer whose output may be
-proposed) already match, and the proposals panel already keys on *agent-authored + proposed*.
+serialized into every op. **Decision (Q1): add `Actor.Bot(id)`** rather than reuse `Agent`,
+because we want a *structural* guarantee — not just a capability whitelist — that automated
+external writers can never silently overwrite a human's decision.
 
-- **Decision: reuse `Actor.Agent(id)`.** No new `Actor` variant, so no op-serialization
-  change and no risk to the golden-locked `Op` vectors.
+- **New variant** `Actor.Bot(val id: String)` (`@SerialName("bot")`). Adding a sealed subtype
+  is backward-compatible for the wire (old ops never carry it); but it **touches the
+  golden-locked serialization + merge conformance**, so it needs new vectors (see
+  `2026-07-08-merge-conformance-vectors.md`) and a version bump of the conformance suite.
+- **Merge rule (the point of the variant):** a register value authored by `Human` is **never
+  overwritten by a `Bot`**, regardless of HLC. Concretely, `Apply.lww` gains an actor-priority
+  override layered on the HLC comparison — the register already carries `RegisterValue.actor`,
+  so the merge can consult writer class:
+  - `Human` beats `Bot` on the same register, independent of HLC (a late bot op does not clobber a human edit; a bot op that *predates* a human edit also stays shadowed).
+  - Among same-class writers (Human↔Human, Bot↔Bot, Operator↔Operator), plain LWW-by-HLC.
+  - `Operator` and `Agent` keep today's behavior (LWW); only the Human-vs-Bot pair is special.
+  This makes "a bot proposes, a human disposes" true even for *committed* bot writes on
+  human-touched fields — the capability whitelist (§2) then just narrows *which* fields a bot
+  may attempt at all.
 - Human-readable names live in the **bot registry** (§2), resolved for display; ops stay
-  compact (`Agent("newz")`). If we later want a hard human/agent/bot trichotomy in the merge
-  layer (e.g. bots can *never* win LWW over a human on the same field), that becomes an
-  `Actor` variant + a merge rule — noted as a follow-up, not needed for v1.
+  compact (`Bot("newz")`). The proposals panel keys on *proposed + non-Human actor*, so it
+  already surfaces bot output.
 
 ## 2. Identity & capabilities — the bot registry
 
@@ -70,9 +81,13 @@ bot(
   "mode": "commit" | "propose",              // may it write live, or only propose?
   "fields": ["title","notes","dueDate","..."] | "*",   // setField whitelist
   "subtree": "<ulid>|inbox|reference|*",     // where it may create/move (root of allowed area)
-  "rateLimitPerMin": 120
+  "rateLimit": { "default": 120, "create": 30, "attach": 10 }  // per-minute, per verb (Q5)
 }
 ```
+
+Rate limits are **per-token, per-verb** (RESOLVED Q5): each verb draws from its own bucket
+(`rateLimit.<verb>`, falling back to `default`), so cheap reads and expensive
+creates/attaches are throttled independently.
 
 - `mode:"propose"` forces every mutation through the proposal path (§4) regardless of verb —
   the default for low-trust bots (public scrapers).
@@ -200,8 +215,9 @@ Read / react side (for bots that subscribe rather than poll):
 - **Field ownership:** a `commit`-mode bot can write live, but human-owned fields should still
   prefer human LWW on conflict — enforce via capability `fields` whitelists now, and (later)
   an `Actor` merge rule if we want it structural.
-- **Hardening:** reuse `installHardening` — per-token rate limits (from the capability grant),
-  size caps on envelopes/blobs, and the existing remote-IP limiter. `/api/*` joins
+- **Hardening:** reuse `installHardening` — **per-token, per-verb** rate limits (Q5; keyed
+  `(botId, verb)`, evicting/bounded buckets like the existing limiter), size caps on
+  envelopes/blobs, and the existing remote-IP limiter as a backstop. `/api/*` joins
   `SESSION_EXEMPT` (bearer-authed, not session-authed). Revocation is a `bot.revoked` flag
   checked per request (like device revocation).
 - **Audit:** log `(botId, idempotencyKey, verbs, targetIds, outcome)` without logging values —
@@ -222,8 +238,10 @@ Read / react side (for bots that subscribe rather than poll):
 
 ## 9. Data-model / code touch-points
 
-- `core`: no `Actor` change (reuse `Agent`). Optional: a `kind="suggestion"` vocabulary
-  constant + `Fields.TARGET_ID`/`TARGET_FIELD`/`PROPOSED_VALUE` for suggestion nodes.
+- `core`: **add `Actor.Bot(id)`** (`@SerialName("bot")`) + the Human-beats-Bot override in
+  `merge/Apply.kt` `lww` (§1); **new merge-conformance + serialization vectors** and a bump of
+  the conformance suite version. Plus a `kind="suggestion"` vocabulary constant +
+  `Fields.TARGET_ID`/`TARGET_FIELD`/`PROPOSED_VALUE` for suggestion nodes.
 - `data`: `bot` (+ optional `bot_request`) tables → **schema v6→v7** migration (`6.sqm`);
   bump the three version-assertion sites (data `SqlDelightStateStoreTest`, server
   `DurabilityTest`, add a `MigrationTest` v6→v7 case). Env-token fallback needs no migration.
@@ -235,9 +253,36 @@ Read / react side (for bots that subscribe rather than poll):
 - `app`: none required for the server API; the phone loopback can expose `/api` too (it serves
   `:web` over the same op stack) if on-device bots ever want it.
 
+## 9a. Client SDKs — Kotlin + Go, stdlib-first (RESOLVED Q6)
+
+Ship **typed SDKs in Kotlin and Go** up front (not just a JSON contract), leaning on each
+language's standard library as far as possible so third-party bots have near-zero deps:
+
+- **Envelope types are the contract.** The intent envelope (§3) + capability grant (§2) are
+  defined once as the source of truth; the SDKs mirror them as typed structs. (v1: hand-write
+  the small type set in each language; if it grows, generate from a single JSON-Schema. Avoid
+  a heavy codegen toolchain — the point is stdlib-first.)
+- **Kotlin SDK:** a thin `ZyncClient(baseUrl, token)` over `kotlinx.serialization` for the
+  envelope + the existing Ktor client (already a project dep) — or `java.net.http.HttpClient`
+  for a zero-extra-dep option. Verbs mirror the intents: `client.create(...)`,
+  `client.comment(...)`, `client.propose(field, value)`, `client.submit(envelope)`; blob
+  upload; an SSE `changes()` flow. Publishable as a small artifact.
+- **Go SDK:** `net/http` + `encoding/json` only (no third-party deps). `zync.New(baseURL,
+  token)`, an `Envelope`/`Intent` struct set, `client.Submit(ctx, env)`, `client.Attach(...)`,
+  and a `Changes(ctx)` reader over the SSE stream. Idempotency-Key handled by the client
+  (auto-generated per submit, overridable).
+- Both SDKs: automatic `Idempotency-Key`, typed error surface for capability/rate/validation
+  rejections (map the 4xx codes), and retry-with-backoff that's safe because of idempotency.
+- Live in-repo (`sdk/kotlin`, `sdk/go`) with a shared `sdk/README.md` + curl examples, so the
+  JSON contract is *also* documented for languages without an SDK.
+
 ## 10. Test plan
 
-- **Envelope translation** (server): each intent → the expected `Op`(s) with `Actor.Agent`;
+- **Merge rule** (core, new conformance vectors): a `Bot` `SetField` never overwrites a
+  `Human` register value regardless of HLC ordering (bot-after-human AND bot-before-human);
+  Bot↔Bot and Human↔Human still LWW-by-HLC; `Operator`/`Agent` unchanged; shuffle-convergence
+  still holds. Serialization round-trip for `Actor.Bot`.
+- **Envelope translation** (server): each intent → the expected `Op`(s) with `Actor.Bot`;
   `commit` vs `propose` routing; capability rejection (verb/field/subtree/rate) → 403 with no
   ops emitted; atomic envelope (one bad intent → whole batch rejected).
 - **Idempotency**: same key twice → one set of ops, identical response.
@@ -250,30 +295,55 @@ Read / react side (for bots that subscribe rather than poll):
 - **Playwright**: a seeded suggestion renders "[Accept]/[Dismiss]" and accepting updates the value.
 - **End-to-end**: a fake "bot" posts an envelope over `testApplication`, item appears in the
   projection/inbox with correct attribution.
+- **SDKs**: Kotlin + Go SDK smoke tests against `testApplication` / a local server — build an
+  envelope, submit, assert the item lands + idempotent retry returns the same result + a
+  capability rejection maps to the typed error. Keep them dependency-light (stdlib clients).
 
 ## 11. Sequencing (proposed)
 
+0. **`Actor.Bot` + Human-beats-Bot merge rule** (core, §1) — foundational, since even
+   commit-mode writes must be safe. New conformance/serialization vectors; conformance suite
+   bump. Land first so everything downstream stamps the right actor with the right guarantees.
 1. **Env-token fallback + `POST /api/ops` (commit only)** — the minimal door: one trusted bot,
-   create/comment/setField/move via `ExternalContentCommands`, idempotency LRU. Unblocks Newz.
-2. **`propose` mode + suggestion nodes** + accept/reject UI (the field-edit model, §4).
+   create/comment/setField/move via `ExternalContentCommands(actor = Bot(id))`, atomic
+   size-capped envelopes, idempotency LRU. Unblocks Newz.
+2. **`propose` mode + suggestion nodes** + accept/reject UI (the field-edit model, §4;
+   show-diff on stale, Q2).
 3. **`/api/blobs` + `attach`** — media ingestion; wire the Newz extraction result handler.
-4. **Bot registry (v7 migration) + capabilities + `server bot add`** — multi-bot, scoped.
-5. **`/api/changes` SSE** (react side) + webhooks; **NATS** only if fan-out demands it.
+4. **Bot registry (v6→v7 migration) + per-verb capabilities + `server bot add`** — multi-bot,
+   scoped, per-token-per-verb limits (Q5).
+5. **`/api/changes` SSE** (react side, Q4 — webhooks deferred); **NATS** only if fan-out demands it.
+6. **Kotlin + Go SDKs** (§9a, Q6) — track the endpoints as they land; publish once the
+   envelope + capabilities stabilize (after step 4).
 
-Each step is independently shippable and testable (JVM route tests + Playwright).
+Each step is independently shippable and testable (JVM route tests + Playwright + SDK smoke).
 
-## 12. Open questions
+## 12. Open questions — RESOLVED 2026-07-22
 
-1. **Actor trichotomy?** Keep bots as `Agent`, or add `Actor.Bot`/`External` with a structural
-   merge rule (human LWW always beats a bot on the same field)? Proposed: reuse `Agent` for
-   v1; revisit if capability whitelists prove insufficient.
-2. **Suggestion staleness UX** — when a proposed field's live value moved before acceptance,
-   accept-anyway / show-diff / auto-dismiss? Proposed: show the diff, human decides.
-3. **Envelope size / batch limits** and whether cross-envelope ordering matters for a bot doing
-   many small writes (vs one big batch).
-4. **Webhook delivery guarantees** — at-least-once with retries + a dead-letter, or best-effort?
-   (Only relevant once webhooks land.)
-5. **Rate-limit granularity** — per-token only, or per-token-per-verb (e.g. cheap reads vs
-   expensive creates)?
-6. **Do we want a typed client SDK** (Kotlin/TS) generated from the envelope schema, or is the
-   JSON contract + examples enough for third-party bots?
+1. **Actor model.** → **Add `Actor.Bot(id)` with a structural merge rule** (§1): a human
+   register value is never overwritten by a bot, regardless of HLC. Costs new
+   merge-conformance + serialization vectors, but makes "bot proposes, human disposes" a
+   guarantee, not a policy.
+2. **Suggestion staleness.** → **Show the diff, human decides** (§4): render proposed vs
+   current; accept still applies the proposed value.
+3. **Envelope batching.** → **Atomic + size-capped** (§3/§5): all intents in one envelope
+   commit in a single transaction or none; cap intent count + bytes; no cross-envelope
+   ordering guarantee.
+4. **React side.** → **SSE `/api/changes` for v1; webhooks deferred** (§6). Delivery-guarantee
+   question re-opens if/when webhooks land.
+5. **Rate-limit granularity.** → **Per-token, per-verb** (§2/§7): each verb has its own bucket,
+   so cheap reads and expensive creates/attaches throttle independently.
+6. **Client tooling.** → **Ship typed Kotlin + Go SDKs up front, stdlib-first** (§9a): Go on
+   `net/http`+`encoding/json` only; Kotlin on `kotlinx.serialization` + `java.net.http` (or the
+   existing Ktor client). Hand-written types v1; generate from a single JSON-Schema only if the
+   type set grows. The JSON contract is documented alongside for other languages.
+
+## 13. Still-open (deferred)
+
+- Webhook delivery guarantees (at-least-once + DLQ vs best-effort) — when webhooks are built.
+- Whether the envelope types should be **generated** from one JSON-Schema source vs hand-written
+  per SDK — decide once the type set stabilizes (§9a).
+- Adopting **NATS** as the internal bus — revisit when producer/consumer fan-out justifies the
+  ops dependency (§6).
+- A structural policy for `Operator`/`Agent` vs `Human` on the same field (today only the
+  Human-vs-`Bot` pair is special) — only if operators/agents ever need the same guarantee.
