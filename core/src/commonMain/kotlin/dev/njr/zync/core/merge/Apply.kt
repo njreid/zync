@@ -1,6 +1,7 @@
 package dev.njr.zync.core.merge
 
 import dev.njr.zync.core.id.Ulid
+import dev.njr.zync.core.op.Actor
 import dev.njr.zync.core.op.Op
 import dev.njr.zync.core.state.EntitySnapshot
 import dev.njr.zync.core.state.RegisterKey
@@ -42,8 +43,16 @@ fun apply(op: Op, store: StateStore) {
 }
 
 private fun lww(store: StateStore, key: RegisterKey, incoming: RegisterValue) {
-    val existing = store.getRegister(key)
-    if (existing == null || incoming.hlc > existing.hlc) store.putRegister(key, incoming)
+    val existing = store.getRegister(key) ?: run { store.putRegister(key, incoming); return }
+    // A Human value is never overwritten by a Bot, and always supersedes a Bot, regardless
+    // of HLC (external-op-api spec §1: "bot proposes, human disposes" as a merge guarantee).
+    // Order-independent: the winner of {Human, Bot} is always the Human. Otherwise LWW by HLC.
+    val wins = when {
+        existing.actor is Actor.Human && incoming.actor is Actor.Bot -> false
+        existing.actor is Actor.Bot && incoming.actor is Actor.Human -> true
+        else -> incoming.hlc > existing.hlc
+    }
+    if (wins) store.putRegister(key, incoming)
 }
 
 private fun applyTag(store: StateStore, key: TagKey, present: Boolean, op: Op) {
