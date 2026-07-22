@@ -27,6 +27,7 @@ fun main() {
     val port = System.getenv("ZYNC_DEV_PORT")?.toInt() ?: 8099
     val service = SyncService(JvmZyncDatabase.inMemory())
     val content = ServerContent(service)
+    content.commands.createTask("Kbd complete me") // gestures.spec keyboard test completes the first row
     content.commands.createTask("Buy milk")
     content.commands.createTask("Read a book")
     content.commands.createTask("CSP probe task") // csp.spec completes this one

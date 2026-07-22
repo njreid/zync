@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
 class AutoFileDoneEndToEndTest {
     private fun harness() = OperatorHarness(
         operators = listOf(OperatorManifests.autoFileDone()),
-        completersFor = { store -> mapOf("auto-file-done" to AutoFileCompletionSource(ReferenceIndex(store))) },
+        completersFor = { store -> mapOf("auto-file-done" to FileSuggesters.autoFileDone(ReferenceIndex(store))) },
     )
 
     @Test

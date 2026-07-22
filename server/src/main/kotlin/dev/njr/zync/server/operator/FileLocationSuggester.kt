@@ -3,6 +3,7 @@ package dev.njr.zync.server.operator
 import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.content.FtsQuery
 import dev.njr.zync.core.content.WellKnownNodes
+import dev.njr.zync.core.content.stringContent
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.state.EntitySnapshot
@@ -73,53 +74,60 @@ class ReferenceIndex(
         return candTokens.count { it in queryTokens }.toDouble() / candTokens.size
     }
 
-    private fun asString(value: kotlinx.serialization.json.JsonElement?): String? =
-        (value as? JsonPrimitive)?.takeIf { it !is JsonNull && it.isString }?.content
+    private fun asString(value: kotlinx.serialization.json.JsonElement?): String? = value.stringContent()
 }
 
 /** The inbox item's text used as the suggestion query (title + notes + summary + OCR text). */
 internal fun queryText(snapshot: EntitySnapshot, blobText: (String) -> String?): String {
     val parts = mutableListOf<String>()
     listOf(Fields.TITLE, Fields.NOTES, Fields.SUMMARY).forEach { f ->
-        (snapshot.fields[f] as? JsonPrimitive)?.takeIf { it !is JsonNull && it.isString }?.content?.let(parts::add)
+        snapshot.fields[f].stringContent()?.let(parts::add)
     }
-    (snapshot.fields[Fields.OCR_BLOB_HASH] as? JsonPrimitive)?.content?.let { blobText(it)?.take(2000)?.let(parts::add) }
+    snapshot.fields[Fields.OCR_BLOB_HASH].stringContent()?.let { blobText(it)?.take(2000)?.let(parts::add) }
     return parts.joinToString("\n")
 }
 
-/** Emits up to 3 ranked file-location suggestions as the `fileSuggestions` field (GTD §6). */
-class SuggestFileCompletionSource(
+/**
+ * A retrieval [CompletionSource]: rank Reference/Projects candidates for the firing
+ * entity and serialize the result into the operator's output field. Both file-location
+ * operators are instances that differ only in [trees], [limit], and [toOutput].
+ */
+private class FileRetrievalSource(
     private val index: ReferenceIndex,
-    private val blobText: (String) -> String? = { null },
+    private val blobText: (String) -> String?,
+    private val trees: Set<String>,
+    private val limit: Int,
+    private val toOutput: (List<Pair<Candidate, Double>>) -> String,
 ) : CompletionSource {
-    override fun complete(request: LlmRequest, snapshot: EntitySnapshot): LlmReply {
-        val ranked = index.rank(queryText(snapshot, blobText), exclude = snapshot.entityId, trees = setOf("projects", "reference"))
-        val array = buildJsonArray {
-            ranked.forEach { (c, s) ->
-                add(
-                    buildJsonObject {
-                        put("targetId", c.nodeId.toString())
-                        put("title", c.title)
-                        put("tree", c.tree)
-                        put("score", s)
-                    },
-                )
-            }
-        }
-        return LlmReply.Text("""{"${Fields.FILE_SUGGESTIONS}":$array}""")
-    }
+    override fun complete(request: LlmRequest, snapshot: EntitySnapshot): LlmReply =
+        LlmReply.Text(toOutput(index.rank(queryText(snapshot, blobText), snapshot.entityId, trees, limit)))
 }
 
-/** Proposes the top Reference-area parent for a DONE task as `proposedFileParent` (GTD §7). */
-class AutoFileCompletionSource(
-    private val index: ReferenceIndex,
-    private val blobText: (String) -> String? = { null },
-) : CompletionSource {
-    override fun complete(request: LlmRequest, snapshot: EntitySnapshot): LlmReply {
-        val top = index.rank(queryText(snapshot, blobText), exclude = snapshot.entityId, trees = setOf("reference"), limit = 1)
-            .firstOrNull()
-        return LlmReply.Text(
-            if (top != null) """{"${Fields.PROPOSED_FILE_PARENT}":"${top.first.nodeId}"}""" else "{}",
-        )
-    }
+/** The two file-location retrieval operators (GTD §6/§7) as [CompletionSource]s. */
+object FileSuggesters {
+    /** Up to 3 ranked `fileSuggestions` over Projects + Reference for an inbox item (§6). */
+    fun suggestFile(index: ReferenceIndex, blobText: (String) -> String? = { null }): CompletionSource =
+        FileRetrievalSource(index, blobText, trees = setOf("projects", "reference"), limit = 3) { ranked ->
+            val array = buildJsonArray {
+                ranked.forEach { (c, s) ->
+                    add(
+                        buildJsonObject {
+                            put("targetId", c.nodeId.toString())
+                            put("title", c.title)
+                            put("tree", c.tree)
+                            put("score", s)
+                        },
+                    )
+                }
+            }
+            """{"${Fields.FILE_SUGGESTIONS}":$array}"""
+        }
+
+    /** The top Reference-area `proposedFileParent` for a DONE task (§7). */
+    fun autoFileDone(index: ReferenceIndex, blobText: (String) -> String? = { null }): CompletionSource =
+        FileRetrievalSource(index, blobText, trees = setOf("reference"), limit = 1) { ranked ->
+            ranked.firstOrNull()
+                ?.let { """{"${Fields.PROPOSED_FILE_PARENT}":"${it.first.nodeId}"}""" }
+                ?: "{}"
+        }
 }

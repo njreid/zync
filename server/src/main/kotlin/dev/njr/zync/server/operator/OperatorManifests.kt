@@ -66,7 +66,7 @@ object OperatorManifests {
 
     /**
      * Suggest up to 3 file locations for an inbox item (GTD triage §6). Deterministic
-     * keyword retrieval (via a [SuggestFileCompletionSource]); no LLM. Re-fires on text
+     * keyword retrieval (via [FileSuggesters.suggestFile]); no LLM. Re-fires on text
      * edits. Owns only `fileSuggestions`; accepting a chip is the human Move.
      */
     fun suggestFileLocations(): OperatorManifest = OperatorManifest(

@@ -22,7 +22,7 @@ import kotlin.test.assertTrue
 class SuggestFileEndToEndTest {
     private fun harness() = OperatorHarness(
         operators = listOf(OperatorManifests.suggestFileLocations()),
-        completersFor = { store -> mapOf("suggest-file" to SuggestFileCompletionSource(ReferenceIndex(store))) },
+        completersFor = { store -> mapOf("suggest-file" to FileSuggesters.suggestFile(ReferenceIndex(store))) },
     )
 
     private fun project(id: dev.njr.zync.core.id.Ulid, title: String, h: OperatorHarness) = listOf(

@@ -11,11 +11,10 @@ import dev.njr.zync.core.state.StateStore
 import dev.njr.zync.core.state.TagKey
 import dev.njr.zync.core.state.TagValue
 import dev.njr.zync.core.content.FtsQuery
+import dev.njr.zync.core.content.stringContent
 import dev.njr.zync.data.db.ZyncDatabase
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * SQLDelight-backed [StateStore] — the durable implementation of `core`'s port,
@@ -185,7 +184,7 @@ class SqlDelightStateStore(
         db.searchIndexQueries.deleteDoc(id)
         if (db.tombstoneQueries.getTombstone(id).executeAsOneOrNull() != null) return
         val fields = db.searchIndexQueries.docFields(id).executeAsList()
-            .associate { it.field_name to jsonString(it.field_value) }
+            .associate { it.field_name to json.decodeFromString(JsonElement.serializer(), it.field_value).stringContent() }
         if (fields["kind"] !in SEARCHABLE_KINDS) return
         if (fields["status"] == "DROPPED") return // trashed items drop out of search
         val body = listOf(fields["title"], fields["notes"], fields["summary"])
@@ -195,11 +194,6 @@ class SqlDelightStateStore(
         if (body.isBlank()) return
         db.searchIndexQueries.insertDoc(id, body)
     }
-
-    // JsonNull / cleared fields read as absent (mirrors ContentReadModel.asString()).
-    private fun jsonString(raw: String): String? =
-        (json.decodeFromString(JsonElement.serializer(), raw) as? JsonPrimitive)
-            ?.takeIf { it !is JsonNull }?.content
 
     private companion object {
         val SEARCHABLE_KINDS = setOf("task", "project", "attachment")

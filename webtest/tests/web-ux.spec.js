@@ -27,14 +27,22 @@ test('renders seeded inbox and Datastar drives live mutations', async ({ page })
   const [r, g, b] = bg.match(/\d+/g).map(Number);
   expect(r + g + b, `body background should be dark, got ${bg}`).toBeLessThan(150);
 
-  // reactivity: complete "Buy milk" → Datastar @post returns an SSE patch → it drops out
-  await page.locator('#inbox li', { hasText: 'Buy milk' }).getByTitle('Complete').click();
+  // reactivity: swipe "Buy milk" right → Datastar @post returns an SSE patch → it drops out
+  {
+    const row = page.locator('#inbox li.swipe-row', { hasText: 'Buy milk' });
+    const box = await row.boundingBox();
+    const y = box.y + box.height / 2, sx = box.x + box.width / 2;
+    await page.mouse.move(sx, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 6; i++) await page.mouse.move(sx + (160 * i) / 6, y);
+    await page.mouse.up();
+  }
   await expect(page.locator('#inbox')).not.toContainText('Buy milk', { timeout: 5000 });
   await expect(page.locator('#inbox')).toContainText('Read a book'); // others stay
 
-  // the inbox is a triage surface: no entry field (creation belongs to capture)
-  // and NO context filter (clarify/file/subdivide only — contexts live on their own view)
-  expect(await page.locator('#inbox input').count()).toBe(0);
+  // the inbox is a triage surface: no VISIBLE entry field (creation belongs to capture;
+  // the per-row triage panels are collapsed by default) and NO context filter.
+  expect(await page.locator('#inbox input:visible').count()).toBe(0);
   expect(await page.locator('.context-pill').count()).toBe(0);
 
   // organize controls on the detail page: set a due date, tag a context

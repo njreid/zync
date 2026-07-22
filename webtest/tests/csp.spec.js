@@ -9,11 +9,17 @@ const BASE = process.env.ZYNC_BASE || 'http://127.0.0.1:8099';
 
 test('Datastar reactivity works under the served CSP', async ({ page }) => {
   await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
-  // Completes its own dedicated seeded task (the inbox is a triage surface — no
-  // entry field). The complete goes through a Datastar expression — exactly what
-  // a too-strict CSP would block.
-  await expect(page.locator('#inbox')).toContainText('CSP probe task');
-  await page.locator('#inbox li', { hasText: 'CSP probe task' }).getByTitle('Complete').click();
+  // Completes its own dedicated seeded task by swiping it right (the inbox has no
+  // visible buttons — swipe fires a hidden Datastar-bound trigger). The complete goes
+  // through a Datastar expression — exactly what a too-strict CSP would block.
+  const row = page.locator('#inbox li.swipe-row', { hasText: 'CSP probe task' });
+  await expect(row).toBeVisible();
+  const box = await row.boundingBox();
+  const y = box.y + box.height / 2, sx = box.x + box.width / 2;
+  await page.mouse.move(sx, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) await page.mouse.move(sx + (160 * i) / 6, y);
+  await page.mouse.up();
   // If the CSP blocks Datastar's eval, this never happens.
   await expect(page.locator('#inbox')).not.toContainText('CSP probe task', { timeout: 5000 });
 });

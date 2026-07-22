@@ -2,11 +2,10 @@ package dev.njr.zync.core.state
 
 import dev.njr.zync.core.clock.Hlc
 import dev.njr.zync.core.content.FtsQuery
+import dev.njr.zync.core.content.stringContent
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.op.Op
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * In-memory [StateStore] — the reference implementation and test double. The
@@ -49,11 +48,11 @@ class InMemoryStateStore : StateStore {
         val tokens = FtsQuery.tokens(query)
         if (tokens.isEmpty()) return emptyList()
         return project().values.asSequence()
-            .filter { it.alive && text(it.fields["kind"]) in SEARCHABLE_KINDS && text(it.fields["status"]) != "DROPPED" }
+            .filter { it.alive && it.fields["kind"].stringContent() in SEARCHABLE_KINDS && it.fields["status"].stringContent() != "DROPPED" }
             .filter { snap ->
                 // Substring AND-match over the joined body — mirrors the durable store's LIKE.
                 val body = listOf("title", "notes", "summary")
-                    .mapNotNull { text(snap.fields[it]) }
+                    .mapNotNull { snap.fields[it].stringContent() }
                     .joinToString(" ").lowercase()
                 tokens.all { body.contains(it) }
             }
@@ -61,9 +60,6 @@ class InMemoryStateStore : StateStore {
             .take(limit)
             .toList()
     }
-
-    private fun text(value: kotlinx.serialization.json.JsonElement?): String? =
-        (value as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content
 
     private companion object {
         val SEARCHABLE_KINDS = setOf("task", "project", "attachment")

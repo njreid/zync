@@ -6,6 +6,7 @@ import dev.njr.zync.core.content.FractionalIndex
 import dev.njr.zync.core.content.Size
 import dev.njr.zync.core.content.Status
 import dev.njr.zync.core.content.WellKnownNodes
+import dev.njr.zync.core.content.stringContent
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.state.EntitySnapshot
@@ -361,7 +362,5 @@ class ContentReadModel(private val store: StateStore) {
         }
     }
 
-    // JsonNull IS a JsonPrimitive (content "null") — cleared fields must read as absent.
-    private fun JsonElement?.asString(): String? =
-        (this as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content
+    private fun JsonElement?.asString(): String? = stringContent()
 }
