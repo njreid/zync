@@ -30,6 +30,7 @@ dependencies {
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.webauthn4j.test)
     testImplementation(kotlin("test"))
+    testImplementation(project(":sdk:kotlin")) // real-SDK end-to-end smoke (SdkE2ETest)
 }
 
 application {

@@ -14,9 +14,10 @@ Two guarantees worth knowing up front:
   value regardless of timing. If you want a human to review a change, use **propose mode** and
   it becomes a suggestion the user accepts or dismisses.
 
-> Typed **Kotlin** and **Go** SDKs (`sdk/kotlin`, `sdk/go`) are planned and will wrap exactly
-> what's shown below. Until they land, the standard-library examples here are the way to
-> integrate — and they'll keep working after the SDKs ship.
+> Typed, dependency-light **Kotlin** and **Go** SDKs live in [`sdk/`](sdk/README.md) — they
+> wrap exactly what's shown below (`sdk/kotlin`, `sdk/go`). Use them for the ergonomic path;
+> the standard-library examples here show what they do under the hood, and work with no SDK
+> at all.
 
 ---
 
@@ -130,10 +131,16 @@ fun main() {
 }
 ```
 
-Using `kotlinx.serialization` for typed envelopes (optional): the wire types live in
-`dev.njr.zync.core.api` (`OpEnvelope`, `OpIntent`, `EnvelopeResult`) if you depend on `:core`;
-otherwise mirror them, or wait for the `sdk/kotlin` artifact which wraps all of this as
-`zync.create(...)`, `zync.propose(field, value)`, etc.
+**Or just use the SDK.** [`sdk/kotlin`](sdk/README.md) (`:sdk:kotlin`) wraps all of this with
+typed envelopes (reusing the `dev.njr.zync.core.api` wire types) and convenience verbs, so the
+above becomes:
+
+```kotlin
+val zync = ZyncClient(baseUrl = "https://zync.example", token = System.getenv("ZYNC_BOT_TOKEN"))
+val r = zync.create(title = "Read: Fractional indexing", parent = "inbox",
+                    fields = mapOf("notes" to JsonPrimitive("https://example.com/article")))
+zync.propose(target = r.nodeId!!, field = "dueDate", value = JsonPrimitive(1893456000000))
+```
 
 **Propose a change for human review:**
 
@@ -237,9 +244,16 @@ func main() {
 }
 ```
 
-(The forthcoming `sdk/go` will provide these types + a `zync.New(baseURL, token)` client with
-`Create`, `Comment`, `SetField`, `Propose`, and idempotency handled for you — all on
-`net/http`/`encoding/json`, no third-party deps.)
+**Or just use the SDK.** [`sdk/go`](sdk/README.md) provides these types + a
+`zync.New(baseURL, token)` client with `Create`, `Comment`, `SetField`, `Propose`,
+`UploadBlob`, and idempotency handled for you — all on `net/http`/`encoding/json`, no
+third-party deps:
+
+```go
+c := zync.New("https://zync.example", os.Getenv("ZYNC_BOT_TOKEN"))
+r, _ := c.Create(ctx, "Read: Fractional indexing", "inbox")
+_, _ = c.Propose(ctx, r.NodeID, "dueDate", 1893456000000)
+```
 
 ---
 
@@ -297,4 +311,4 @@ curl -sS -X POST "$BASE/api/ops" \
 
 *This document tracks the API as implemented; see `docs/superpowers/specs/2026-07-22-external-op-api.md`
 for the full design, the capability/registry model, `/api/blobs`, the `/api/changes` feed, and
-the SDK plan.*
+the SDKs in [`sdk/`](sdk/README.md).*
