@@ -29,6 +29,7 @@ import io.ktor.server.application.log
 import io.ktor.server.plugins.BadRequestException
 import dev.njr.zync.server.agenda.AgendaEndpoint
 import dev.njr.zync.server.agenda.agendaRoutes
+import dev.njr.zync.server.api.apiRoutes
 import dev.njr.zync.server.integrations.newzRoutes
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.doublereceive.DoubleReceive
@@ -49,6 +50,8 @@ fun Application.zyncModule(
     webauthn: WebAuthnEndpoint? = null,
     agenda: AgendaEndpoint? = null,
     newz: dev.njr.zync.server.integrations.NewzIntegration? = null,
+    botApi: dev.njr.zync.server.api.ExternalOpApi? = null,
+    botAuth: dev.njr.zync.server.api.BotAuth? = null,
     json: Json = Json,
     allowUnauthenticatedWeb: Boolean = false,
     usage: () -> UsageGauges = { UsageGauges() },
@@ -92,6 +95,7 @@ fun Application.zyncModule(
         if (webauthn != null) webAuthnRoutes(webauthn)
         if (agenda != null) agendaRoutes(agenda, auth)
         if (newz != null) newzRoutes(newz, auth)
+        if (botApi != null && botAuth != null) apiRoutes(botApi, botAuth)
         if (hardening != null) get("/metrics") {
             if (!call.requireAuth(auth.authenticator)) return@get
             call.respond(hardening.metrics.snapshot(usage()))

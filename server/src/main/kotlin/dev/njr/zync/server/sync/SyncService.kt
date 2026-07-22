@@ -92,6 +92,31 @@ class SyncService(
         return assigned
     }
 
+    /**
+     * Ingest a batch of server-authored ops (e.g. one external-op-api envelope) atomically:
+     * all in a single transaction, or none. Dedupes by opId, assigns seq, applies, and fires
+     * the change feed + operator hook once for the accepted set. Returns the accepted ops.
+     */
+    fun ingestLocalBatch(ops: List<Op>): List<Op> {
+        if (ops.isEmpty()) return emptyList()
+        val accepted = mutableListOf<Op>()
+        db.transaction {
+            var head = headSeq()
+            for (op in ops) {
+                if (db.transportQueries.opExists(op.opId.toString()).executeAsOne() > 0L) continue
+                val assigned = op.withSeq(++head)
+                insertOpLog(assigned)
+                apply(assigned, store)
+                accepted += assigned
+            }
+        }
+        if (accepted.isNotEmpty()) {
+            onIngest()
+            hook.onIngested(accepted)
+        }
+        return accepted
+    }
+
     /** Ops with `seq > since`, ordered and paged; plus the current head. */
     fun pull(since: Long, limit: Long = DEFAULT_PAGE): PullResponse {
         val capped = limit.coerceIn(1, MAX_PAGE)

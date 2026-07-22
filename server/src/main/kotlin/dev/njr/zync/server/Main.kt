@@ -86,6 +86,9 @@ fun main(args: Array<String>) {
     wireOperators(db, service, ingestHook, blobs)
     val hardening = Hardening(TokenBucketRateLimiter(capacity = 240, refillPerSecond = 4.0))
     val content = ServerContent(service, changes)
+    // External op API (bots/scripts/integrations): env-token auth for now (ZYNC_BOT_TOKEN).
+    val botAuth = dev.njr.zync.server.api.EnvBotAuth.fromEnv()
+    val botApi = dev.njr.zync.server.api.ExternalOpApi(service)
 
     // Op-log compaction: daily by default; 0 disables. Retention via ZYNC_OPLOG_RETAIN_*.
     val compactor = OplogCompactor(db, CompactionPolicy.fromEnv(System::getenv), metrics = hardening.metrics)
@@ -116,6 +119,8 @@ fun main(args: Array<String>) {
             webauthn = webauthn,
             agenda = agenda,
             newz = newz,
+            botApi = botApi,
+            botAuth = botAuth,
             allowUnauthenticatedWeb = System.getenv("ZYNC_ALLOW_UNAUTHENTICATED_WEB") == "true",
             usage = usage,
             compactionFloor = compactor::floor,
