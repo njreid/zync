@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -100,17 +99,9 @@ fun HomeScreen(
                         else if (total < -threshold) onSwipeLaunch()
                     },
                 )
-            }
-            // Swipe UP on the home surface = our custom multi-search drawer.
-            .pointerInput(Unit) {
-                val threshold = 72.dp.toPx()
-                var total = 0f
-                detectVerticalDragGestures(
-                    onDragStart = { total = 0f },
-                    onVerticalDrag = { _, dy -> total += dy },
-                    onDragEnd = { if (total < -threshold) onOpenSearch() },
-                )
             },
+        // Swipe-up = our custom drawer, but that's the OS home gesture (handled in
+        // MainActivity.handleHomeIntent) — no in-content vertical detector here, so the agenda scrolls.
     ) {
         TileRow(state, onTap = onTileTap)
         Hero(state, onContextSelect, onEnableWeather)

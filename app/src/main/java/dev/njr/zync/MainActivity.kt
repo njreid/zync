@@ -77,6 +77,7 @@ class MainActivity : ComponentActivity() {
     private var barAppsTick by mutableIntStateOf(0)
     private var permissionTick by mutableIntStateOf(0)
     private var photoFile: java.io.File? = null
+    private var lastBackEdge: Int = androidx.activity.BackEventCompat.EDGE_LEFT // set by the predictive-back gesture
     private val takePicture =
         registerForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
             val file = photoFile
@@ -236,16 +237,23 @@ class MainActivity : ComponentActivity() {
             }
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            // The back gesture fires from BOTH edges; capture which one so home can route them
+            // differently (predictive back is enabled in the manifest, so this arrives first).
+            override fun handleOnBackStarted(backEvent: androidx.activity.BackEventCompat) {
+                lastBackEdge = backEvent.swipeEdge
+            }
+
             override fun handleOnBackPressed() {
                 when {
                     searchOpen || captureOpen || settingsTab != null || syncLogOpen || pairingOpen || newzOpen -> Unit // their BackHandlers own it
                     screen == ZyncScreen.Web && webView.canGoBack() -> webView.goBack()
                     screen == ZyncScreen.Web -> screen = ZyncScreen.Home
-                    // On the home surface the left-edge swipe (the system back gesture) opens
-                    // Google web search — there's nothing to go "back" to. (Our own drawer opens
-                    // on swipe-up; Newz on a right-edge/leftward swipe.)
+                    // At the home root there's nothing to go "back" to: the hard-RIGHT-edge swipe
+                    // opens Newz, the hard-LEFT-edge swipe (default) opens Google web search.
+                    lastBackEdge == androidx.activity.BackEventCompat.EDGE_RIGHT -> launchSwipeApp()
                     else -> openGoogleSearch()
                 }
+                lastBackEdge = androidx.activity.BackEventCompat.EDGE_LEFT // reset for the next (maybe button) back
             }
         })
         lifecycleScope.launch(Dispatchers.IO) {
@@ -522,16 +530,19 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * The home gesture while zync IS home re-delivers MAIN/HOME here: from anywhere
-     * it returns to the main home surface; already there, it opens Google search
-     * with the input focused (the system-wide "just search" escape hatch).
+     * The OS home gesture (swipe up from the bottom edge) re-delivers MAIN/HOME here. Coming from
+     * anywhere else — another app, the Web surface, an overlay — it returns to the home surface.
+     * Already on the home surface AND foreground (a second home gesture), it opens our custom
+     * multi-search drawer (the launcher "app drawer" action). We distinguish the two by whether the
+     * activity was already RESUMED when the intent arrived (from another app it's only STARTED).
      */
     private fun handleHomeIntent(intent: Intent?) {
         if (intent?.action != Intent.ACTION_MAIN || intent.hasCategory(Intent.CATEGORY_HOME) != true) return
-        val atHome = screen == dev.njr.zync.ui.ZyncScreen.Home && !searchOpen && !captureOpen &&
+        val atHomeSurface = screen == dev.njr.zync.ui.ZyncScreen.Home && !searchOpen && !captureOpen &&
             settingsTab == null && !syncLogOpen && !pairingOpen && !newzOpen
-        if (atHome) {
-            openGoogleSearch()
+        val alreadyForeground = lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+        if (atHomeSurface && alreadyForeground) {
+            searchOpen = true // second home gesture at home → our custom drawer
         } else {
             searchOpen = false
             captureOpen = false

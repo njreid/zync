@@ -296,8 +296,8 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                 cursorBrush = SolidColor(TextPrimary),
                 modifier = Modifier
                     .weight(1f)
-                    .background(FieldBackground)
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                    .background(FieldBackground, androidx.compose.foundation.shape.RoundedCornerShape(22.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
             )
             if (query.isNotEmpty()) {
                 BasicText(
