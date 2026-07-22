@@ -218,6 +218,17 @@ fun Route.webRoutes(
         // Agent-proposal review (spec §8): accept/reject are human ops.
         post("/proposal/{id}/accept") { call.nodeId()?.let { id -> call.applied { acceptProposal(id) } } }
         post("/proposal/{id}/reject") { call.nodeId()?.let { id -> call.applied { rejectProposal(id) } } }
+        // Bot-proposed field edits (external-op-api §4): accept applies the change as a human op.
+        post("/suggestion/{id}/accept") {
+            val id = call.nodeId()
+            val s = id?.let { sid -> read.suggestions().firstOrNull { it.id.toString() == sid.toString() } }
+            if (s == null) call.respondText("not found", status = HttpStatusCode.NotFound)
+            else call.applied { acceptSuggestion(s.id, s.targetId, s.field, s.proposedValue) }
+        }
+        post("/suggestion/{id}/reject") {
+            call.nodeId()?.let { id -> call.applied { rejectSuggestion(id) } }
+                ?: call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
         post("/node/{id}/defer") {
             val until = call.request.queryParameters["until"]?.toLongOrNull() ?: 0L
             call.nodeId()?.let { id -> call.applied { defer(id, until) } }

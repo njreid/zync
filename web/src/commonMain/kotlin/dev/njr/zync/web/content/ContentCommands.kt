@@ -6,6 +6,7 @@ import dev.njr.zync.core.content.Size
 import dev.njr.zync.core.content.Status
 import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.id.Ulid
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -99,6 +100,19 @@ class ContentCommands(private val ops: OpEmitter) {
 
     /** Reject the DONE→Reference proposal (clear the operator field). */
     fun rejectProposedFile(node: Ulid) = ops.setField(node, Fields.PROPOSED_FILE_PARENT, JsonNull)
+
+    /**
+     * Accept a bot's proposed field edit (external-op-api §4): emit the real SetField as a
+     * human op (so it wins the merge), then tombstone the suggestion node. The route reads
+     * the suggestion's target/field/value and passes them in.
+     */
+    fun acceptSuggestion(suggestion: Ulid, target: Ulid, field: String, value: JsonElement) {
+        ops.setField(target, field, value)
+        ops.tombstone(suggestion)
+    }
+
+    /** Reject a suggestion: tombstone it, no change to the target. */
+    fun rejectSuggestion(suggestion: Ulid) = ops.tombstone(suggestion)
     fun convertToProject(node: Ulid) = ops.setField(node, "kind", JsonPrimitive("project"))
     fun convertToTask(node: Ulid) = ops.setField(node, "kind", JsonPrimitive("task"))
 

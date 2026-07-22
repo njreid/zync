@@ -118,6 +118,26 @@ class ApiOpsTest {
     }
 
     @Test
+    fun proposeModeMakesASuggestionNotALiveEdit() = run { client, service ->
+        val node = id(1)
+        service.ingestLocal(Op.SetField(id(9), node, EntityType.Node, Hlc(5, 0, "server"), Actor.Human, "server", 5, "title", str("orig")))
+        val resp = client.submit(
+            OpEnvelope(mode = "propose", intents = listOf(
+                OpIntent(op = "setField", target = node.toString(), field = "dueDate", value = JsonPrimitive(123L)),
+            )),
+        )
+        assertEquals(HttpStatusCode.OK, resp.status)
+        assertEquals("proposed", json.decodeFromString(EnvelopeResult.serializer(), resp.bodyAsText()).results.single().status)
+        // The target is NOT edited…
+        assertNull(service.stateStore.getRegister(RegisterKey(node, "dueDate")))
+        // …instead a suggestion node targeting it exists.
+        assertTrue(service.stateStore.project().values.any {
+            (it.fields["kind"] as? JsonPrimitive)?.content == "suggestion" &&
+                (it.fields["targetId"] as? JsonPrimitive)?.content == node.toString()
+        })
+    }
+
+    @Test
     fun botDoesNotOverwriteAHumanField() = run { client, service ->
         // A human writes the title directly (Actor.Human), then a bot tries to change it.
         val node = id(1)

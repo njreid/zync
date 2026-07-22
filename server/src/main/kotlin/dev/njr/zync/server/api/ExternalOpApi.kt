@@ -4,8 +4,11 @@ import dev.njr.zync.core.api.EnvelopeResult
 import dev.njr.zync.core.api.IntentResult
 import dev.njr.zync.core.api.OpEnvelope
 import dev.njr.zync.core.api.OpIntent
+import dev.njr.zync.core.agent.AgentFlow
 import dev.njr.zync.core.clock.Clock
 import dev.njr.zync.core.clock.HlcGenerator
+import dev.njr.zync.core.content.Fields
+import dev.njr.zync.core.content.KIND_SUGGESTION
 import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.op.Actor
@@ -16,6 +19,7 @@ import dev.njr.zync.web.content.ContentCommands
 import dev.njr.zync.web.content.OpEmitter
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.random.Random
 
 /**
@@ -33,40 +37,59 @@ class ExternalOpApi(
     private val inbox: () -> Ulid? = { null },
 ) {
     fun submit(bot: BotIdentity, env: OpEnvelope): EnvelopeResult {
+        // Effective mode: a bot without commit capability, or an envelope asking to propose,
+        // routes mutations through the proposal path (spec §4). Committing needs both.
+        val propose = !bot.commit || env.mode == "propose"
         val emitter = RecordingBotEmitter(bot.id, now, random)
         val commands = ContentCommands(emitter)
-        val results = env.intents.map { translate(it, commands, emitter) }
-        // Atomic: only ingest if every intent validated. Otherwise nothing lands.
+        val results = env.intents.map { translate(it, commands, emitter, propose) }
         if (results.none { it.status == "error" }) service.ingestLocalBatch(emitter.ops)
         return EnvelopeResult(results)
     }
 
-    private fun translate(i: OpIntent, c: ContentCommands, e: RecordingBotEmitter): IntentResult = try {
+    private fun translate(i: OpIntent, c: ContentCommands, e: RecordingBotEmitter, propose: Boolean): IntentResult = try {
         when (i.op) {
             "create" -> {
                 val id = if (i.kind == "project") c.createProject(i.title.orEmpty(), resolveParent(i.parent))
                 else c.createTask(i.title.orEmpty(), resolveParent(i.parent))
                 i.fields?.forEach { (f, v) -> e.setField(id, f, v) }
                 i.tags?.forEach { c.addTag(id, Ulid.parse(it)) }
-                ok(i, id)
+                if (propose) { e.setField(id, AgentFlow.FIELD_PROPOSED, JsonPrimitive(true)); proposed(i, id) } else ok(i, id)
             }
+            // Comments are additive and can't clobber human state → always commit.
             "comment" -> ok(i, c.addComment(target(i), i.text.orEmpty()))
-            "setField" -> {
-                val t = target(i)
-                e.setField(t, requireNotNull(i.field) { "field required" }, i.value ?: JsonNull)
-                ok(i, t)
+            "setField" -> edit(i, e, target(i), requireNotNull(i.field) { "field required" }, i.value ?: JsonNull, propose)
+            "complete" -> edit(i, e, target(i), Fields.STATUS, JsonPrimitive("DONE"), propose)
+            "trash" -> edit(i, e, target(i), Fields.STATUS, JsonPrimitive("DROPPED"), propose)
+            "addTag" -> {
+                if (propose) return IntentResult(i.op, null, "error", "addTag is not proposable yet")
+                val t = target(i); c.addTag(t, Ulid.parse(requireNotNull(i.context) { "context required" })); ok(i, t)
             }
-            "addTag" -> { val t = target(i); c.addTag(t, Ulid.parse(requireNotNull(i.context) { "context required" })); ok(i, t) }
-            "move" -> { val t = target(i); c.move(t, requireNotNull(resolveParent(i.parent)) { "parent required" }); ok(i, t) }
-            "complete" -> { val t = target(i); c.complete(t); ok(i, t) }
-            "trash" -> { val t = target(i); c.trash(t); ok(i, t) }
+            "move" -> {
+                if (propose) return IntentResult(i.op, null, "error", "move is not proposable yet")
+                val t = target(i); c.move(t, requireNotNull(resolveParent(i.parent)) { "parent required" }); ok(i, t)
+            }
             else -> IntentResult(i.op, null, "error", "unsupported op '${i.op}'")
         }
     } catch (ex: Exception) {
         IntentResult(i.op, null, "error", ex.message ?: "invalid intent")
     }
 
+    /** A field edit: commit the live `SetField`, or (propose) mint a suggestion node (§4). */
+    private fun edit(i: OpIntent, e: RecordingBotEmitter, target: Ulid, field: String, value: JsonElement, propose: Boolean): IntentResult {
+        if (!propose) { e.setField(target, field, value); return ok(i, target) }
+        val sug = e.newId()
+        e.setField(sug, Fields.KIND, JsonPrimitive(KIND_SUGGESTION))
+        e.setField(sug, Fields.TARGET_ID, JsonPrimitive(target.toString()))
+        e.setField(sug, Fields.TARGET_FIELD, JsonPrimitive(field))
+        e.setField(sug, Fields.PROPOSED_VALUE, value)
+        e.setField(sug, AgentFlow.FIELD_PROPOSED, JsonPrimitive(true))
+        e.move(sug, target) // associate under the target
+        return proposed(i, sug)
+    }
+
     private fun ok(i: OpIntent, id: Ulid) = IntentResult(i.op, id.toString(), "committed")
+    private fun proposed(i: OpIntent, id: Ulid) = IntentResult(i.op, id.toString(), "proposed")
 
     private fun target(i: OpIntent): Ulid = Ulid.parse(requireNotNull(i.target) { "target required" })
 

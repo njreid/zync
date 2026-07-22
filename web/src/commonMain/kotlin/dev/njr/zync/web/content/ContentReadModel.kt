@@ -5,11 +5,14 @@ import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.content.FractionalIndex
 import dev.njr.zync.core.content.Size
 import dev.njr.zync.core.content.Status
+import dev.njr.zync.core.content.KIND_SUGGESTION
 import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.content.stringContent
 import dev.njr.zync.core.id.Ulid
+import dev.njr.zync.core.op.Actor
 import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.state.EntitySnapshot
+import dev.njr.zync.core.state.RegisterKey
 import dev.njr.zync.core.state.StateStore
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -54,6 +57,17 @@ data class FileSuggestion(val targetId: Ulid, val title: String, val tree: Strin
 /** An attachment as the triage preview reads it (GTD triage §4). */
 data class AttachmentView(val id: Ulid, val type: String?, val filename: String?, val blobHash: String?)
 
+/** A bot-proposed field edit awaiting review (external-op-api §4): the diff + who proposed it. */
+data class SuggestionView(
+    val id: Ulid,
+    val targetId: Ulid,
+    val targetTitle: String?,
+    val field: String,
+    val currentValue: String?,
+    val proposedValue: JsonElement,
+    val byBot: String?,
+)
+
 /** A context/tag as the UI reads it. */
 data class ContextView(val id: Ulid, val name: String?)
 
@@ -97,9 +111,36 @@ class ContentReadModel(private val store: StateStore) {
             .filter { it.status != "DROPPED" }
             .sortedBy { it.id.toString() }
 
-    /** Agent-authored nodes awaiting human review (accept/reject), oldest first. */
+    /** Agent-authored nodes awaiting human review (accept/reject), oldest first. Suggestion
+     *  nodes (proposed field edits) render separately via [suggestions]. */
     fun proposals(): List<NodeView> =
-        snapshots().filter { it.proposed() }.map { it.toView() }.sortedBy { it.id.toString() }
+        snapshots().filter { it.proposed() && it.kind() != KIND_SUGGESTION }
+            .map { it.toView() }.sortedBy { it.id.toString() }
+
+    /** Bot-proposed field edits awaiting review (external-op-api §4): the diff for each. */
+    fun suggestions(): List<SuggestionView> {
+        val snaps = store.project()
+        return snaps.values.asSequence()
+            .filter { it.alive && it.kind() == KIND_SUGGESTION && it.proposed() }
+            .mapNotNull { snap ->
+                val targetId = snap.fields[Fields.TARGET_ID].asString()
+                    ?.let { runCatching { Ulid.parse(it) }.getOrNull() } ?: return@mapNotNull null
+                val field = snap.fields[Fields.TARGET_FIELD].asString() ?: return@mapNotNull null
+                val proposed = snap.fields[Fields.PROPOSED_VALUE] ?: return@mapNotNull null
+                val target = snaps[targetId]
+                SuggestionView(
+                    id = snap.entityId,
+                    targetId = targetId,
+                    targetTitle = target?.fields?.get(Fields.TITLE).asString(),
+                    field = field,
+                    currentValue = target?.fields?.get(field).asString(),
+                    proposedValue = proposed,
+                    byBot = (store.getRegister(RegisterKey(snap.entityId, Fields.TARGET_FIELD))?.actor as? Actor.Bot)?.id,
+                )
+            }
+            .sortedBy { it.id.toString() }
+            .toList()
+    }
 
     /**
      * Inbox: live children of [inbox] that aren't completed/dropped/deferred-out,

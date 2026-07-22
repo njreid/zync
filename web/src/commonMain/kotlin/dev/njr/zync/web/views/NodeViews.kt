@@ -76,6 +76,38 @@ fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long, co
         }
     }
     proposalsSection(read)
+    suggestionsSection(read)
+}
+
+/**
+ * Bot-proposed field edits awaiting review (external-op-api §4). Each shows the diff
+ * (field: current → proposed) + who proposed it; accept applies the change as a human op,
+ * dismiss drops the suggestion. Rendered in the inbox fragment so SSE keeps it current.
+ */
+fun FlowContent.suggestionsSection(read: ContentReadModel) {
+    val suggestions = read.suggestions()
+    if (suggestions.isEmpty()) return
+    h2 { +"Suggestions" }
+    ul {
+        suggestions.forEach { s ->
+            li {
+                span("proposed") { +(s.targetTitle ?: "(item)") }
+                span("status") {
+                    val proposed = (s.proposedValue as? kotlinx.serialization.json.JsonPrimitive)?.content ?: s.proposedValue.toString()
+                    +" · ${s.field}: ${s.currentValue ?: "—"} → $proposed"
+                }
+                s.byBot?.let { span("waiting") { +" @$it" } }
+                button(classes = "action") {
+                    attributes["data-on:click"] = "@post('/suggestion/${s.id}/accept')"
+                    +"✔ Accept"
+                }
+                button(classes = "action") {
+                    attributes["data-on:click"] = "@post('/suggestion/${s.id}/reject')"
+                    +"✖ Dismiss"
+                }
+            }
+        }
+    }
 }
 
 /**

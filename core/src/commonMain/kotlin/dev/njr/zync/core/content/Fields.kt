@@ -63,7 +63,19 @@ object Fields {
      * owner Operator("auto-file-done").
      */
     const val PROPOSED_FILE_PARENT = "proposedFileParent"
+
+    // --- Suggestion nodes (external-op-api spec §4): a bot's proposed edit to a field on an
+    // existing node. kind="suggestion", proposed=true; accepting emits the real SetField. ---
+    /** The node the suggestion targets. */
+    const val TARGET_ID = "targetId"
+    /** The field on [TARGET_ID] the suggestion proposes to change. */
+    const val TARGET_FIELD = "targetField"
+    /** The proposed new value for [TARGET_FIELD] (any JSON value). */
+    const val PROPOSED_VALUE = "proposedValue"
 }
+
+/** The node kind used by external-op-api suggestion nodes (§4). */
+const val KIND_SUGGESTION = "suggestion"
 
 /** OCR lifecycle values for [Fields.OCR_STATUS]. */
 object OcrStatus {
