@@ -87,6 +87,7 @@ fun ZyncShell(
     onEnableNotifications: () -> Unit = {},
     searchOpen: Boolean = false,
     onSearchOpenChange: (Boolean) -> Unit = {},
+    onOpenGoogleSearch: () -> Unit = {},
     contextApp: dev.njr.zync.launcher.BarApp? = null,
     onContextTap: () -> Unit = {},
     onContextEdit: () -> Unit = {},
@@ -109,6 +110,7 @@ fun ZyncShell(
                     HomeScreen(
                         homeState, onTileTap, onContextSelect, onCompleteTask, onEnableWeather, onEnableCalendar,
                         onOpenSearch = { onSearchOpenChange(true) },
+                        onOpenGoogleSearch = onOpenGoogleSearch,
                         onOpenEvent = onOpenEvent,
                         onEnableNotifications = onEnableNotifications,
                         onSwipeLaunch = onSwipeLaunch,
@@ -117,7 +119,7 @@ fun ZyncShell(
             }
             ZyncActionBar(
                 onAction = onBarAction,
-                onSearch = { onSearchOpenChange(true) },
+                onOpenGoogleSearch = onOpenGoogleSearch,
                 barApps = barApps,
                 onLaunchApp = onLaunchApp,
                 onEditRole = onEditRole,

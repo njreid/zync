@@ -30,12 +30,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -55,9 +55,10 @@ private val TextWork = Color(0xFF9FBEE3) // blue-leaning ink: work-profile rows 
 private val FieldBackground = Color(0xFF1A212B)
 
 /**
- * The search surface (launcher spec L3 + device feedback): apps across ALL profiles,
- * settings pages, web handoff (≤5 local matches), the five most recent selections at
- * the top of the blank list, and the five most recent query texts under the field.
+ * The custom multi-search drawer (launcher spec L3 + device feedback): opens on a home swipe-UP.
+ * Recent APPS head the drawer as a 4-col icon grid, then every app by launch frequency; the
+ * query box sits at the BOTTOM, near the thumb, and (no auto-focus) opens onto the grid. Typing
+ * turns it into full multi-search — apps + settings + contacts + a web handoff.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -65,17 +66,12 @@ fun SearchOverlay(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val apps = remember { AppSearch.launchableApps(context) }
     var query by remember { mutableStateOf("") }
-    // No auto-focus: the overlay opens onto the recent-selections list for one-tap
-    // reuse; tapping the field brings the keyboard + recent query texts.
-    var fieldFocused by remember { mutableStateOf(false) }
     var contactsGranted by remember { mutableStateOf(ContactSearch.hasPermission(context)) }
     val contactsPermission = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
     ) { granted -> contactsGranted = granted }
 
-    // Contacts lookup is a cross-process ContentResolver query (up to two) — never run it inside the
-    // LazyColumn item builder (it re-ran on every keystroke AND every unrelated recompose, janking
-    // the field). Fetch off the main thread, debounced, into state instead.
+    // Contacts lookup is a cross-process ContentResolver query — off the main thread, debounced.
     var contacts by remember { mutableStateOf<List<dev.njr.zync.launcher.ContactHit>>(emptyList()) }
     LaunchedEffect(query, contactsGranted) {
         contacts = if (contactsGranted && query.trim().length >= 2) {
@@ -101,6 +97,22 @@ fun SearchOverlay(onDismiss: () -> Unit) {
         onDismiss()
     }
 
+    val usage = remember { SearchHistory.usageCounts(context) }
+    val recentApps = remember { SearchHistory.recentApps(context).take(8) } // 8 recent apps, newest first
+    val appMatches = AppSearch.filter(apps, query, usage) // blank query = all apps, most-launched first
+    val settingsMatches = AppSearch.settingsMatches(query)
+    var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
+    val fewLocalMatches = AppSearch.showWebSearch(query, appMatches.size + settingsMatches.size)
+    LaunchedEffect(query, fewLocalMatches) {
+        // Chrome-style live web suggestions once local matches thin out; debounced.
+        if (query.length >= 2 && fewLocalMatches) {
+            kotlinx.coroutines.delay(150)
+            suggestions = dev.njr.zync.launcher.WebSuggest.fetch(query)
+        } else {
+            suggestions = emptyList()
+        }
+    }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -108,94 +120,13 @@ fun SearchOverlay(onDismiss: () -> Unit) {
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 16.dp),
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            BasicTextField(
-                value = query,
-                onValueChange = { query = it },
-                singleLine = true,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    imeAction = androidx.compose.ui.text.input.ImeAction.Go,
-                ),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                    onGo = {
-                        // Enter = top result: best app, else settings, else web search.
-                        val top = AppSearch.filter(apps, query, SearchHistory.usageCounts(context)).firstOrNull()
-                        val setting = AppSearch.settingsMatches(query).firstOrNull()
-                        when {
-                            top != null -> launchRecent(
-                                RecentItem(RecentItem.Kind.App, top.label, top.packageName, top.activityName, top.userSerial),
-                            )
-                            setting != null -> launchRecent(
-                                RecentItem(RecentItem.Kind.Setting, setting.label, settingsAction = setting.action),
-                            )
-                            query.isNotBlank() -> launchRecent(RecentItem(RecentItem.Kind.Web, "Web: $query", webQuery = query))
-                        }
-                        if (query.isNotBlank()) SearchHistory.recordQuery(context, query)
-                    },
-                ),
-                textStyle = TextStyle(color = TextPrimary, fontSize = 19.sp),
-                cursorBrush = SolidColor(TextPrimary),
-                modifier = Modifier
-                    .weight(1f)
-                    .background(FieldBackground)
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
-                    .onFocusChanged { fieldFocused = it.isFocused },
-            )
-            if (query.isNotEmpty()) {
-                BasicText(
-                    "✕",
-                    style = TextStyle(color = TextMuted, fontSize = 16.sp),
-                    modifier = Modifier.clickable { query = "" }.padding(6.dp),
-                )
-            }
-            BasicText(
-                "Close",
-                style = TextStyle(color = TextMuted, fontSize = 14.sp),
-                modifier = Modifier.clickable(onClick = onDismiss).padding(6.dp),
-            )
+        // TOP: recent apps as a 4-col icon grid (apps only; icons, no text) — blank query only.
+        if (query.isBlank() && recentApps.isNotEmpty()) {
+            RecentAppsGrid(recentApps) { launchRecent(it) }
         }
 
-        // recent query texts: only once the user has tapped into the field (device
-        // feedback 2026-07-17) — before that the list below leads with recent selections
-        if (fieldFocused && query.isBlank()) {
-            val recentQueries = remember { SearchHistory.recentQueries(context) }
-            if (recentQueries.isNotEmpty()) {
-                Column(Modifier.padding(bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    recentQueries.forEach { q ->
-                        BasicText(
-                            q,
-                            style = TextStyle(color = TextMuted, fontSize = 13.sp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(FieldBackground, androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
-                                .clickable { query = q }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                        )
-                    }
-                }
-            }
-        }
-
-        val usage = remember { SearchHistory.usageCounts(context) }
-        val recents = remember { SearchHistory.recentItems(context) } // prefs decode: once per open, not per recompose
-        val appMatches = AppSearch.filter(apps, query, usage)
-        val settingsMatches = AppSearch.settingsMatches(query)
-        var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
-        val fewLocalMatches = AppSearch.showWebSearch(query, appMatches.size + settingsMatches.size)
-        LaunchedEffect(query, fewLocalMatches) {
-            // Chrome-style live web suggestions once local matches thin out; debounced
-            // so we only ask after the user pauses typing.
-            if (query.length >= 2 && fewLocalMatches) {
-                kotlinx.coroutines.delay(150)
-                suggestions = dev.njr.zync.launcher.WebSuggest.fetch(query)
-            } else {
-                suggestions = emptyList()
-            }
-        }
+        // MIDDLE: results. Blank query → every app by launch frequency; typing → the full
+        // multi-search (calc + settings + contacts + web handoff + apps).
         LazyColumn(Modifier.weight(1f)) {
             // 0. inline calculator: "17*23" answers in place; tap copies
             if (CalcEval.looksLikeMath(query)) {
@@ -218,48 +149,7 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                     }
                 }
             }
-            // 1. recents: their own labeled section, divider below (device feedback)
-            if (query.isBlank()) {
-                if (recents.isNotEmpty()) {
-                    item(key = "recent-header") {
-                        BasicText(
-                            "RECENT",
-                            style = TextStyle(color = TextFaint, fontSize = 11.sp, letterSpacing = 1.2.sp),
-                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
-                        )
-                    }
-                    items(recents, key = { "r:" + it.label + it.kind + (it.userSerial ?: 0) }) { item ->
-                        Row(
-                            Modifier.fillMaxWidth().clickable { launchRecent(item) }.padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            when (item.kind) {
-                                RecentItem.Kind.App -> AppIcon(item.packageName!!, item.activityName!!, item.userSerial)
-                                RecentItem.Kind.Setting -> BasicText("⚙", style = TextStyle(color = TextMuted, fontSize = 20.sp))
-                                RecentItem.Kind.Web -> BasicText("🔎", style = TextStyle(color = TextMuted, fontSize = 17.sp))
-                            }
-                            BasicText(
-                                item.label,
-                                style = TextStyle(
-                                    color = if (item.userSerial != null) TextWork else TextPrimary,
-                                    fontSize = 16.sp,
-                                ),
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                    item(key = "recent-divider") {
-                        Box(
-                            Modifier.fillMaxWidth().padding(vertical = 6.dp)
-                                .height(1.dp)
-                                .background(androidx.compose.ui.graphics.Color(0xFF2A313C)),
-                        )
-                    }
-                }
-            }
-            // 2. web handoff when few local results match
+            // 1. web handoff when few local results match
             if (AppSearch.showWebSearch(query, appMatches.size + settingsMatches.size)) {
                 items(listOf("web-search")) { _ ->
                     Row(
@@ -275,7 +165,7 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                     }
                 }
             }
-            // 2b. live suggestions (tap = straight to a web search for that text)
+            // 1b. live suggestions (tap = straight to a web search for that text)
             if (query.length >= 2 && fewLocalMatches) {
                 items(suggestions.filter { it != query }, key = { "g:$it" }) { sug ->
                     Row(
@@ -293,7 +183,7 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                     }
                 }
             }
-            // 3. settings matches
+            // 2. settings matches
             items(settingsMatches, key = { "s:" + it.action }) { setting ->
                 Row(
                     Modifier.fillMaxWidth()
@@ -309,7 +199,7 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                     BasicText(setting.label, style = TextStyle(color = TextPrimary, fontSize = 16.sp))
                 }
             }
-            // 3b. contacts (once granted; an invite row asks the first time)
+            // 2b. contacts (once granted; an invite row asks the first time)
             if (query.trim().length >= 2) {
                 if (contactsGranted) {
                     items(contacts, key = { "c:" + it.id }) { hit ->
@@ -336,7 +226,7 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                     }
                 }
             }
-            // 4. apps (all profiles; work apps carry badged icons + blue-leaning ink)
+            // 3. apps (all profiles; blank query = every app by frequency, recents included)
             items(appMatches, key = { it.packageName + it.activityName + (it.userSerial ?: 0) }) { app ->
                 Row(
                     Modifier.fillMaxWidth()
@@ -371,14 +261,87 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                 }
             }
         }
+
+        // BOTTOM: the multi-search query box, near the thumb. No auto-focus — tap to type.
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            BasicTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Go,
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onGo = {
+                        // Enter = top result: best app, else settings, else web search.
+                        val top = AppSearch.filter(apps, query, SearchHistory.usageCounts(context)).firstOrNull()
+                        val setting = AppSearch.settingsMatches(query).firstOrNull()
+                        when {
+                            top != null -> launchRecent(
+                                RecentItem(RecentItem.Kind.App, top.label, top.packageName, top.activityName, top.userSerial),
+                            )
+                            setting != null -> launchRecent(
+                                RecentItem(RecentItem.Kind.Setting, setting.label, settingsAction = setting.action),
+                            )
+                            query.isNotBlank() -> launchRecent(RecentItem(RecentItem.Kind.Web, "Web: $query", webQuery = query))
+                        }
+                        if (query.isNotBlank()) SearchHistory.recordQuery(context, query)
+                    },
+                ),
+                textStyle = TextStyle(color = TextPrimary, fontSize = 19.sp),
+                cursorBrush = SolidColor(TextPrimary),
+                modifier = Modifier
+                    .weight(1f)
+                    .background(FieldBackground)
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+            )
+            if (query.isNotEmpty()) {
+                BasicText(
+                    "✕",
+                    style = TextStyle(color = TextMuted, fontSize = 16.sp),
+                    modifier = Modifier.clickable { query = "" }.padding(6.dp),
+                )
+            }
+            BasicText(
+                "Close",
+                style = TextStyle(color = TextMuted, fontSize = 14.sp),
+                modifier = Modifier.clickable(onClick = onDismiss).padding(6.dp),
+            )
+        }
+    }
+}
+
+/** Recent apps as a 4-column icon grid (icons only, no labels): tap to launch. */
+@Composable
+private fun RecentAppsGrid(apps: List<RecentItem>, onLaunch: (RecentItem) -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        apps.chunked(4).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { item ->
+                    Box(Modifier.weight(1f).clickable { onLaunch(item) }, contentAlignment = Alignment.Center) {
+                        AppIcon(item.packageName!!, item.activityName!!, item.userSerial, size = 46.dp)
+                    }
+                }
+                repeat(4 - row.size) { Box(Modifier.weight(1f)) {} } // pad the last row to 4 columns
+            }
+        }
     }
 }
 
 @Composable
-private fun AppIcon(packageName: String, activityName: String, userSerial: Long?) {
+private fun AppIcon(packageName: String, activityName: String, userSerial: Long?, size: Dp = 34.dp) {
     val context = LocalContext.current
     val icon = remember(packageName, activityName, userSerial) {
         AppLaunch.icon(context, packageName, activityName, userSerial)?.toBitmap(96, 96)?.asImageBitmap()
     }
-    icon?.let { Image(bitmap = it, contentDescription = null, modifier = Modifier.size(34.dp)) }
+    icon?.let {
+        Image(bitmap = it, contentDescription = null, modifier = Modifier.size(size), colorFilter = workIconFilter(userSerial))
+    }
 }

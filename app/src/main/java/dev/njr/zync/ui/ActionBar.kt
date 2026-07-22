@@ -67,7 +67,7 @@ private val BarAccent = Color(0xFF4A90C2)
 @Composable
 fun ZyncActionBar(
     onAction: (BarAction) -> Unit,
-    onSearch: () -> Unit = {},
+    onOpenGoogleSearch: () -> Unit = {},
     barApps: (BarRole) -> List<BarApp> = { emptyList() },
     onLaunchApp: (BarApp) -> Unit = {},
     onEditRole: (BarRole) -> Unit = {},
@@ -87,8 +87,8 @@ fun ZyncActionBar(
                     onDragStart = { total = 0f },
                     onHorizontalDrag = { _, dx -> total += dx },
                     onDragEnd = {
-                        if (total > threshold) onSearch() // rightward drag = "from the left"
-                        else if (total < -threshold) onSwipeLaunch() // leftward drag = "from the right"
+                        if (total > threshold) onOpenGoogleSearch() // rightward drag / left edge = Google
+                        else if (total < -threshold) onSwipeLaunch() // leftward drag / right edge = Newz
                     },
                 )
             }
@@ -132,7 +132,7 @@ private fun contextSlot(app: BarApp?, modifier: Modifier, onTap: () -> Unit, onE
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (bitmap != null) {
-            Image(bitmap = bitmap, contentDescription = app?.label, modifier = Modifier.size(42.dp))
+            Image(bitmap = bitmap, contentDescription = app?.label, modifier = Modifier.size(42.dp), colorFilter = workIconFilter(app?.userSerial))
         } else {
             BasicText("@", style = TextStyle(color = BarMuted, fontSize = 32.sp, fontWeight = FontWeight.Bold))
         }
@@ -236,7 +236,7 @@ private fun MenuRow(label: String, icon: BarApp?, hot: Boolean) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         bitmap?.let {
-            Image(bitmap = it, contentDescription = null, modifier = Modifier.size(32.dp))
+            Image(bitmap = it, contentDescription = null, modifier = Modifier.size(32.dp), colorFilter = workIconFilter(icon?.userSerial))
             androidx.compose.foundation.layout.Spacer(Modifier.width(12.dp))
         }
         val ink = when {

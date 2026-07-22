@@ -177,6 +177,7 @@ class MainActivity : ComponentActivity() {
                             pairingOpen = false
                         }
                     },
+                    onOpenGoogleSearch = ::openGoogleSearch,
                     contextApp = remember(homeState.contextName, barAppsTick) {
                         ContextApps.pick(this@MainActivity, homeState.contextName)
                     },
@@ -240,9 +241,10 @@ class MainActivity : ComponentActivity() {
                     searchOpen || captureOpen || settingsTab != null || syncLogOpen || pairingOpen || newzOpen -> Unit // their BackHandlers own it
                     screen == ZyncScreen.Web && webView.canGoBack() -> webView.goBack()
                     screen == ZyncScreen.Web -> screen = ZyncScreen.Home
-                    // On the home surface an edge swipe (the system back gesture) opens
-                    // search (device feedback) — there's nothing to go "back" to.
-                    else -> searchOpen = true
+                    // On the home surface the left-edge swipe (the system back gesture) opens
+                    // Google web search — there's nothing to go "back" to. (Our own drawer opens
+                    // on swipe-up; Newz on a right-edge/leftward swipe.)
+                    else -> openGoogleSearch()
                 }
             }
         })
@@ -451,6 +453,22 @@ class MainActivity : ComponentActivity() {
         runCatching { homeRoleRequest.launch(roles.createRequestRoleIntent(RoleManager.ROLE_HOME)) }
     }
 
+    /**
+     * The generic Google web-search surface (auto-fills as you type, web results only) — opened
+     * by the left-edge / rightward swipe and by the home-at-home gesture. Falls back to
+     * ACTION_WEB_SEARCH when no global-search agent is installed.
+     */
+    private fun openGoogleSearch() {
+        runCatching {
+            startActivity(
+                Intent(android.app.SearchManager.INTENT_ACTION_GLOBAL_SEARCH)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }.recoverCatching {
+            startActivity(Intent(Intent.ACTION_WEB_SEARCH).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
+
     /** Launcher action bar taps (spec L1): app slots fire intents; Capture opens the screen. */
     private fun handleBarAction(action: BarAction) {
         when (action) {
@@ -513,14 +531,7 @@ class MainActivity : ComponentActivity() {
         val atHome = screen == dev.njr.zync.ui.ZyncScreen.Home && !searchOpen && !captureOpen &&
             settingsTab == null && !syncLogOpen && !pairingOpen && !newzOpen
         if (atHome) {
-            runCatching {
-                startActivity(
-                    Intent(android.app.SearchManager.INTENT_ACTION_GLOBAL_SEARCH)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                )
-            }.recoverCatching {
-                startActivity(Intent(Intent.ACTION_WEB_SEARCH).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }
+            openGoogleSearch()
         } else {
             searchOpen = false
             captureOpen = false

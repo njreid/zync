@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -75,6 +76,7 @@ fun HomeScreen(
     onEnableWeather: () -> Unit,
     onEnableCalendar: () -> Unit,
     onOpenSearch: () -> Unit = {},
+    onOpenGoogleSearch: () -> Unit = {},
     onOpenEvent: (dev.njr.zync.home.CalEvent) -> Unit = {},
     onEnableNotifications: () -> Unit = {},
     onSwipeLaunch: () -> Unit = {},
@@ -83,8 +85,10 @@ fun HomeScreen(
         Modifier
             .fillMaxSize()
             .background(C.Surface)
-            // Swipe from the left (rightward drag) = search; from the right = the
-            // configurable swipe app (Harmonic by default).
+            // Home gestures (device-tuned): rightward drag / hard-left-edge = Google web search;
+            // leftward drag / right edge = the swipe app (Newz by default). Horizontal + vertical
+            // are separate detectors so a vertical drag doesn't steal from horizontal (and vice
+            // versa), and so the agenda can still scroll.
             .pointerInput(Unit) {
                 val threshold = 64.dp.toPx()
                 var total = 0f
@@ -92,9 +96,19 @@ fun HomeScreen(
                     onDragStart = { total = 0f },
                     onHorizontalDrag = { _, dx -> total += dx },
                     onDragEnd = {
-                        if (total > threshold) onOpenSearch()
+                        if (total > threshold) onOpenGoogleSearch()
                         else if (total < -threshold) onSwipeLaunch()
                     },
+                )
+            }
+            // Swipe UP on the home surface = our custom multi-search drawer.
+            .pointerInput(Unit) {
+                val threshold = 72.dp.toPx()
+                var total = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { total = 0f },
+                    onVerticalDrag = { _, dy -> total += dy },
+                    onDragEnd = { if (total < -threshold) onOpenSearch() },
                 )
             },
     ) {

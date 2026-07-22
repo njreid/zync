@@ -308,7 +308,7 @@ private fun AppIcon(app: BarApp?) {
         }
     }
     if (bitmap != null) {
-        Image(bitmap = bitmap, contentDescription = null, modifier = Modifier.size(34.dp))
+        Image(bitmap = bitmap, contentDescription = null, modifier = Modifier.size(34.dp), colorFilter = dev.njr.zync.ui.workIconFilter(app?.userSerial))
     } else {
         Spacer(Modifier.size(34.dp))
     }

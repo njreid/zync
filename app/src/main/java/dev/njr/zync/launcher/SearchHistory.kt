@@ -46,13 +46,18 @@ object SearchHistory {
         }.getOrNull() ?: emptyList()
 
     fun recordItem(context: Context, item: RecentItem) {
-        val next = (listOf(item) + recentItems(context).filterNot { it.dedupeKey() == item.dedupeKey() }).take(5)
+        // Recents are APPS ONLY (spec): settings/web selections still count toward usage-ranking
+        // via recordQuery/usage but never appear in the recent-apps grid. Keep the 8 most recent.
+        if (item.kind != RecentItem.Kind.App) return
+        val next = (listOf(item) + recentApps(context).filterNot { it.dedupeKey() == item.dedupeKey() }).take(8)
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putString(ITEMS, json.encodeToString(next)).apply()
-        if (item.kind == RecentItem.Kind.App) {
-            recordUsage(context, usageKey(item.packageName, item.activityName, item.userSerial))
-        }
+        recordUsage(context, usageKey(item.packageName, item.activityName, item.userSerial))
     }
+
+    /** The recent-app grid source: app selections only, newest first (legacy mixed data filtered). */
+    fun recentApps(context: Context): List<RecentItem> =
+        recentItems(context).filter { it.kind == RecentItem.Kind.App }
 
     /** Stable identity for an app entry in the usage-count map. */
     fun usageKey(packageName: String?, activityName: String?, userSerial: Long?): String =
