@@ -48,6 +48,9 @@ class SyncService(
      */
     private fun headSeq(): Long = db.transportQueries.headSeq().executeAsOne()
 
+    /** The current transport head seq — the monotonic cursor bots track over the change feed. */
+    fun head(): Long = headSeq()
+
     /** Ingest pending ops; dedupe by opId; ack everything the server now holds. */
     fun push(request: PushRequest): PushResponse {
         val accepted = mutableListOf<Op>()

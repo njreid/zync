@@ -95,7 +95,7 @@ fun Application.zyncModule(
         if (webauthn != null) webAuthnRoutes(webauthn)
         if (agenda != null) agendaRoutes(agenda, auth)
         if (newz != null) newzRoutes(newz, auth)
-        if (botApi != null && botAuth != null) apiRoutes(botApi, botAuth, blobs)
+        if (botApi != null && botAuth != null) apiRoutes(botApi, botAuth, blobs, content?.changes, service::head)
         if (hardening != null) get("/metrics") {
             if (!call.requireAuth(auth.authenticator)) return@get
             call.respond(hardening.metrics.snapshot(usage()))

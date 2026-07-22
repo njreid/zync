@@ -5,6 +5,7 @@ import dev.njr.zync.core.api.EnvelopeResult
 import dev.njr.zync.core.api.OpEnvelope
 import dev.njr.zync.server.blob.BlobService
 import dev.njr.zync.server.blob.BlobTooLargeException
+import dev.njr.zync.web.sse.ChangeNotifier
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -15,6 +16,7 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
+import io.ktor.server.sse.sse
 
 private const val MAX_INTENTS = 200
 
@@ -29,9 +31,24 @@ private fun ApplicationCall.bot(auth: BotAuth): BotIdentity? {
  * envelope and ingests it (idempotent per `(botId, idempotencyKey)`); `PUT /api/blobs`
  * content-addresses a blob to reference in an `attach` intent. Session-exempt (bearer).
  */
-fun Route.apiRoutes(api: ExternalOpApi, auth: BotAuth, blobs: BlobService? = null) {
+fun Route.apiRoutes(
+    api: ExternalOpApi,
+    auth: BotAuth,
+    blobs: BlobService? = null,
+    changes: ChangeNotifier? = null,
+    head: () -> Long = { 0L },
+) {
     val idem = IdempotencyCache()
     val limiter = VerbRateLimiter()
+
+    // The react side (spec §6, Q4): a bearer-authed SSE feed. Emits a `changed` event with
+    // the current head seq whenever the op log changes, so a bot knows to re-query.
+    if (changes != null) sse("/api/changes") {
+        if (call.bot(auth) == null) { close(); return@sse }
+        suspend fun ping() = send(event = "changed", data = """{"head":${head()}}""")
+        ping()
+        changes.changes.collect { ping() }
+    }
 
     if (blobs != null) put("/api/blobs") {
         if (call.bot(auth) == null) return@put call.respondText("unauthorized", status = HttpStatusCode.Unauthorized)
