@@ -11,7 +11,7 @@ test('expand, set size, and the panel survives the SSE morph', async ({ page }) 
   await expect(row).toBeVisible();
 
   // Expand ▸ → the triage panel becomes visible.
-  await row.getByTitle('Expand').click();
+  await row.locator('.row-title').click(); // tap the title to expand the triage panel
   const panel = row.locator('.triage');
   await expect(panel).toBeVisible();
 
@@ -28,7 +28,7 @@ test('no CSP or JS errors from the triage panel', async ({ page }) => {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto(BASE + '/', { waitUntil: 'networkidle' });
   const row = page.locator('#inbox li.swipe-row').first();
-  await row.getByTitle('Expand').click();
+  await row.locator('.row-title').click(); // tap the title to expand the triage panel
   const bad = errors.filter((e) => /Content Security Policy|unsafe-eval|is not defined|SyntaxError/.test(e));
   expect(bad, bad.join('\n')).toHaveLength(0);
 });

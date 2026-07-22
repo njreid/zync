@@ -20,6 +20,6 @@ test('Datastar reactivity works under the served CSP', async ({ page }) => {
   await page.mouse.down();
   for (let i = 1; i <= 6; i++) await page.mouse.move(sx + (160 * i) / 6, y);
   await page.mouse.up();
-  // If the CSP blocks Datastar's eval, this never happens.
-  await expect(page.locator('#inbox')).not.toContainText('CSP probe task', { timeout: 5000 });
+  // If the CSP blocks Datastar's eval, this never happens (allow >3s for the swipe undo window).
+  await expect(page.locator('#inbox')).not.toContainText('CSP probe task', { timeout: 7000 });
 });

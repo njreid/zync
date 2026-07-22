@@ -23,24 +23,39 @@ async function drag(page, box, dx) {
   await page.mouse.up();
 }
 
+// A committed swipe now opens a ~3s undo window before it actually commits, so allow >3s.
 test('swipe-right completes a row', async ({ page }) => {
   await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
   const { box } = await rowBox(page, 'Swipe me done');
   await drag(page, box, 160);
-  await expect(page.locator('#inbox')).not.toContainText('Swipe me done', { timeout: 5000 });
+  await expect(page.locator('#inbox')).not.toContainText('Swipe me done', { timeout: 7000 });
 });
 
 test('swipe-left trashes a row', async ({ page }) => {
   await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
   const { box } = await rowBox(page, 'Swipe me gone');
   await drag(page, box, -160);
-  await expect(page.locator('#inbox')).not.toContainText('Swipe me gone', { timeout: 5000 });
+  await expect(page.locator('#inbox')).not.toContainText('Swipe me gone', { timeout: 7000 });
 });
 
-test('a tap opens the item (swipe suppression does not break navigation)', async ({ page }) => {
+test('swipe then Undo cancels the pending action', async ({ page }) => {
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
+  const { row, box } = await rowBox(page, 'Read a book');
+  await drag(page, box, 160); // commit-swipe → enters the 3s pending window
+  await expect(row).toHaveClass(/pending/);
+  await row.locator('[data-undo]').click(); // undo before it commits
+  await expect(row).not.toHaveClass(/pending/);
+  // Still present a moment later (the pending complete was cancelled, not merely delayed).
+  await page.waitForTimeout(3500);
+  await expect(page.locator('#inbox')).toContainText('Read a book');
+});
+
+test('a tap expands the item; Details opens the editor', async ({ page }) => {
   await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
   const row = page.locator('#inbox li.swipe-row', { hasText: 'Buy milk' });
-  await row.getByRole('link', { name: 'Buy milk' }).click();
+  await row.locator('.row-title').click(); // tap the title → expand the triage panel
+  await expect(row.locator('.triage')).toBeVisible();
+  await row.locator('.triage a.details').click(); // Details → the full editor
   await expect(page).toHaveURL(/\/node\//);
 });
 
@@ -58,9 +73,9 @@ test('keyboard cursor + space completes', async ({ page }) => {
   await page.keyboard.press('j'); // cursor to first row
   const cursorRow = page.locator('#inbox li.swipe-row.cursor');
   await expect(cursorRow).toHaveCount(1);
-  const title = (await cursorRow.locator('a[href^="/node/"]').innerText()).trim();
-  await page.keyboard.press(' '); // complete the cursor row
-  await expect(page.locator('#inbox')).not.toContainText(title, { timeout: 5000 });
+  const title = (await cursorRow.locator('.row-title').innerText()).trim();
+  await page.keyboard.press(' '); // complete the cursor row (immediate; keyboard skips the undo window)
+  await expect(page.locator('#inbox')).not.toContainText(title, { timeout: 7000 });
 });
 
 test('g-chord switches tabs', async ({ page }) => {
