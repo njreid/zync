@@ -82,4 +82,16 @@ class MigrationTest {
             "post-migration backfill should index existing content",
         )
     }
+
+    @Test
+    fun v6MigratesToV7WithBotTable() {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        driver.execute(null, "PRAGMA user_version = 6", 0)
+        val db = dev.njr.zync.data.JvmZyncDatabase.open(driver)
+        assertEquals(listOf(ZyncDatabase.Schema.version.toString()), query(driver, "PRAGMA user_version"))
+        // The bot table exists post-migration and is usable.
+        db.botQueries.upsertBot("b1", "Bot One", "deadbeef", "{}", 1L)
+        val row = db.botQueries.botBySecretHash("deadbeef").executeAsOne()
+        assertEquals("Bot One", row.name)
+    }
 }

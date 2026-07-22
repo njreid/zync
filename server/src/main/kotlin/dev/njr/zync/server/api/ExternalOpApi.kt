@@ -43,15 +43,27 @@ class ExternalOpApi(
     fun submit(bot: BotIdentity, env: OpEnvelope): EnvelopeResult {
         // Effective mode: a bot without commit capability, or an envelope asking to propose,
         // routes mutations through the proposal path (spec §4). Committing needs both.
-        val propose = !bot.commit || env.mode == "propose"
+        val propose = !bot.commits || env.mode == "propose"
         val emitter = RecordingBotEmitter(bot.id, now, random)
         val commands = ContentCommands(emitter)
-        val results = env.intents.map { translate(it, commands, emitter, propose) }
+        val results = env.intents.map { translate(it, commands, emitter, propose, bot.capabilities) }
         if (results.none { it.status == "error" }) service.ingestLocalBatch(emitter.ops)
         return EnvelopeResult(results)
     }
 
-    private fun translate(i: OpIntent, c: ContentCommands, e: RecordingBotEmitter, propose: Boolean): IntentResult = try {
+    private fun translate(
+        i: OpIntent,
+        c: ContentCommands,
+        e: RecordingBotEmitter,
+        propose: Boolean,
+        caps: dev.njr.zync.core.api.BotCapabilities,
+    ): IntentResult = try {
+        if (i.op !in caps.verbs) return IntentResult(i.op, null, "error", "verb '${i.op}' not permitted")
+        val allowedFields = caps.fields
+        val field = i.field
+        if (i.op == "setField" && allowedFields != null && (field == null || field !in allowedFields)) {
+            return IntentResult(i.op, null, "error", "field '$field' not permitted")
+        }
         when (i.op) {
             "create" -> {
                 val id = if (i.kind == "project") c.createProject(i.title.orEmpty(), resolveParent(i.parent))

@@ -52,6 +52,12 @@ fun main(args: Array<String>) {
         return
     }
 
+    if (args.firstOrNull() == "bot") {
+        val db = JvmZyncDatabase.file(dbPath)
+        dev.njr.zync.server.api.BotCommand.run(db, args.drop(1), System.currentTimeMillis())
+        return
+    }
+
     val port = System.getenv("ZYNC_PORT")?.toInt() ?: 8080
     val gateway = System.getenv("ZYNC_LITESTREAM_URL")?.let(::LitestreamCli) ?: DbBackupGateway.None
     val db = StartupSequence.open(dbPath, gateway)
@@ -86,8 +92,10 @@ fun main(args: Array<String>) {
     wireOperators(db, service, ingestHook, blobs)
     val hardening = Hardening(TokenBucketRateLimiter(capacity = 240, refillPerSecond = 4.0))
     val content = ServerContent(service, changes)
-    // External op API (bots/scripts/integrations): env-token auth for now (ZYNC_BOT_TOKEN).
-    val botAuth = dev.njr.zync.server.api.EnvBotAuth.fromEnv()
+    // External op API (bots/scripts/integrations): the env token AND the registry both work.
+    val envBot = dev.njr.zync.server.api.EnvBotAuth.fromEnv()
+    val botRegistry = dev.njr.zync.server.api.SqlBotRegistry(db)
+    val botAuth = dev.njr.zync.server.api.BotAuth { t -> envBot.authenticate(t) ?: botRegistry.authenticate(t) }
     val botApi = dev.njr.zync.server.api.ExternalOpApi(service, blobs = blobs)
 
     // Op-log compaction: daily by default; 0 disables. Retention via ZYNC_OPLOG_RETAIN_*.

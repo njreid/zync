@@ -1,0 +1,27 @@
+-- Registered external bots/scripts/integrations that write through the op API
+-- (external-op-api spec §2). One row per bot; the bearer token is stored only as a
+-- sha256 hash. `capabilities` is the JSON capability grant (verbs/mode/fields/subtree/
+-- rateLimit). Populated by `server bot add`; survives restarts.
+CREATE TABLE bot (
+  id           TEXT NOT NULL PRIMARY KEY,
+  name         TEXT NOT NULL,
+  secret_hash  TEXT NOT NULL,   -- sha256hex of the bearer token
+  capabilities TEXT NOT NULL,   -- JSON (BotCapabilities)
+  created_wall INTEGER NOT NULL,
+  revoked      INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX bot_secret_hash ON bot(secret_hash);
+
+upsertBot:
+INSERT OR REPLACE INTO bot(id, name, secret_hash, capabilities, created_wall, revoked)
+VALUES (?, ?, ?, ?, ?, 0);
+
+botBySecretHash:
+SELECT id, name, capabilities, revoked FROM bot WHERE secret_hash = ?;
+
+revokeBot:
+UPDATE bot SET revoked = 1 WHERE id = ?;
+
+allBots:
+SELECT id, name, revoked FROM bot;

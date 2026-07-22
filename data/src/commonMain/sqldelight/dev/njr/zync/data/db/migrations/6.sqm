@@ -1,0 +1,10 @@
+-- v6 → v7: registered external bots for the op API (external-op-api spec §2/§4).
+CREATE TABLE bot (
+  id           TEXT NOT NULL PRIMARY KEY,
+  name         TEXT NOT NULL,
+  secret_hash  TEXT NOT NULL,
+  capabilities TEXT NOT NULL,
+  created_wall INTEGER NOT NULL,
+  revoked      INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX bot_secret_hash ON bot(secret_hash);

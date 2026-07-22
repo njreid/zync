@@ -31,6 +31,7 @@ private fun ApplicationCall.bot(auth: BotAuth): BotIdentity? {
  */
 fun Route.apiRoutes(api: ExternalOpApi, auth: BotAuth, blobs: BlobService? = null) {
     val idem = IdempotencyCache()
+    val limiter = VerbRateLimiter()
 
     if (blobs != null) put("/api/blobs") {
         if (call.bot(auth) == null) return@put call.respondText("unauthorized", status = HttpStatusCode.Unauthorized)
@@ -55,12 +56,45 @@ fun Route.apiRoutes(api: ExternalOpApi, auth: BotAuth, blobs: BlobService? = nul
             return@post call.respondText("intents must be 1..$MAX_INTENTS", status = HttpStatusCode.BadRequest)
         }
 
+        // A cached idempotent retry returns without consuming rate budget.
         env.idempotencyKey?.let { key -> idem.get(bot.id, key)?.let { return@post call.respond(it) } }
+
+        // Per-token, per-verb rate limit (RESOLVED Q5), atomic for the whole envelope.
+        val counts = env.intents.groupingBy { it.op }.eachCount()
+        if (!limiter.tryConsume(bot.id, counts, bot.capabilities)) {
+            return@post call.respondText("rate limit exceeded", status = HttpStatusCode.TooManyRequests)
+        }
+
         val result = api.submit(bot, env)
         env.idempotencyKey?.let { idem.put(bot.id, it, result) }
 
         val status = if (result.results.any { it.status == "error" }) HttpStatusCode.BadRequest else HttpStatusCode.OK
         call.respond(status, result)
+    }
+}
+
+/** Per-`(botId, verb)` fixed-window rate limiter, checked atomically for the whole envelope (spec §7, Q5). */
+private class VerbRateLimiter(private val now: () -> Long = System::currentTimeMillis) {
+    private class Window(var start: Long, var count: Int)
+    private val windows = HashMap<String, Window>()
+
+    @Synchronized
+    fun tryConsume(botId: String, counts: Map<String, Int>, caps: dev.njr.zync.core.api.BotCapabilities): Boolean {
+        val t = now()
+        // Check every verb fits first (atomic — no partial consumption).
+        for ((verb, n) in counts) {
+            val limit = caps.limitFor(verb) ?: continue
+            val w = windows["$botId::$verb"]
+            val used = if (w == null || t - w.start >= 60_000) 0 else w.count
+            if (used + n > limit) return false
+        }
+        for ((verb, n) in counts) {
+            if (caps.limitFor(verb) == null) continue
+            val w = windows.getOrPut("$botId::$verb") { Window(t, 0) }
+            if (t - w.start >= 60_000) { w.start = t; w.count = 0 }
+            w.count += n
+        }
+        return true
     }
 }
 
