@@ -25,12 +25,17 @@ function pushAgenda() {
 
   var now = new Date();
   var horizon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  // The server rejects the WHOLE push if any event has a >300-char title or a
+  // non-positive duration, so clamp titles and drop zero-length events here.
+  var MAX_TITLE = 300;
   var events = CalendarApp.getDefaultCalendar().getEvents(now, horizon)
     .filter(function (e) { return e.getMyStatus() !== CalendarApp.GuestStatus.NO; })
+    .filter(function (e) { return e.getEndTime().getTime() > e.getStartTime().getTime(); })
     .slice(0, 400)
     .map(function (e) {
+      var title = titles ? e.getTitle() || '(untitled)' : 'busy';
       return {
-        title: titles ? e.getTitle() || '(untitled)' : 'busy',
+        title: title.length > MAX_TITLE ? title.slice(0, MAX_TITLE) : title,
         beginMillis: e.getStartTime().getTime(),
         endMillis: e.getEndTime().getTime(),
         allDay: e.isAllDayEvent(),
