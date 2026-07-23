@@ -84,10 +84,9 @@ fun HomeScreen(
         Modifier
             .fillMaxSize()
             .background(C.Surface)
-            // Home gestures (device-tuned): rightward drag / hard-left-edge = Google web search;
-            // leftward drag / right edge = the swipe app (Newz by default). Horizontal + vertical
-            // are separate detectors so a vertical drag doesn't steal from horizontal (and vice
-            // versa), and so the agenda can still scroll.
+            // Home gestures (device-tuned): rightward drag / hard-left-edge = the swipe app (Newz);
+            // leftward drag / right edge = Google web search. (Swipe-up = our drawer, handled by the
+            // OS home gesture in MainActivity.handleHomeIntent, so no vertical detector here.)
             .pointerInput(Unit) {
                 val threshold = 64.dp.toPx()
                 var total = 0f
@@ -95,8 +94,8 @@ fun HomeScreen(
                     onDragStart = { total = 0f },
                     onHorizontalDrag = { _, dx -> total += dx },
                     onDragEnd = {
-                        if (total > threshold) onOpenGoogleSearch()
-                        else if (total < -threshold) onSwipeLaunch()
+                        if (total > threshold) onSwipeLaunch()
+                        else if (total < -threshold) onOpenGoogleSearch()
                     },
                 )
             },

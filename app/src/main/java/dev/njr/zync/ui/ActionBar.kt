@@ -87,8 +87,8 @@ fun ZyncActionBar(
                     onDragStart = { total = 0f },
                     onHorizontalDrag = { _, dx -> total += dx },
                     onDragEnd = {
-                        if (total > threshold) onOpenGoogleSearch() // rightward drag / left edge = Google
-                        else if (total < -threshold) onSwipeLaunch() // leftward drag / right edge = Newz
+                        if (total > threshold) onSwipeLaunch() // rightward drag / left edge = Newz
+                        else if (total < -threshold) onOpenGoogleSearch() // leftward drag / right edge = Google
                     },
                 )
             }

@@ -78,6 +78,9 @@ class MainActivity : ComponentActivity() {
     private var permissionTick by mutableIntStateOf(0)
     private var photoFile: java.io.File? = null
     private var lastBackEdge: Int = androidx.activity.BackEventCompat.EDGE_LEFT // set by the predictive-back gesture
+    // Set by our own onResume/onPause: true only while WE are the foreground activity. More
+    // reliable than lifecycle.currentState at onNewIntent time (which can read STARTED mid-gesture).
+    private var isForeground = false
     private val takePicture =
         registerForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
             val file = photoFile
@@ -249,9 +252,9 @@ class MainActivity : ComponentActivity() {
                     screen == ZyncScreen.Web && webView.canGoBack() -> webView.goBack()
                     screen == ZyncScreen.Web -> screen = ZyncScreen.Home
                     // At the home root there's nothing to go "back" to: the hard-RIGHT-edge swipe
-                    // opens Newz, the hard-LEFT-edge swipe (default) opens Google web search.
-                    lastBackEdge == androidx.activity.BackEventCompat.EDGE_RIGHT -> launchSwipeApp()
-                    else -> openGoogleSearch()
+                    // opens Google web search, the hard-LEFT-edge swipe (default) opens Newz.
+                    lastBackEdge == androidx.activity.BackEventCompat.EDGE_RIGHT -> openGoogleSearch()
+                    else -> launchSwipeApp()
                 }
                 lastBackEdge = androidx.activity.BackEventCompat.EDGE_LEFT // reset for the next (maybe button) back
             }
@@ -522,6 +525,16 @@ class MainActivity : ComponentActivity() {
             .onFailure { Toast.makeText(this, missing, Toast.LENGTH_SHORT).show() }
     }
 
+    override fun onResume() {
+        super.onResume()
+        isForeground = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isForeground = false
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handlePairingIntent(intent)
@@ -540,7 +553,7 @@ class MainActivity : ComponentActivity() {
         if (intent?.action != Intent.ACTION_MAIN || intent.hasCategory(Intent.CATEGORY_HOME) != true) return
         val atHomeSurface = screen == dev.njr.zync.ui.ZyncScreen.Home && !searchOpen && !captureOpen &&
             settingsTab == null && !syncLogOpen && !pairingOpen && !newzOpen
-        val alreadyForeground = lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+        val alreadyForeground = isForeground
         if (atHomeSurface && alreadyForeground) {
             searchOpen = true // second home gesture at home → our custom drawer
         } else {
