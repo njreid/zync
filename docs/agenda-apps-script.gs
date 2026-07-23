@@ -30,6 +30,10 @@ function pushAgenda() {
   // The server rejects the WHOLE push if any event has a >300-char title or a
   // non-positive duration, so clamp titles and drop zero-length events here.
   var MAX_TITLE = 300;
+  // The htmlLink is account-agnostic, so the phone's Calendar app would open it under
+  // the DEFAULT (personal) profile. Pin it to THIS (work) account with authuser so it
+  // opens in the right profile. getEmail() may be '' on some domains → then we skip it.
+  var account = Session.getActiveUser().getEmail() || '';
   // Advanced Calendar service: singleEvents expands recurrences; each item carries
   // htmlLink (the deep link) that CalendarApp can't give us.
   var resp = Calendar.Events.list('primary', {
@@ -52,6 +56,8 @@ function pushAgenda() {
       var beginMs = new Date(allDay ? e.start.date + 'T00:00:00' : e.start.dateTime).getTime();
       var endMs = new Date(allDay ? e.end.date + 'T00:00:00' : e.end.dateTime).getTime();
       var title = titles ? e.summary || '(untitled)' : 'busy';
+      var link = e.htmlLink || null;
+      if (link && account) link += (link.indexOf('?') >= 0 ? '&' : '?') + 'authuser=' + encodeURIComponent(account);
       return {
         title: title.length > MAX_TITLE ? title.slice(0, MAX_TITLE) : title,
         beginMillis: beginMs,
@@ -59,7 +65,7 @@ function pushAgenda() {
         allDay: allDay,
         profile: 'WORK',
         location: titles ? e.location || null : null,
-        link: e.htmlLink || null,
+        link: link,
       };
     })
     .filter(function (e) { return e.endMillis > e.beginMillis; })
