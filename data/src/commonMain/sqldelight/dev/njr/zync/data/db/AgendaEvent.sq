@@ -9,7 +9,8 @@ CREATE TABLE agenda_event (
   end_ms INTEGER NOT NULL,
   all_day INTEGER NOT NULL DEFAULT 0,
   profile TEXT NOT NULL DEFAULT 'WORK',
-  location TEXT
+  location TEXT,
+  link TEXT
 );
 CREATE INDEX agenda_event_source ON agenda_event(source);
 
@@ -17,11 +18,11 @@ deleteSource:
 DELETE FROM agenda_event WHERE source = ?;
 
 insertEvent:
-INSERT INTO agenda_event(source, title, begin_ms, end_ms, all_day, profile, location)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO agenda_event(source, title, begin_ms, end_ms, all_day, profile, location, link)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
 upcoming:
-SELECT source, title, begin_ms, end_ms, all_day, profile, location FROM agenda_event
+SELECT source, title, begin_ms, end_ms, all_day, profile, location, link FROM agenda_event
 WHERE end_ms > ? ORDER BY begin_ms;
 
 prune:

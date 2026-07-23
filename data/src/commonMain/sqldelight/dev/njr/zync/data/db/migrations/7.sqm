@@ -1,0 +1,2 @@
+-- v7 → v8: agenda events carry a canonical "open in source calendar" link (htmlLink).
+ALTER TABLE agenda_event ADD COLUMN link TEXT;

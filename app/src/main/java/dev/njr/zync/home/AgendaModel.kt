@@ -17,6 +17,8 @@ data class CalEvent(
     val fromNotification: Boolean = false,
     /** Where it happens; a URL here becomes a "join" link on the agenda row. */
     val location: String? = null,
+    /** Canonical "open in the source calendar" URL (server-pushed events); null = none. */
+    val link: String? = null,
 ) {
     enum class Profile { HOME, WORK }
 

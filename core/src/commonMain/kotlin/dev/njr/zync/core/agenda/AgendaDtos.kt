@@ -18,6 +18,8 @@ data class AgendaEventDto(
     val profile: String = "WORK",
     /** Free-text location; a URL inside becomes a "join" link on the phone. */
     val location: String? = null,
+    /** Canonical "open in the source calendar" URL (e.g. the event's Google Calendar htmlLink). */
+    val link: String? = null,
 )
 
 /** `POST /agenda/{source}` body: this source's upcoming events, replacing the last push. */

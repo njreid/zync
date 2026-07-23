@@ -56,6 +56,6 @@ class SqlDelightStateStoreTest {
     fun schemaVersionBaselineForMigrationHarness() {
         // Bumping this is the trigger to add a .sqm migration + a v(N-1)->vN test
         // (see MigrationTest). v2: device.replica_id (pairing→replica binding).
-        assertEquals(7L, ZyncDatabase.Schema.version)
+        assertEquals(8L, ZyncDatabase.Schema.version)
     }
 }

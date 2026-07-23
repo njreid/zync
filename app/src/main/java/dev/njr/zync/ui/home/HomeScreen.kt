@@ -403,26 +403,26 @@ private fun EventRow(row: AgendaRow.Event, onOpenEvent: (dev.njr.zync.home.CalEv
         )
         ProfileBar(row.event, alpha)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+            val locContext = LocalContext.current
+            fun open(url: String) = runCatching {
+                locContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+            }
+            // Tapping the title opens the event in its source calendar (server-pushed events only).
+            val calLink = row.event.link
             BasicText(
                 row.event.title,
                 style = TextStyle(color = fg, fontSize = 15.sp, fontFamily = ZyncSans, fontWeight = if (inverted) FontWeight.SemiBold else FontWeight.Normal),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = if (calLink != null) Modifier.clickable { open(calLink) } else Modifier,
             )
             // Location under the title, quieter; a URL inside becomes a "join" link.
             val join = row.event.joinUrl
-            val locContext = LocalContext.current
             when {
                 join != null -> BasicText(
                     "join",
                     style = TextStyle(color = C.Accent.copy(alpha = alpha), fontSize = 12.sp, fontFamily = ZyncSans, textDecoration = TextDecoration.Underline),
-                    modifier = Modifier.clickable {
-                        runCatching {
-                            locContext.startActivity(
-                                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(join)),
-                            )
-                        }
-                    },
+                    modifier = Modifier.clickable { open(join) },
                 )
                 row.event.location != null -> BasicText(
                     row.event.location!!,

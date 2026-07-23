@@ -37,7 +37,7 @@ class ReplicaSynchronizer(
                 db.agendaEventQueries.deleteSource(AGENDA_CACHE_SOURCE)
                 snapshot.events.forEach {
                     db.agendaEventQueries.insertEvent(
-                        AGENDA_CACHE_SOURCE, it.title, it.beginMillis, it.endMillis, if (it.allDay) 1 else 0, it.profile, it.location,
+                        AGENDA_CACHE_SOURCE, it.title, it.beginMillis, it.endMillis, if (it.allDay) 1 else 0, it.profile, it.location, it.link,
                     )
                 }
             }

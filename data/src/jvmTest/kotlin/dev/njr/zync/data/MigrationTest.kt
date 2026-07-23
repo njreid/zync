@@ -67,6 +67,15 @@ class MigrationTest {
                )""",
             0,
         )
+        // agenda_event (created back in 2.sqm) must exist for later migrations that ALTER it (7.sqm).
+        driver.execute(
+            null,
+            """CREATE TABLE agenda_event (
+                 source TEXT NOT NULL, title TEXT NOT NULL, begin_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
+                 all_day INTEGER NOT NULL DEFAULT 0, profile TEXT NOT NULL DEFAULT 'WORK', location TEXT
+               )""",
+            0,
+        )
         val e = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
         driver.execute(null, "INSERT INTO register VALUES ('$e','kind','\"task\"',1,0,'d','\"x\"')", 0)
         driver.execute(null, "INSERT INTO register VALUES ('$e','title','\"Quarterly budget\"',1,1,'d','\"x\"')", 0)
@@ -86,6 +95,15 @@ class MigrationTest {
     @Test
     fun v6MigratesToV7WithBotTable() {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        // agenda_event (2.sqm/4.sqm shape) must exist for 7.sqm's ALTER when migrating to HEAD.
+        driver.execute(
+            null,
+            """CREATE TABLE agenda_event (
+                 source TEXT NOT NULL, title TEXT NOT NULL, begin_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
+                 all_day INTEGER NOT NULL DEFAULT 0, profile TEXT NOT NULL DEFAULT 'WORK', location TEXT
+               )""",
+            0,
+        )
         driver.execute(null, "PRAGMA user_version = 6", 0)
         val db = dev.njr.zync.data.JvmZyncDatabase.open(driver)
         assertEquals(listOf(ZyncDatabase.Schema.version.toString()), query(driver, "PRAGMA user_version"))
@@ -93,5 +111,27 @@ class MigrationTest {
         db.botQueries.upsertBot("b1", "Bot One", "deadbeef", "{}", 1L)
         val row = db.botQueries.botBySecretHash("deadbeef").executeAsOne()
         assertEquals("Bot One", row.name)
+    }
+
+    @Test
+    fun v7MigratesToV8WithAgendaEventLink() {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        // v7 shape of agenda_event (no link column), with a pre-migration row.
+        driver.execute(
+            null,
+            """CREATE TABLE agenda_event (
+                 source TEXT NOT NULL, title TEXT NOT NULL, begin_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
+                 all_day INTEGER NOT NULL DEFAULT 0, profile TEXT NOT NULL DEFAULT 'WORK', location TEXT
+               )""",
+            0,
+        )
+        driver.execute(null, "INSERT INTO agenda_event(source, title, begin_ms, end_ms) VALUES ('work', 'Standup', 10, 20)", 0)
+        driver.execute(null, "PRAGMA user_version = 7", 0)
+
+        val db = dev.njr.zync.data.JvmZyncDatabase.open(driver)
+        assertEquals(listOf(ZyncDatabase.Schema.version.toString()), query(driver, "PRAGMA user_version"))
+        val row = db.agendaEventQueries.upcoming(0).executeAsOne()
+        assertEquals("Standup", row.title)
+        assertNull(row.link, "pre-migration events migrate with a NULL link")
     }
 }

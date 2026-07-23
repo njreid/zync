@@ -8,11 +8,13 @@
  *
  * Setup (once, from the work account):
  *   1. script.new → paste this file.
- *   2. Project Settings → Script Properties:
+ *   2. Services (+) → add "Google Calendar API" (identifier: Calendar) — needed for
+ *      each event's canonical htmlLink (the phone's "open in calendar" tap target).
+ *   3. Project Settings → Script Properties:
  *        ZYNC_URL   = https://dev.choosh.ai
  *        ZYNC_TOKEN = <the ZYNC_AGENDA_TOKEN secret>
- *   3. Run pushAgenda once to grant Calendar + UrlFetch permissions.
- *   4. Triggers → Add: pushAgenda, time-driven, every 15 minutes.
+ *   4. Run pushAgenda once to grant Calendar + UrlFetch permissions.
+ *   5. Triggers → Add: pushAgenda, time-driven, every 15 minutes.
  *
  * Privacy dial: set TITLES=false in Script Properties to push "busy" blocks only.
  */
@@ -28,21 +30,40 @@ function pushAgenda() {
   // The server rejects the WHOLE push if any event has a >300-char title or a
   // non-positive duration, so clamp titles and drop zero-length events here.
   var MAX_TITLE = 300;
-  var events = CalendarApp.getDefaultCalendar().getEvents(now, horizon)
-    .filter(function (e) { return e.getMyStatus() !== CalendarApp.GuestStatus.NO; })
-    .filter(function (e) { return e.getEndTime().getTime() > e.getStartTime().getTime(); })
-    .slice(0, 400)
+  // Advanced Calendar service: singleEvents expands recurrences; each item carries
+  // htmlLink (the deep link) that CalendarApp can't give us.
+  var resp = Calendar.Events.list('primary', {
+    timeMin: now.toISOString(),
+    timeMax: horizon.toISOString(),
+    singleEvents: true,
+    orderBy: 'startTime',
+    maxResults: 400,
+    showDeleted: false,
+  });
+  var events = (resp.items || [])
+    .filter(function (e) {
+      if (e.status === 'cancelled') return false;
+      var me = (e.attendees || []).filter(function (a) { return a.self; })[0];
+      return !(me && me.responseStatus === 'declined');
+    })
     .map(function (e) {
-      var title = titles ? e.getTitle() || '(untitled)' : 'busy';
+      var allDay = !e.start.dateTime; // all-day events carry start.date, not start.dateTime
+      // For all-day, parse at LOCAL midnight (append T00:00:00) so the day matches the calendar.
+      var beginMs = new Date(allDay ? e.start.date + 'T00:00:00' : e.start.dateTime).getTime();
+      var endMs = new Date(allDay ? e.end.date + 'T00:00:00' : e.end.dateTime).getTime();
+      var title = titles ? e.summary || '(untitled)' : 'busy';
       return {
         title: title.length > MAX_TITLE ? title.slice(0, MAX_TITLE) : title,
-        beginMillis: e.getStartTime().getTime(),
-        endMillis: e.getEndTime().getTime(),
-        allDay: e.isAllDayEvent(),
+        beginMillis: beginMs,
+        endMillis: endMs,
+        allDay: allDay,
         profile: 'WORK',
-        location: titles ? e.getLocation() || null : null,
+        location: titles ? e.location || null : null,
+        link: e.htmlLink || null,
       };
-    });
+    })
+    .filter(function (e) { return e.endMillis > e.beginMillis; })
+    .slice(0, 400);
 
   var response = UrlFetchApp.fetch(url + '/agenda/work', {
     method: 'post',

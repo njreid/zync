@@ -359,6 +359,7 @@ class MainActivity : ComponentActivity() {
                     calendarName = row.source,
                     allDay = row.all_day != 0L,
                     location = row.location,
+                    link = row.link,
                 )
             }
         }.getOrDefault(emptyList())
