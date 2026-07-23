@@ -163,3 +163,24 @@ never binds them. Server pushes patches as SSE events `datastar-patch-elements` 
 `datastar-patch-signals` (see `web/.../sse/Datastar.kt`); default patch mode is `outer`
 (morph by element id). Verify the client side headlessly with the Playwright suite in
 `webtest/` against `./gradlew :server:webDevServer`.
+
+### The Tao of Datastar (philosophy — follow it)
+
+Highlights from <https://data-star.dev/guide/the_tao_of_datastar>. Datastar is
+backend-driven hypermedia; work WITH that, don't rebuild an SPA in signals.
+
+- **Backend is the source of truth.** Keep state server-side. Reach for a `data-signals`
+  form/client-state model only after the server-driven version is genuinely insufficient.
+- **Don't overuse signals.** Restrict them to *user interactions* (toggle visibility, an
+  open/closed flag) and *form input bindings*. A page thick with signals + client-side
+  computeds is frontend-state creep — a smell. Prefer re-rendering from the server over
+  reading stale client state.
+- **Fat morph is fine.** Send a large DOM chunk and let morphing patch only what actually
+  changed — don't hand-optimize into many fine-grained fragment replacements. Rendering
+  and morphing a whole section (or `#main`) is idiomatic; use `data-ignore-morph` to skip
+  an element (e.g. a focused input or a live media element).
+- **Navigate with plain `<a>`; let the browser own history.** Do NOT manage history
+  manually (`history.back()`, `pushState`) — a real link + View Transitions is the way.
+- **No deceptive optimistic UI.** Show a loading/pending indicator and let the backend
+  confirm; don't fake success before the server has applied it.
+- **Keep it DRY server-side** (backend templating) and compress the SSE stream.
