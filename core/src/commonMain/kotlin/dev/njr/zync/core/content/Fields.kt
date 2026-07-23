@@ -42,6 +42,13 @@ object Fields {
     /** The URL of a shared link (shown as an icon; the full URL is revealed in Edit). */
     const val LINK_URL = "linkUrl"
 
+    /**
+     * Prefix for free-form tags: each tag is its OWN boolean register field (`tag:<label>` = true),
+     * so tags merge per-label (a human adding one and a bot adding another both stick), reusing the
+     * SetField op + the human-beats-bot rule. Bots label items here so they can find relevant work.
+     */
+    const val FREE_TAG_PREFIX = "tag:"
+
     /** Fetched <title> of a shared URL (preview shown when an inbox item is expanded). */
     const val LINK_TITLE = "linkTitle"
 

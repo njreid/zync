@@ -145,8 +145,25 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
             }
         }
 
-        // 8. Tags — the model has no separate free-form tags yet; context (field 2) covers
-        // all tagging today, so nothing extra is rendered here.
+        // 8. Free-form tags (mergeable per-label): current tags as removable chips + an add box.
+        //    This is how bots + humans label items; each chip is its own op.
+        div(classes = "edit-field") {
+            span("edit-label") { icon("tag"); +" Tags" }
+            div(classes = "chips-row") {
+                node.freeTags.forEach { t ->
+                    button(classes = "action chip-on") {
+                        attributes["data-on:click"] = "@post('/node/${node.id}/freetag?on=false&label=' + encodeURIComponent('$t'))"
+                        +"#$t ✕"
+                    }
+                }
+            }
+            input(type = InputType.text) {
+                attributes["data-bind:tag"] = ""
+                attributes["placeholder"] = "Add a tag"
+                attributes["data-on:keydown"] =
+                    "if (evt.key === 'Enter') { @post('/node/${node.id}/freetag?label=' + encodeURIComponent(\$tag)); \$tag = '' }"
+            }
+        }
 
         // 9. Waiting-for — toggled picker with a person input + recent-people datalist.
         div(classes = "edit-field") {

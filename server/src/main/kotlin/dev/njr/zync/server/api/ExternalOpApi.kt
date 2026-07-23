@@ -108,6 +108,10 @@ class ExternalOpApi(
                 if (propose) return err(i, "addTag is not proposable yet")
                 val t = target(i); c.addTag(t, Ulid.parse(requireNotNull(i.context) { "context required" })); ok(i, t)
             }
+            // Free-form tags are additive per-label metadata (mergeable) — always commit, so a
+            // propose-only bot can still flag items relevant to it.
+            "addFreeTag" -> { val t = target(i); c.addFreeTag(t, requireNotNull(i.tag) { "tag required" }); ok(i, t) }
+            "removeFreeTag" -> { val t = target(i); c.removeFreeTag(t, requireNotNull(i.tag) { "tag required" }); ok(i, t) }
             "move" -> {
                 if (propose) return err(i, "move is not proposable yet")
                 val t = target(i); c.move(t, requireNotNull(resolveParent(i.parent)) { "parent required" }); ok(i, t)

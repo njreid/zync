@@ -287,6 +287,7 @@ private fun FlowContent.triagePanel(read: ContentReadModel, node: NodeView) {
                 node.ocrStatus?.let { +" · ${ocrLabel(it)}" }
             }
             node.summary?.let { s -> div(classes = "f-row muted") { +s } }
+            if (node.freeTags.isNotEmpty()) div(classes = "f-row") { icon("tag"); +node.freeTags.joinToString(" ") { "#$it" } }
             node.person?.let { p -> div(classes = "f-row") { icon("waiting"); +"@$p" } }
         }
 

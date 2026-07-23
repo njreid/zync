@@ -33,6 +33,7 @@ data class OpIntent(
     val text: String? = null,
     val context: String? = null,
     val tags: List<String>? = null,
+    val tag: String? = null, // addFreeTag/removeFreeTag: a single free-form label
     val fields: Map<String, JsonElement>? = null,
     val blobRef: String? = null, // attach: content-addressed key from PUT /api/blobs
     val type: String? = null, // attach: attachment type

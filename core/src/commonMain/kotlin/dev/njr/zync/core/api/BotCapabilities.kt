@@ -23,6 +23,9 @@ data class BotCapabilities(
     fun limitFor(verb: String): Int? = rateLimit[verb] ?: rateLimit["default"]
 
     companion object {
-        val ALL_VERBS = setOf("create", "comment", "setField", "addTag", "move", "complete", "trash", "attach")
+        val ALL_VERBS = setOf(
+            "create", "comment", "setField", "addTag", "move", "complete", "trash", "attach",
+            "addFreeTag", "removeFreeTag",
+        )
     }
 }

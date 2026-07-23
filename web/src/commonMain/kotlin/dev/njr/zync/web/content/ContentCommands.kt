@@ -130,6 +130,16 @@ class ContentCommands(private val ops: OpEmitter) {
     fun addTag(node: Ulid, context: Ulid) = ops.addTag(node, context)
     fun removeTag(node: Ulid, context: Ulid) = ops.removeTag(node, context)
 
+    /** Add a free-form tag (mergeable per-label): its own `tag:<label>` boolean register. */
+    fun addFreeTag(node: Ulid, label: String) {
+        val l = label.trim().removePrefix("#").trim().takeIf { it.isNotEmpty() } ?: return
+        ops.setField(node, Fields.FREE_TAG_PREFIX + l, JsonPrimitive(true))
+    }
+
+    /** Remove a free-form tag (clears its register). */
+    fun removeFreeTag(node: Ulid, label: String) =
+        ops.setField(node, Fields.FREE_TAG_PREFIX + label.trim(), JsonNull)
+
     /**
      * Accept an agent proposal: a human op clearing the `proposed` flag, so the node
      * becomes ordinary content (spec §8 — acceptance is a human op, never implicit).

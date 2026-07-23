@@ -221,6 +221,19 @@ class ApiOpsTest {
     }
 
     @Test
+    fun addFreeTagLabelsTheItemForBots() = run { client, service ->
+        val node = json.decodeFromString(
+            EnvelopeResult.serializer(),
+            client.submit(OpEnvelope(intents = listOf(OpIntent(op = "create", title = "t")))).bodyAsText(),
+        ).results.single().nodeId!!
+        val resp = client.submit(OpEnvelope(intents = listOf(OpIntent(op = "addFreeTag", target = node, tag = "review"))))
+        assertEquals(HttpStatusCode.OK, resp.status)
+        // Stored as its own boolean register so tags merge per-label.
+        val nodeUlid = dev.njr.zync.core.id.Ulid.parse(node)
+        assertEquals(JsonPrimitive(true), service.stateStore.getRegister(RegisterKey(nodeUlid, "tag:review"))!!.value)
+    }
+
+    @Test
     fun botDoesNotOverwriteAHumanField() = run { client, service ->
         // A human writes the title directly (Actor.Human), then a bot tries to change it.
         val node = id(1)

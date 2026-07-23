@@ -438,6 +438,13 @@ fun Route.webRoutes(
             if (id != null) call.appliedDetail(id) { waitingFor(id, name) }
             else call.respondText("bad request", status = HttpStatusCode.BadRequest)
         }
+        post("/node/{id}/freetag") {
+            val label = call.request.queryParameters["label"].orEmpty().trim()
+            val on = call.request.queryParameters["on"] != "false"
+            val id = call.nodeId()
+            if (id != null && label.isNotEmpty()) call.appliedDetail(id) { if (on) addFreeTag(id, label) else removeFreeTag(id, label) }
+            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
         post("/node/{id}/file-to") {
             val target = call.request.queryParameters["target"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
             val id = call.nodeId()
