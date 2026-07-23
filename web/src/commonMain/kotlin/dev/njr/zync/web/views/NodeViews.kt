@@ -203,8 +203,16 @@ fun UL.itemLi(
         attributes["data-node"] = node.id.toString()
         attributes["data-complete"] = "/node/${node.id}/complete"
         attributes["data-trash"] = "/node/${node.id}/trash"
+        // Drag handle sits to the LEFT of the title, shown only when expanded + reorderable.
+        if (canReorder) span(classes = "drag-handle") {
+            attributes["data-show"] = "\$exp === '${node.id}'"
+            attributes["data-drag"] = ""
+            attributes["title"] = "Drag to reorder"
+            icon("grip")
+        }
         span(classes = "row-title") {
             attributes["data-on:click"] = "\$exp = (\$exp === '${node.id}' ? '' : '${node.id}')"
+            attributes["data-attr:data-expanded"] = "\$exp === '${node.id}' ? 'true' : 'false'"
             +(node.title ?: "(untitled)")
         }
         lead?.invoke(this)
@@ -278,20 +286,11 @@ private fun FlowContent.expandedPanel(read: ContentReadModel, node: NodeView, ca
     div(classes = "expanded") {
         attributes["data-show"] = "\$exp === '${node.id}'"
 
-        // Drag handle (pointer-based, touch-friendly) — only where sibling order is stored
-        // (inbox + a project's subtasks), not the computed Next/Today views.
-        if (canReorder) div(classes = "exp-head") {
-            span(classes = "drag-handle") {
-                attributes["data-drag"] = ""
-                attributes["title"] = "Drag to reorder"
-                icon("grip")
-            }
-        }
-
-        // Read-only fields, in order (title is the head above); omitted when unset.
+        // (The drag handle now sits to the left of the title in the row, not here.)
+        // Read-only fields, in order (title is the row above); omitted when unset.
         div(classes = "fields") {
             val ctx = read.contexts().filter { c -> node.tags.any { it.toString() == c.id.toString() } }.mapNotNull { it.name }
-            if (ctx.isNotEmpty()) div(classes = "f-row") { icon("tag"); +ctx.joinToString(" ") }
+            if (ctx.isNotEmpty()) div(classes = "f-row") { icon("tag"); span("ctx") { +ctx.joinToString(" ") } }
             node.dueDate?.let { d -> div(classes = "f-row") { icon("calendar"); +DueDates.format(d) } }
             node.size?.let { s -> div(classes = "f-row") { icon("gauge"); +s } }
             node.linkUrl?.let { url -> div(classes = "f-row") { icon("link"); a(href = url) { +linkLabel(url) } } }
@@ -325,7 +324,7 @@ private fun FlowContent.expandedPanel(read: ContentReadModel, node: NodeView, ca
             div(classes = "snooze-wrap") {
                 button(classes = "btn") {
                     attributes["data-act"] = "file"; attributes["data-key"] = "f"
-                    attributes["data-on:click"] = "\$fo_${node.id} = !\$fo_${node.id}"
+                    attributes["data-on:click"] = "\$fo_${node.id} = !\$fo_${node.id}; \$so_${node.id} = false"
                     icon("folder"); +"File"
                 }
                 div(classes = "file-picker") {
@@ -341,7 +340,7 @@ private fun FlowContent.expandedPanel(read: ContentReadModel, node: NodeView, ca
             div(classes = "snooze-wrap") {
                 button(classes = "btn") {
                     attributes["data-act"] = "snooze"; attributes["data-key"] = "s"
-                    attributes["data-on:click"] = "\$so_${node.id} = !\$so_${node.id}"
+                    attributes["data-on:click"] = "\$so_${node.id} = !\$so_${node.id}; \$fo_${node.id} = false"
                     icon("clock"); +"Snooze"
                 }
                 div(classes = "snooze-menu") {

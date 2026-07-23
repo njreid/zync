@@ -482,3 +482,18 @@ button.action.suggest-chip { border-style: dashed; }
   border-color: #199E70;
   box-shadow: 0 0 0 1px #199E70;
 }
+
+/* v0.7.x polish */
+/* Contexts render in the mono "machine" voice wherever they appear. */
+.ctx { font-family: "Iosevka Charon Mono", ui-monospace, monospace; font-weight: 700; }
+nav.topbar .context-menu ul a { font-family: "Iosevka Charon Mono", ui-monospace, monospace; font-weight: 700; }
+
+/* Snooze popup sits above following content. */
+.snooze-menu { z-index: 100; }
+
+/* Title: truncate to one line when collapsed; wrap when the row is expanded. */
+.item .row-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .row-title[data-expanded="true"] { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+
+/* Drag handle inline to the left of the title (shown only when expanded via data-show). */
+.item .drag-handle { flex: 0 0 auto; cursor: grab; touch-action: none; color: var(--pico-muted-color); }

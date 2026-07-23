@@ -14,7 +14,7 @@ test('tapping the title expands the read-only panel with its actions', async ({ 
   const panel = row.locator('.expanded');
   await expect(panel).toBeVisible();
   // The Expanded panel carries the drag handle + the File/Snooze/Edit action row.
-  await expect(panel.locator('.drag-handle')).toBeVisible();
+  await expect(row.locator('.drag-handle')).toBeVisible(); // now sits left of the title in the row
   await expect(panel.locator('[data-act="file"]')).toBeVisible();
   await expect(panel.locator('[data-act="snooze"]')).toBeVisible();
 });

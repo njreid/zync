@@ -164,7 +164,10 @@ document.addEventListener('pointerup', (e) => {
   const over = pdrag.over;
   if (over && pdrag.id) {
     const beforeId = over.getAttribute('data-node'); // drop the moved item just before the target
-    if (beforeId) fetch('/node/' + pdrag.id + '/reorder-before?before=' + beforeId, { method: 'POST' });
+    if (beforeId) {
+      if (over.parentNode) over.parentNode.insertBefore(pdrag.item, over); // reflect immediately
+      fetch('/node/' + pdrag.id + '/reorder-before?before=' + beforeId, { method: 'POST' });
+    }
   }
   clearDrag();
 });

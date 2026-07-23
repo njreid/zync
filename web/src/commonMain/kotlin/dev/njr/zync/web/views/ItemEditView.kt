@@ -60,7 +60,7 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
             div(classes = "chips-row") {
                 read.contexts().forEach { c ->
                     val on = node.tags.any { it.toString() == c.id.toString() }
-                    button(classes = if (on) "btn chip-on" else "btn") {
+                    button(classes = if (on) "btn ctx chip-on" else "btn ctx") {
                         attributes["data-on:click"] =
                             "@post('/node/${node.id}/tag?context=${c.id}&on=${if (on) "false" else "true"}')"
                         +(c.name ?: "(context)")
@@ -240,7 +240,7 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
                 attributes["data-key"] = "x"; attributes["data-act"] = "done"
                 if (node.status == "DONE") {
                     attributes["data-on:click"] = "@post('/node/${node.id}/reopen')"
-                    icon("check"); +" Reopen"
+                    icon("check"); +" Undone"
                 } else {
                     attributes["data-on:click"] = "@post('/node/${node.id}/complete')"
                     icon("check"); +" Done"
