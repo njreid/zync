@@ -47,6 +47,13 @@ env:
   - name: "ZYNC_PUBLIC_ADDR"
     from:
       env: "ZYNC_PUBLIC_ADDR"
+  # External operations API: a dedicated bearer credential for trusted bots
+  # such as Newz. Unset keeps POST /api/ops closed.
+  - name: "ZYNC_BOT_TOKEN"
+    from:
+      env: "ZYNC_BOT_TOKEN"
+  - name: "ZYNC_BOT_ID"
+    value: "newz"
   # Browser passkey auth. Without RP_ID + ORIGIN the server REFUSES to start (fail
   # closed; ZYNC_ALLOW_UNAUTHENTICATED_WEB=true is the dev-only override). ORIGIN must
   # be the exact scheme+host; RP_ID the registrable domain.

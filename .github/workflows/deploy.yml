@@ -6,6 +6,7 @@ name: Deploy server
 #            ZYNC_WEBAUTHN_REG_TOKEN
 #            ZYNC_AGENDA_TOKEN    — bearer token for the agenda push endpoint
 #            ZYNC_NEWZ_SIGNING_SEED, ZYNC_NEWZ_REDEEM_TOKEN — newz handoff (see docs)
+#            ZYNC_BOT_TOKEN      — bearer credential for trusted external operations clients
 #   vars:    HALOY_SERVER        — the haloyd API host (e.g. haloy.zync.example.com)
 #            ZYNC_DOMAIN         — the app domain (e.g. zync.example.com)
 #            ZYNC_PUBLIC_ADDR    — https://<ZYNC_DOMAIN>
@@ -87,6 +88,7 @@ jobs:
           AWS_REGION: ${{ vars.AWS_REGION }}
           ZYNC_BLOB_BUCKET: ${{ vars.ZYNC_BLOB_BUCKET }}
           ZYNC_PUBLIC_ADDR: ${{ vars.ZYNC_PUBLIC_ADDR }}
+          ZYNC_BOT_TOKEN: ${{ secrets.ZYNC_BOT_TOKEN }}
           ZYNC_WEBAUTHN_RP_ID: ${{ vars.ZYNC_WEBAUTHN_RP_ID }}
           ZYNC_WEBAUTHN_ORIGIN: ${{ vars.ZYNC_WEBAUTHN_ORIGIN }}
           ZYNC_WEBAUTHN_REG_TOKEN: ${{ secrets.ZYNC_WEBAUTHN_REG_TOKEN }}
