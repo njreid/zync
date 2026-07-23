@@ -73,6 +73,7 @@ window.addEventListener('pagehide', flushPending);
 // --- Pointer / swipe ---
 
 document.addEventListener('pointerdown', (e) => {
+  if (e.target.closest && e.target.closest('[data-drag]')) return; // the drag handle owns this
   const row = e.target.closest && e.target.closest('.swipe-row');
   if (!row) return;
   // No setPointerCapture: we delegate on `document`, so moves arrive anyway, and
@@ -130,40 +131,44 @@ document.addEventListener('pointercancel', (e) => {
   active = null;
 });
 
-// --- Drag-drop reorder (the .drag-handle in an expanded item) ---
-let dragItem = null;
-document.addEventListener('dragstart', (e) => {
+// --- Pointer-based drag reorder (the .drag-handle in an expanded item) ---
+// HTML5 `draggable` does NOT fire on touch devices, so reorder with pointer events instead.
+// The swipe handler above ignores pointerdowns that begin on a [data-drag] handle.
+let pdrag = null;
+function clearDrag() {
+  if (pdrag) pdrag.item.classList.remove('dragging');
+  document.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+  pdrag = null;
+}
+document.addEventListener('pointerdown', (e) => {
   const handle = e.target.closest && e.target.closest('[data-drag]');
-  if (!handle) return; // only the drag handle starts a reorder (swipe uses pointer events)
-  dragItem = handle.closest('li');
-  if (dragItem) { dragItem.classList.add('dragging'); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; }
+  if (!handle) return;
+  const item = handle.closest('li');
+  if (!item) return;
+  pdrag = { item, id: item.getAttribute('data-node'), pointerId: e.pointerId, over: null };
+  item.classList.add('dragging');
+  if (handle.setPointerCapture) handle.setPointerCapture(e.pointerId);
+  e.preventDefault();
 });
-document.addEventListener('dragover', (e) => {
-  if (!dragItem) return;
-  const over = e.target.closest && e.target.closest('li');
-  if (over && over !== dragItem) { e.preventDefault(); over.classList.add('drag-over'); }
+document.addEventListener('pointermove', (e) => {
+  if (!pdrag || e.pointerId !== pdrag.pointerId) return;
+  e.preventDefault();
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const over = el && el.closest && el.closest('li');
+  document.querySelectorAll('.drag-over').forEach((x) => x.classList.remove('drag-over'));
+  pdrag.over = (over && over !== pdrag.item) ? over : null;
+  if (pdrag.over) pdrag.over.classList.add('drag-over');
 });
-document.addEventListener('dragleave', (e) => {
-  const over = e.target.closest && e.target.closest('li');
-  if (over) over.classList.remove('drag-over');
-});
-document.addEventListener('drop', (e) => {
-  if (!dragItem) return;
-  const over = e.target.closest && e.target.closest('li');
-  if (over && over !== dragItem) {
-    e.preventDefault();
-    const movingId = dragItem.getAttribute('data-node');
+document.addEventListener('pointerup', (e) => {
+  if (!pdrag || e.pointerId !== pdrag.pointerId) return;
+  const over = pdrag.over;
+  if (over && pdrag.id) {
     const beforeId = over.getAttribute('data-node'); // drop the moved item just before the target
-    if (movingId && beforeId) fetch('/node/' + movingId + '/reorder-before?before=' + beforeId, { method: 'POST' });
+    if (beforeId) fetch('/node/' + pdrag.id + '/reorder-before?before=' + beforeId, { method: 'POST' });
   }
   clearDrag();
 });
-document.addEventListener('dragend', clearDrag);
-function clearDrag() {
-  if (dragItem) dragItem.classList.remove('dragging');
-  dragItem = null;
-  document.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
-}
+document.addEventListener('pointercancel', (e) => { if (pdrag && e.pointerId === pdrag.pointerId) clearDrag(); });
 
 // --- List search ('/' everywhere): filter the visible rows by text ---
 const listSearch = document.querySelector('.list-search');

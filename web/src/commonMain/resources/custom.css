@@ -436,6 +436,10 @@ button.action.suggest-chip { border-style: dashed; }
 .item.dragging { opacity: .45; }
 .item.drag-over { box-shadow: inset 0 2px 0 var(--pico-color); }
 
+/* The cheatsheet is hidden by default EVERYWHERE (base rule outside the media query, so it
+   never shows on mobile); only the desktop query below re-enables its `.show` toggle. */
+.kbd-help { display: none; }
+
 /* Desktop-only keyboard hints + cheatsheet. On touch (no hover) these stay hidden. */
 @media (hover: hover) and (pointer: fine) {
   .btn[data-key]::after {

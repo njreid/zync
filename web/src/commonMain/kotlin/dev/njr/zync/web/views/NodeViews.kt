@@ -261,15 +261,14 @@ private fun FlowContent.triagePanel(read: ContentReadModel, node: NodeView) {
     div(classes = "expanded") {
         attributes["data-show"] = "\$exp === '${node.id}'"
 
-        // Head: a drag handle (reorder, top-left next to the title) + the title.
+        // Head: just the drag handle (the collapsed row already shows the title above — don't
+        // repeat it). Pointer-based drag (works on touch, unlike HTML5 draggable).
         div(classes = "exp-head") {
             span(classes = "drag-handle") {
                 attributes["data-drag"] = ""
-                attributes["draggable"] = "true"
                 attributes["title"] = "Drag to reorder"
                 icon("grip")
             }
-            span(classes = "exp-title") { +(node.title ?: "(untitled)") }
         }
 
         // Read-only fields, in order (title is the head above); omitted when unset.
