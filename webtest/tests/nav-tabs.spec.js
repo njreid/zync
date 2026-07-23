@@ -27,8 +27,10 @@ test('top-bar View dropdown navigates the fixed GTD categories', async ({ page }
   await expect(page).toHaveURL(/\/projects$/);
   await expect(page.locator('#projects')).toContainText('Launch website');
   await expect(page.locator('#projects')).toContainText('open'); // open next-action count
-  await page.locator('#projects a', { hasText: 'Launch website' }).click();
-  await expect(page.locator('main')).toContainText('Draft the launch copy'); // its subtask
+  // projects are collapsible items now: expand to reveal the subtask
+  const proj = page.locator('#projects li.item').filter({ has: page.locator('.row-title', { hasText: 'Launch website' }) });
+  await proj.locator('.row-title').click();
+  await expect(proj.locator('.subtasks-list')).toContainText('Draft the launch copy');
 
   // The top bar (with the View dropdown) is present on the detail page too.
   await expect(page.locator('nav.topbar .view-menu')).toBeVisible();

@@ -46,7 +46,7 @@ class GesturesServingTest {
     fun inboxRowsCarrySwipeContract() = app { client ->
         commands.createTask("triage me", inbox)
         val home = client.get("/").bodyAsText()
-        assertTrue(home.contains("class=\"swipe-row\""), "inbox rows need the swipe-row wrapper: $home")
+        assertTrue(home.contains("swipe-row"), "inbox rows need the swipe-row wrapper: $home")
         assertTrue(home.contains("data-node="))
         assertTrue(home.contains("class=\"swipe-fire complete\""))
         assertTrue(home.contains("class=\"swipe-fire trash\""))

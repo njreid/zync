@@ -21,6 +21,7 @@ import kotlinx.html.option
 import kotlinx.html.p
 import kotlinx.html.select
 import kotlinx.html.span
+import kotlinx.html.UL
 import kotlinx.html.ul
 
 /**
@@ -56,25 +57,14 @@ fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long, co
         if (items.isEmpty()) {
             p("muted") { +"Inbox zero." }
         } else {
-            ul {
-                items.forEach {
-                    li("swipe-row") {
-                        attributes["data-node"] = it.id.toString()
-                        // URLs the gesture layer commits (via sendBeacon) if you leave mid-undo.
-                        attributes["data-complete"] = "/node/${it.id}/complete"
-                        attributes["data-trash"] = "/node/${it.id}/trash"
-                        nodeRow(it, reorderable = true)
-                        triagePanel(read, it)
-                    }
-                }
-            }
+            ul { items.forEach { itemLi(read, it, canReorder = true) } }
         }
     } else {
         val items = read.contextTasks(context, now)
         if (items.isEmpty()) {
             p("muted") { +"No active tasks in this context." }
         } else {
-            ul { items.forEach { li { nodeRow(it) } } }
+            ul { items.forEach { itemLi(read, it) } }
         }
     }
     proposalsSection(read)
@@ -154,13 +144,12 @@ fun FlowContent.nextSection(read: ContentReadModel, inbox: Ulid?, now: Long, con
     } else {
         ul {
             rows.forEach { row ->
-                li {
+                itemLi(read, row.action, lead = {
                     row.project?.let { proj ->
-                        a(href = "/node/${proj.id}") { span("project") { +(proj.title ?: "(project)") } }
                         +" · "
+                        a(href = "/node/${proj.id}") { span("project") { +(proj.title ?: "(project)") } }
                     }
-                    nodeRow(row.action)
-                }
+                })
             }
         }
     }
@@ -176,7 +165,7 @@ fun FlowContent.todaySection(read: ContentReadModel, now: Long, context: Ulid? =
     val items = read.dueTasks(byMillis)
         .let { list -> if (context == null) list else list.filter { n -> n.tags.any { it.toString() == context.toString() } } }
     if (items.isEmpty()) p("muted") { +"Nothing due today." }
-    else ul { items.forEach { li { nodeRow(it) } } }
+    else ul { items.forEach { itemLi(read, it) } }
 }
 
 /**
@@ -193,12 +182,40 @@ fun FlowContent.projectsSection(read: ContentReadModel, now: Long, inbox: Ulid? 
     }
     ul {
         projects.forEach { project ->
-            li {
-                a(href = "/node/${project.id}") { +(project.title ?: "(untitled project)") }
-                val open = read.inbox(project.id, now).size
-                span("status") { +(if (open == 0) "· done" else "· $open open") }
-            }
+            val open = read.inbox(project.id, now).size
+            itemLi(read, project, lead = { span("status") { +(if (open == 0) " · done" else " · $open open") } })
         }
+    }
+}
+
+/**
+ * A list item for ANY view: a collapsed title (tap to expand) + the inline [expandedPanel].
+ * [canReorder] shows the drag handle (order-stored lists only — inbox + a project's subtasks).
+ * [lead] injects inline content right after the title (a Next project label, a Projects count).
+ */
+fun UL.itemLi(
+    read: ContentReadModel,
+    node: NodeView,
+    canReorder: Boolean = false,
+    lead: (FlowContent.() -> Unit)? = null,
+) {
+    li(classes = "item swipe-row") {
+        attributes["data-node"] = node.id.toString()
+        attributes["data-complete"] = "/node/${node.id}/complete"
+        attributes["data-trash"] = "/node/${node.id}/trash"
+        span(classes = "row-title") {
+            attributes["data-on:click"] = "\$exp = (\$exp === '${node.id}' ? '' : '${node.id}')"
+            +(node.title ?: "(untitled)")
+        }
+        lead?.invoke(this)
+        button(classes = "swipe-fire complete") {
+            attributes["data-on:click"] = "@post('/node/${node.id}/complete')"; attributes["aria-label"] = "Complete"; +"Complete"
+        }
+        button(classes = "swipe-fire trash") {
+            attributes["data-on:click"] = "@post('/node/${node.id}/trash')"; attributes["aria-label"] = "Delete"; +"Delete"
+        }
+        button(classes = "undo") { attributes["data-undo"] = ""; +"Undo" }
+        expandedPanel(read, node, canReorder)
     }
 }
 
@@ -257,13 +274,13 @@ fun FlowContent.nodeRow(node: NodeView, reorderable: Boolean = false) {
  * expanded node id) so it survives the SSE morph and only one is open at a time. Fields render in
  * the agreed order and a field is OMITTED when unset. CSP-safe (no inline script/style).
  */
-private fun FlowContent.triagePanel(read: ContentReadModel, node: NodeView) {
+private fun FlowContent.expandedPanel(read: ContentReadModel, node: NodeView, canReorder: Boolean) {
     div(classes = "expanded") {
         attributes["data-show"] = "\$exp === '${node.id}'"
 
-        // Head: just the drag handle (the collapsed row already shows the title above — don't
-        // repeat it). Pointer-based drag (works on touch, unlike HTML5 draggable).
-        div(classes = "exp-head") {
+        // Drag handle (pointer-based, touch-friendly) — only where sibling order is stored
+        // (inbox + a project's subtasks), not the computed Next/Today views.
+        if (canReorder) div(classes = "exp-head") {
             span(classes = "drag-handle") {
                 attributes["data-drag"] = ""
                 attributes["title"] = "Drag to reorder"
@@ -376,10 +393,10 @@ fun FlowContent.referenceSection(read: ContentReadModel, query: String? = null) 
 fun FlowContent.referenceResults(read: ContentReadModel, query: String?) {
     if (!query.isNullOrBlank()) {
         val hits = read.search(query)
-        if (hits.isEmpty()) p("muted") { +"No matches." } else ul { hits.forEach { li { nodeRow(it) } } }
+        if (hits.isEmpty()) p("muted") { +"No matches." } else ul { hits.forEach { itemLi(read, it) } }
     } else {
         val filed = read.reference()
-        if (filed.isEmpty()) p("muted") { +"Nothing filed yet." } else ul { filed.forEach { li { nodeRow(it) } } }
+        if (filed.isEmpty()) p("muted") { +"Nothing filed yet." } else ul { filed.forEach { itemLi(read, it) } }
     }
 }
 
