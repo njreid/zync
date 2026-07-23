@@ -1,5 +1,6 @@
 package dev.njr.zync.core.merge
 
+import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.state.StateStore
 
@@ -28,8 +29,10 @@ internal fun reintegrateMoves(store: StateStore) {
     val ordered = store.moveLog().sortedBy { it.hlc }
     val parent = mutableMapOf<Ulid, Ulid>()
     for (move in ordered) {
-        if (!wouldCycle(move.entityId, move.newParentId, parent)) {
-            parent[move.entityId] = move.newParentId
+        when {
+            // Sentinel "move to top level": drop any parent link (last-write-wins by HLC order).
+            move.newParentId == WellKnownNodes.ROOT -> parent.remove(move.entityId)
+            !wouldCycle(move.entityId, move.newParentId, parent) -> parent[move.entityId] = move.newParentId
         }
     }
     // Reconcile the store's projected parents with the freshly integrated map:

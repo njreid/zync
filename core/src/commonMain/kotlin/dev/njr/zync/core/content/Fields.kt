@@ -124,4 +124,11 @@ object Size {
 object WellKnownNodes {
     /** Parent of the Reference tree (GTD triage §7); filing Moves under this subtree. */
     val REFERENCE_ROOT: Ulid = Ulid.parse("000000000000000000000RFRNC")
+
+    /**
+     * Sentinel "move to the top level" target: a Move whose `newParentId` is [ROOT] un-parents
+     * the node (back to the Projects root / actionable top level). It is never a real node —
+     * [reintegrateMoves] translates it to "no parent" rather than a child link.
+     */
+    val ROOT: Ulid = Ulid.parse("00000000000000000000000000")
 }

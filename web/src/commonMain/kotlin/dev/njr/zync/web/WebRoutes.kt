@@ -1,5 +1,6 @@
 package dev.njr.zync.web
 
+import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.web.content.ContentCommands
 import dev.njr.zync.web.content.ContentReadModel
@@ -470,9 +471,11 @@ fun Route.webRoutes(
             val id = call.nodeId()
             when {
                 id == null || target == null -> call.respondText("bad request", status = HttpStatusCode.BadRequest)
+                // ROOT = file to the top level (Projects root); no depth to exceed there.
+                target == WellKnownNodes.ROOT -> call.applied { move(id, target) }
                 read.moveWouldExceedDepth(id, target) ->
                     call.respondText("filing would exceed 4 levels", status = HttpStatusCode.Conflict)
-                else -> call.appliedDetail(id) { move(id, target) }
+                else -> call.applied { move(id, target) }
             }
         }
     }

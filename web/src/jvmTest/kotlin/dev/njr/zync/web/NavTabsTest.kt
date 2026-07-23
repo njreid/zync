@@ -45,7 +45,8 @@ class NavTabsTest {
         assertTrue(next.contains("<h2>Next</h2>"))
         assertTrue(next.contains("Draft copy"), "next should list the project's next action: $next")
         assertTrue(next.contains("Launch website"), "next groups actions under their project label: $next")
-        assertTrue(!next.contains("Buy milk"), "untriaged inbox items do not appear in Next: $next")
+        // Not as a next-action ROW; it may appear as a File destination (subtask of a project).
+        assertTrue(!next.contains(">Buy milk</span>"), "untriaged inbox items do not appear in Next: $next")
 
         // Today = the due-today surface.
         val today = client.get("/today").bodyAsText()

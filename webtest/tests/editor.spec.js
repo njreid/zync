@@ -15,7 +15,7 @@ test('editor buffers a text field, marks it changed, and Save commits it', async
   await expect(page).toHaveURL(/\/node\//);
   const editorUrl = page.url();
 
-  const desc = page.locator('.edit-field textarea');
+  const desc = page.locator('.edit-field textarea:not(.edit-title)');
   await expect(desc).toBeVisible();
   await desc.fill('a memoir about the sea');
   // reactive changed-marker (drives the green border)
@@ -28,5 +28,5 @@ test('editor buffers a text field, marks it changed, and Save commits it', async
 
   // re-open the editor: the description persisted
   await page.goto(editorUrl, { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('.edit-field textarea')).toHaveValue('a memoir about the sea');
+  await expect(page.locator('.edit-field textarea:not(.edit-title)')).toHaveValue('a memoir about the sea');
 });

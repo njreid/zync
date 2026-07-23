@@ -236,12 +236,27 @@ class ContentReadModel(private val store: StateStore) {
         val self = node(forNode)
         val q = stemTokens((self?.title ?: "") + " " + (self?.notes ?: ""))
         val refRoot = WellKnownNodes.REFERENCE_ROOT
-        return snapshots()
+        val snaps = snapshots()
+        val kindById: Map<String, String?> = snaps.associate { it.entityId.toString() to it.kind() }
+        // A node is "in the projects tree" if it is a project or descends from one — so subtasks
+        // of a project are filing targets (filing under one elevates the project to an initiative),
+        // but the inbox container and loose top-level tasks are not.
+        fun inProjectTree(id: Ulid): Boolean {
+            var cur: Ulid? = id
+            val seen = HashSet<String>()
+            while (cur != null && seen.add(cur.toString())) {
+                if (kindById[cur.toString()] == "project") return true
+                cur = store.getParent(cur)
+            }
+            return false
+        }
+        return snaps
             .filter { it.alive && it.kind() != "context" && it.kind() != "comment" && it.entityId.toString() != forNode.toString() }
             .filter { snap ->
                 val underRef = isUnder(snap.entityId, refRoot)
-                if (area == FileArea.REFERENCE) underRef else (!underRef && snap.kind() == "project")
+                if (area == FileArea.REFERENCE) underRef else (!underRef && inProjectTree(snap.entityId))
             }
+            .filter { !isUnder(it.entityId, forNode) }  // never offer the item's own descendants
             .map { snap ->
                 val titleToks = stemTokens(snap.fields[Fields.TITLE].asString() ?: "")
                 FileCandidate(

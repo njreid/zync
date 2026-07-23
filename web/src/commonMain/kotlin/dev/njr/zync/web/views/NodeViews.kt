@@ -59,14 +59,14 @@ fun FlowContent.inboxSection(read: ContentReadModel, inbox: Ulid?, now: Long, co
         if (items.isEmpty()) {
             p("muted") { +"Inbox zero." }
         } else {
-            ul { items.forEach { itemLi(read, it, canReorder = true) } }
+            ul { items.forEach { itemLi(read, it, canReorder = true, now = now) } }
         }
     } else {
         val items = read.contextTasks(context, now)
         if (items.isEmpty()) {
             p("muted") { +"No active tasks in this context." }
         } else {
-            ul { items.forEach { itemLi(read, it) } }
+            ul { items.forEach { itemLi(read, it, now = now) } }
         }
     }
     proposalsSection(read)
@@ -146,7 +146,7 @@ fun FlowContent.nextSection(read: ContentReadModel, inbox: Ulid?, now: Long, con
     } else {
         ul {
             rows.forEach { row ->
-                itemLi(read, row.action, lead = {
+                itemLi(read, row.action, now = now, lead = {
                     row.project?.let { proj ->
                         +" · "
                         a(href = "/node/${proj.id}") { span("project") { +(proj.title ?: "(project)") } }
@@ -167,7 +167,7 @@ fun FlowContent.todaySection(read: ContentReadModel, now: Long, context: Ulid? =
     val items = read.dueTasks(byMillis)
         .let { list -> if (context == null) list else list.filter { n -> n.tags.any { it.toString() == context.toString() } } }
     if (items.isEmpty()) p("muted") { +"Nothing due today." }
-    else ul { items.forEach { itemLi(read, it) } }
+    else ul { items.forEach { itemLi(read, it, now = now) } }
 }
 
 /**
@@ -185,7 +185,7 @@ fun FlowContent.projectsSection(read: ContentReadModel, now: Long, inbox: Ulid? 
     ul {
         projects.forEach { project ->
             val open = read.inbox(project.id, now).size
-            itemLi(read, project, lead = { span("status") { +(if (open == 0) " · done" else " · $open open") } })
+            itemLi(read, project, now = now, lead = { span("status") { +(if (open == 0) " · done" else " · $open open") } })
         }
     }
 }
@@ -195,29 +195,46 @@ fun FlowContent.projectsSection(read: ContentReadModel, now: Long, inbox: Ulid? 
  * [canReorder] shows the drag handle (order-stored lists only — inbox + a project's subtasks).
  * [lead] injects inline content right after the title (a Next project label, a Projects count).
  */
+/**
+ * Row urgency class from status + due date (replaces the old "active" text label):
+ * done → dim + strikethrough, overdue → red, due within 2 days → orange, else white.
+ * With no clock ([now] = MAX, e.g. the Reference archive) only done vs. active is shown.
+ */
+internal fun statusClass(node: NodeView, now: Long): String = when {
+    node.status == "DONE" || node.status == "DROPPED" -> "st-done"
+    node.dueDate == null || now == Long.MAX_VALUE -> "st-active"
+    now > node.dueDate -> "st-overdue"
+    node.dueDate - now <= 2 * 86_400_000L -> "st-soon"
+    else -> "st-active"
+}
+
 fun UL.itemLi(
     read: ContentReadModel,
     node: NodeView,
     canReorder: Boolean = false,
+    now: Long = Long.MAX_VALUE,
     lead: (FlowContent.() -> Unit)? = null,
 ) {
     li(classes = "item swipe-row") {
         attributes["data-node"] = node.id.toString()
         attributes["data-complete"] = "/node/${node.id}/complete"
         attributes["data-trash"] = "/node/${node.id}/trash"
-        // Drag handle sits to the LEFT of the title, shown only when expanded + reorderable.
-        if (canReorder) span(classes = "drag-handle") {
-            attributes["data-show"] = "\$exp === '${node.id}'"
-            attributes["data-drag"] = ""
-            attributes["title"] = "Drag to reorder"
-            icon("grip")
+        // Header row: drag handle (left of the title, only when expanded + reorderable) and the
+        // title in a flex row so a long title wraps beside the handle, not onto its own line.
+        div(classes = "item-head") {
+            if (canReorder) span(classes = "drag-handle") {
+                attributes["data-show"] = "\$exp === '${node.id}'"
+                attributes["data-drag"] = ""
+                attributes["title"] = "Drag to reorder"
+                icon("grip")
+            }
+            span(classes = "row-title ${statusClass(node, now)}") {
+                attributes["data-on:click"] = "\$exp = (\$exp === '${node.id}' ? '' : '${node.id}')"
+                attributes["data-attr:data-expanded"] = "\$exp === '${node.id}' ? 'true' : 'false'"
+                +(node.title ?: "(untitled)")
+            }
+            lead?.invoke(this)
         }
-        span(classes = "row-title") {
-            attributes["data-on:click"] = "\$exp = (\$exp === '${node.id}' ? '' : '${node.id}')"
-            attributes["data-attr:data-expanded"] = "\$exp === '${node.id}' ? 'true' : 'false'"
-            +(node.title ?: "(untitled)")
-        }
-        lead?.invoke(this)
         button(classes = "swipe-fire complete") {
             attributes["data-on:click"] = "@post('/node/${node.id}/complete')"; attributes["aria-label"] = "Complete"; +"Complete"
         }
@@ -324,24 +341,26 @@ private fun FlowContent.expandedPanel(read: ContentReadModel, node: NodeView, ca
         // Action row: File · Snooze · Edit.
         div(classes = "actions") {
             div(classes = "snooze-wrap") {
-                button(classes = "btn") {
-                    attributes["data-act"] = "file"; attributes["data-key"] = "f"
+                button(classes = "btn icon-btn") {
+                    attributes["data-act"] = "file"; attributes["data-key"] = "f"; attributes["title"] = "File"
+                    attributes["aria-label"] = "File"
                     attributes["data-on:click"] = "\$fo_${node.id} = !\$fo_${node.id}; \$so_${node.id} = false"
-                    icon("folder"); +"File"
+                    icon("folder")
                 }
                 div(classes = "file-picker") {
                     attributes["data-show"] = "\$fo_${node.id}"
-                    // Reference has a root (a real node) that's itself a destination; Projects is a
-                    // set of top-level project nodes with no single root, so no root button there.
-                    fileSection(read, node, FileArea.PROJECTS, "Projects", null)
+                    // Both roots are destinations: Projects → top level (ROOT sentinel un-parents),
+                    // Reference → the reference root node.
+                    fileSection(read, node, FileArea.PROJECTS, "Projects", WellKnownNodes.ROOT)
                     fileSection(read, node, FileArea.REFERENCE, "Reference", WellKnownNodes.REFERENCE_ROOT)
                 }
             }
             div(classes = "snooze-wrap") {
-                button(classes = "btn") {
-                    attributes["data-act"] = "snooze"; attributes["data-key"] = "s"
+                button(classes = "btn icon-btn") {
+                    attributes["data-act"] = "snooze"; attributes["data-key"] = "s"; attributes["title"] = "Snooze"
+                    attributes["aria-label"] = "Snooze"
                     attributes["data-on:click"] = "\$so_${node.id} = !\$so_${node.id}; \$fo_${node.id} = false"
-                    icon("clock"); +"Snooze"
+                    icon("clock")
                 }
                 div(classes = "snooze-menu") {
                     attributes["data-show"] = "\$so_${node.id}"
@@ -351,9 +370,10 @@ private fun FlowContent.expandedPanel(read: ContentReadModel, node: NodeView, ca
                     snoozeOption(node.id, "In 2 weeks", 14)
                 }
             }
-            a(href = "/node/${node.id}", classes = "btn") {
-                attributes["data-act"] = "edit"; attributes["data-key"] = "e"
-                icon("pencil"); +"Edit"
+            a(href = "/node/${node.id}", classes = "btn icon-btn btn-primary") {
+                attributes["data-act"] = "edit"; attributes["data-key"] = "e"; attributes["title"] = "Edit"
+                attributes["aria-label"] = "Edit"
+                icon("pencil")
             }
         }
     }
@@ -395,11 +415,11 @@ internal fun FlowContent.fileSection(
                 +c.path.ifBlank { label }
             }
         }
-        if (candidates.size > 6) {
-            button(classes = "btn fp-more") {
-                attributes["data-on:click"] = "\$dlg_${node.id} = '${area.name}'"
-                +"… more"
-            }
+        // Always offer the full tree — the ranked shortlist rarely holds everything.
+        button(classes = "btn fp-more") {
+            attributes["data-on:click"] = "\$dlg_${node.id} = '${area.name}'"
+            attributes["title"] = "Browse all of $label"
+            +"…"
         }
     }
     // Full-tree dialog for this area: a filter box + every destination (client-side filtered).

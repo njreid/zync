@@ -525,3 +525,30 @@ nav.topbar .context-menu ul a { font-family: "Iosevka Charon Mono", ui-monospace
   display: flex; flex-direction: column; gap: .25rem; align-items: stretch;
 }
 .tree-dialog-list .btn { text-align: left; }
+
+/* ---- Item-view feedback pass ---- */
+
+/* Header row: handle stays top-left; a long title wraps beside/below it, never bumping
+   the handle to its own line. */
+.item-head { display: flex; align-items: flex-start; gap: .5rem; }
+.item-head .row-title { flex: 1 1 auto; min-width: 0; }
+.item-head .drag-handle { flex: 0 0 auto; }
+
+/* Bigger, easier-to-grab drag anchor (icons are 1em, so font-size scales them). */
+.item .drag-handle { padding: .35rem; font-size: 1.55rem; line-height: 1; cursor: grab; touch-action: none; color: var(--pico-muted-color); }
+
+/* Row urgency by status + due date (replaces the old "active" text label). */
+.row-title.st-active  { color: #ffffff; }
+.row-title.st-soon    { color: #ffb454; }                     /* due within ~2 days */
+.row-title.st-overdue { color: #ff5555; font-weight: 700; }   /* past the due date */
+.row-title.st-done    { color: rgba(255, 255, 255, .55); text-decoration: line-through; }
+
+/* Square icon buttons: no text label, bigger tap target. */
+.icon-btn { font-size: 1.4rem; padding: .5rem; min-width: 2.9rem; min-height: 2.9rem; justify-content: center; }
+.icon-btn .icn { display: inline-flex; }
+/* Primary action: deep blue, white icon (icons use currentColor). */
+.btn-primary, a.btn-primary { background: #1d4ed8; border-color: #1d4ed8; color: #ffffff; }
+.btn-primary:hover, a.btn-primary:hover { background: #1e40af; }
+
+/* Editor title wraps (textarea, not input). */
+.edit-title { width: 100%; resize: vertical; overflow-wrap: anywhere; }

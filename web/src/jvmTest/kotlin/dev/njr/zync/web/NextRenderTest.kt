@@ -40,7 +40,9 @@ class NextRenderTest {
         val body = client.get("/next").bodyAsText()
         assertTrue(body.contains("loose-action"))
         assertTrue(body.contains("Kitchen") && body.contains("buy tiles"))
-        assertFalse(body.contains("triage-me"), "inbox item leaked into Next: $body")
+        // The item must not appear as a next-action ROW (row-title). It may legitimately appear as
+        // a File destination now, since the test's inbox is a project and triage-me its subtask.
+        assertFalse(body.contains(">triage-me</span>"), "inbox item leaked into Next as a row: $body")
     }
 
     @Test

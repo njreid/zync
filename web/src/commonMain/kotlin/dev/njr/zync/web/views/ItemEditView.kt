@@ -49,10 +49,12 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
         // 1. Title (buffered).
         div(classes = "edit-field") {
             span("edit-label") { icon("pencil"); +" Title" }
-            input(type = InputType.text) {
+            // Textarea (not input) so long titles wrap instead of scrolling off one line.
+            textArea(classes = "edit-title") {
                 attributes["data-bind:title"] = ""
                 attributes["data-attr:data-changed"] = "\$title !== \$o_title ? 'true' : 'false'"
-                attributes["value"] = title
+                attributes["rows"] = "2"
+                +title
             }
         }
 
@@ -152,9 +154,12 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
                 attributes["placeholder"] = "Add a tag"
                 attributes["list"] = "all-tags"
                 attributes["autocomplete"] = "off"
+                // Commit when the value gains a space — the `input` event fires reliably on mobile
+                // soft keyboards (which don't emit usable keydown key values); Enter also commits.
+                attributes["data-on:input"] =
+                    "if (\$tag.includes(' ') && \$tag.trim() !== '') { @post('/node/${node.id}/freetag?label=' + encodeURIComponent(\$tag.trim())); \$tag = '' }"
                 attributes["data-on:keydown"] =
-                    "if ((evt.key === 'Enter' || evt.key === ' ') && \$tag.trim() !== '') { " +
-                        "evt.preventDefault(); @post('/node/${node.id}/freetag?label=' + encodeURIComponent(\$tag.trim())); \$tag = '' }"
+                    "if (evt.key === 'Enter' && \$tag.trim() !== '') { evt.preventDefault(); @post('/node/${node.id}/freetag?label=' + encodeURIComponent(\$tag.trim())); \$tag = '' }"
             }
             val allTags = read.nodes().flatMap { it.freeTags }.distinct().sorted()
             dataList {
@@ -229,40 +234,45 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
 
         // Bottom action row: immediate Delete/File/Done, then Cancel + Save for the buffered fields.
         div(classes = "actions") {
-            button(classes = "btn") {
+            button(classes = "btn icon-btn") {
                 attributes["data-key"] = "#"; attributes["data-act"] = "delete"
+                attributes["title"] = "Delete"; attributes["aria-label"] = "Delete"
                 attributes["data-on:click"] = "@post('/node/${node.id}/trash').then(() => location.href = '/')"
-                icon("trash"); +" Delete"
+                icon("trash")
             }
-            button(classes = "btn") {
+            button(classes = "btn icon-btn") {
                 attributes["data-key"] = "f"; attributes["data-act"] = "file"
+                attributes["title"] = "File"; attributes["aria-label"] = "File"
                 attributes["data-on:click"] = "\$fopen = !\$fopen"
-                icon("folder"); +" File"
+                icon("folder")
             }
             div(classes = "file-picker") {
                 attributes["data-show"] = "\$fopen"
-                fileSection(read, node, FileArea.PROJECTS, "Projects", null)
+                fileSection(read, node, FileArea.PROJECTS, "Projects", WellKnownNodes.ROOT)
                 fileSection(read, node, FileArea.REFERENCE, "Reference", WellKnownNodes.REFERENCE_ROOT)
             }
-            button(classes = "btn") {
+            button(classes = "btn icon-btn") {
                 attributes["data-key"] = "x"; attributes["data-act"] = "done"
                 if (node.status == "DONE") {
                     attributes["data-on:click"] = "@post('/node/${node.id}/reopen')"
-                    icon("check"); +" Undone"
+                    attributes["title"] = "Mark undone"; attributes["aria-label"] = "Mark undone"
+                    icon("undo")
                 } else {
                     attributes["data-on:click"] = "@post('/node/${node.id}/complete')"
-                    icon("check"); +" Done"
+                    attributes["title"] = "Mark done"; attributes["aria-label"] = "Mark done"
+                    icon("check")
                 }
             }
             // Cancel is a plain anchor (browser owns navigation, per the Tao); pending signal
             // edits are simply discarded when the page unloads.
-            a(href = "/", classes = "btn") { icon("close"); +" Cancel" }
-            button(classes = "btn save-btn") {
+            a(href = "/", classes = "btn icon-btn") { attributes["title"] = "Cancel"; attributes["aria-label"] = "Cancel"; icon("close") }
+            button(classes = "btn icon-btn btn-primary save-btn") {
+                attributes["title"] = "Save"; attributes["aria-label"] = "Save"
                 attributes["data-on:click"] =
                     "@post('/node/${node.id}/save?title=' + encodeURIComponent(\$title) + '&notes=' + encodeURIComponent(\$notes) + " +
                         "'&due=' + encodeURIComponent(\$due) + '&link=' + encodeURIComponent(\$link) + '&person=' + encodeURIComponent(\$person))" +
                         ".then(() => location.href = '/')"
-                icon("check"); +" Save"
+                icon("check")
             }
         }
     }
