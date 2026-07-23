@@ -1,8 +1,10 @@
 package dev.njr.zync.web.views
 
 import dev.njr.zync.core.content.Size
+import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.web.content.ContentReadModel
+import dev.njr.zync.web.content.FileArea
 import dev.njr.zync.web.content.DueDates
 import dev.njr.zync.web.content.NodeView
 import kotlinx.html.FlowContent
@@ -329,12 +331,10 @@ private fun FlowContent.expandedPanel(read: ContentReadModel, node: NodeView, ca
                 }
                 div(classes = "file-picker") {
                     attributes["data-show"] = "\$fo_${node.id}"
-                    (read.projects() + read.reference()).filter { it.id.toString() != node.id.toString() }.forEach { t ->
-                        button(classes = "btn") {
-                            attributes["data-on:click"] = "@post('/node/${node.id}/file-to?target=${t.id}')"
-                            +(t.title ?: "(untitled)")
-                        }
-                    }
+                    // Reference has a root (a real node) that's itself a destination; Projects is a
+                    // set of top-level project nodes with no single root, so no root button there.
+                    fileSection(read, node, FileArea.PROJECTS, "Projects", null)
+                    fileSection(read, node, FileArea.REFERENCE, "Reference", WellKnownNodes.REFERENCE_ROOT)
                 }
             }
             div(classes = "snooze-wrap") {
@@ -364,6 +364,76 @@ private fun FlowContent.snoozeOption(id: Ulid, label: String, days: Int) {
     button(classes = "btn") {
         attributes["data-on:click"] = "@post('/node/$id/defer?until=' + (Date.now() + $days*86400000))"
         +label
+    }
+}
+
+/**
+ * One filing area in the File picker: the ranked, path-labeled destinations (top few), plus a
+ * "… more" button that opens a full-tree dialog with a filter box. Contexts/roots render mono.
+ * The area root (Reference only — Projects has no single root node) is itself a destination.
+ * Signals: `$dlg_<id>` holds the open dialog's area name; `$dq_<id>` is that dialog's filter.
+ */
+internal fun FlowContent.fileSection(
+    read: ContentReadModel,
+    node: NodeView,
+    area: FileArea,
+    label: String,
+    root: Ulid?,
+) {
+    val candidates = read.fileCandidates(area, node.id)
+    div(classes = "fp-section") {
+        span("fp-head ctx") { +label }
+        root?.let { r ->
+            button(classes = "btn") {
+                attributes["data-on:click"] = "@post('/node/${node.id}/file-to?target=$r')"
+                icon("folder"); +" $label"
+            }
+        }
+        candidates.take(6).forEach { c ->
+            button(classes = "btn") {
+                attributes["data-on:click"] = "@post('/node/${node.id}/file-to?target=${c.id}')"
+                +c.path.ifBlank { label }
+            }
+        }
+        if (candidates.size > 6) {
+            button(classes = "btn fp-more") {
+                attributes["data-on:click"] = "\$dlg_${node.id} = '${area.name}'"
+                +"… more"
+            }
+        }
+    }
+    // Full-tree dialog for this area: a filter box + every destination (client-side filtered).
+    div(classes = "tree-dialog") {
+        attributes["data-show"] = "\$dlg_${node.id} === '${area.name}'"
+        div(classes = "tree-dialog-card") {
+            div(classes = "tree-dialog-head") {
+                input(type = InputType.search) {
+                    attributes["data-bind:dq_${node.id}"] = ""
+                    attributes["placeholder"] = "Filter $label…"
+                }
+                button(classes = "btn") {
+                    attributes["data-on:click"] = "\$dlg_${node.id} = ''"
+                    icon("close")
+                }
+            }
+            div(classes = "tree-dialog-list") {
+                root?.let { r ->
+                    button(classes = "btn") {
+                        attributes["data-on:click"] = "@post('/node/${node.id}/file-to?target=$r')"
+                        +label
+                    }
+                }
+                candidates.forEach { c ->
+                    val needle = c.path.lowercase().replace(Regex("['\\\\]"), "")
+                    button(classes = "btn") {
+                        attributes["data-show"] =
+                            "\$dq_${node.id} === '' || '$needle'.includes((\$dq_${node.id}).toLowerCase())"
+                        attributes["data-on:click"] = "@post('/node/${node.id}/file-to?target=${c.id}')"
+                        +c.path.ifBlank { label }
+                    }
+                }
+            }
+        }
     }
 }
 

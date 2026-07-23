@@ -497,3 +497,31 @@ nav.topbar .context-menu ul a { font-family: "Iosevka Charon Mono", ui-monospace
 
 /* Drag handle inline to the left of the title (shown only when expanded via data-show). */
 .item .drag-handle { flex: 0 0 auto; cursor: grab; touch-action: none; color: var(--pico-muted-color); }
+
+/* File picker: ranked sections + full-tree dialog. */
+.file-picker { display: flex; flex-direction: column; gap: .45rem; }
+.fp-section { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; }
+.fp-head { font-size: .78rem; opacity: .7; margin-right: .25rem; }
+.fp-more { font-style: italic; opacity: .85; }
+
+.tree-dialog {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: flex-start; justify-content: center;
+  background: rgba(0, 0, 0, .5); padding: 3rem 1rem;
+}
+.tree-dialog-card {
+  background: var(--pico-background-color, #fff);
+  border-radius: .6rem; width: 100%; max-width: 32rem; max-height: 80vh;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, .4);
+}
+.tree-dialog-head {
+  display: flex; gap: .4rem; padding: .6rem;
+  border-bottom: 1px solid var(--pico-muted-border-color, #ddd);
+}
+.tree-dialog-head input { flex: 1 1 auto; margin: 0; }
+.tree-dialog-list {
+  overflow-y: auto; padding: .5rem;
+  display: flex; flex-direction: column; gap: .25rem; align-items: stretch;
+}
+.tree-dialog-list .btn { text-align: left; }

@@ -64,6 +64,12 @@ data class FileSuggestion(val targetId: Ulid, val title: String, val tree: Strin
 /** An attachment as the triage preview reads it (GTD triage §4). */
 data class AttachmentView(val id: Ulid, val type: String?, val filename: String?, val blobHash: String?)
 
+/** A filing area (the two roots that are themselves valid destinations). */
+enum class FileArea { PROJECTS, REFERENCE }
+
+/** A file-destination candidate: the target node, its path label, and a keyword-match score. */
+data class FileCandidate(val id: Ulid, val path: String, val score: Int)
+
 /** A bot-proposed field edit awaiting review (external-op-api §4): the diff + who proposed it. */
 data class SuggestionView(
     val id: Ulid,
@@ -219,6 +225,62 @@ class ContentReadModel(private val store: StateStore) {
 
     /** The Reference tree (GTD triage §7): live children of the well-known reference root. */
     fun reference(root: Ulid = WellKnownNodes.REFERENCE_ROOT): List<NodeView> = children(root)
+
+    /**
+     * File-destination candidates in an [area] (Projects or Reference), each with its path label
+     * ("Family / Letters") and a simple stemmed-keyword score against [forNode]'s title+notes —
+     * so the most relevant destinations sort first (semantic/embeddings can replace the scorer
+     * later). Both area roots are valid destinations too (the caller adds them).
+     */
+    fun fileCandidates(area: FileArea, forNode: Ulid): List<FileCandidate> {
+        val self = node(forNode)
+        val q = stemTokens((self?.title ?: "") + " " + (self?.notes ?: ""))
+        val refRoot = WellKnownNodes.REFERENCE_ROOT
+        return snapshots()
+            .filter { it.alive && it.kind() != "context" && it.kind() != "comment" && it.entityId.toString() != forNode.toString() }
+            .filter { snap ->
+                val underRef = isUnder(snap.entityId, refRoot)
+                if (area == FileArea.REFERENCE) underRef else (!underRef && snap.kind() == "project")
+            }
+            .map { snap ->
+                val titleToks = stemTokens(snap.fields[Fields.TITLE].asString() ?: "")
+                FileCandidate(
+                    id = snap.entityId,
+                    path = pathLabel(snap.entityId, if (area == FileArea.REFERENCE) refRoot else null),
+                    score = titleToks.count { it in q },
+                )
+            }
+            .sortedWith(compareByDescending<FileCandidate> { it.score }.thenBy { it.path.lowercase() })
+    }
+
+    /** Is [id] the [root] or a descendant of it? (bounded walk, cycle-safe). */
+    private fun isUnder(id: Ulid, root: Ulid): Boolean {
+        if (id.toString() == root.toString()) return true
+        var cur = store.getParent(id)
+        val seen = HashSet<String>()
+        while (cur != null && seen.add(cur.toString())) {
+            if (cur.toString() == root.toString()) return true
+            cur = store.getParent(cur)
+        }
+        return false
+    }
+
+    /** Ancestor titles from just under [stopAt] down to [id], joined " / " (empty = the root). */
+    private fun pathLabel(id: Ulid, stopAt: Ulid?): String {
+        val parts = ArrayDeque<String>()
+        var cur: Ulid? = id
+        val seen = HashSet<String>()
+        while (cur != null && cur.toString() != stopAt?.toString() && seen.add(cur.toString())) {
+            parts.addFirst(store.getRegister(RegisterKey(cur, Fields.TITLE))?.value.asString() ?: "(untitled)")
+            cur = store.getParent(cur)
+        }
+        return parts.joinToString(" / ")
+    }
+
+    /** Lowercase word tokens, crudely stemmed (strip -ing/-ed/-s), length ≥ 3. */
+    private fun stemTokens(text: String): Set<String> =
+        text.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length >= 3 }
+            .map { it.removeSuffix("ing").removeSuffix("ed").removeSuffix("s") }.toSet()
 
     /**
      * Keyword search across all content (GTD triage §7): matches on title/notes/summary

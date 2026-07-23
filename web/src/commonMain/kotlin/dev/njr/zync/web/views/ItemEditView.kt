@@ -1,8 +1,10 @@
 package dev.njr.zync.web.views
 
 import dev.njr.zync.core.content.Size
+import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.web.content.ContentReadModel
 import dev.njr.zync.web.content.DueDates
+import dev.njr.zync.web.content.FileArea
 import dev.njr.zync.web.content.NodeView
 import kotlinx.html.FlowContent
 import kotlinx.html.InputType
@@ -143,11 +145,21 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
                     }
                 }
             }
+            // Single-word tags: space (or Enter) turns the word into a chip; autocomplete against
+            // tags already in use. The existing chips above carry the ✕ that removes them.
             input(type = InputType.text) {
                 attributes["data-bind:tag"] = ""
                 attributes["placeholder"] = "Add a tag"
+                attributes["list"] = "all-tags"
+                attributes["autocomplete"] = "off"
                 attributes["data-on:keydown"] =
-                    "if (evt.key === 'Enter') { @post('/node/${node.id}/freetag?label=' + encodeURIComponent(\$tag)); \$tag = '' }"
+                    "if ((evt.key === 'Enter' || evt.key === ' ') && \$tag.trim() !== '') { " +
+                        "evt.preventDefault(); @post('/node/${node.id}/freetag?label=' + encodeURIComponent(\$tag.trim())); \$tag = '' }"
+            }
+            val allTags = read.nodes().flatMap { it.freeTags }.distinct().sorted()
+            dataList {
+                id = "all-tags"
+                allTags.forEach { option { value = it } }
             }
         }
 
@@ -229,12 +241,8 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
             }
             div(classes = "file-picker") {
                 attributes["data-show"] = "\$fopen"
-                (read.projects() + read.reference()).filter { it.id.toString() != node.id.toString() }.forEach { t ->
-                    button(classes = "btn") {
-                        attributes["data-on:click"] = "@post('/node/${node.id}/file-to?target=${t.id}')"
-                        +(t.title ?: "(untitled)")
-                    }
-                }
+                fileSection(read, node, FileArea.PROJECTS, "Projects", null)
+                fileSection(read, node, FileArea.REFERENCE, "Reference", WellKnownNodes.REFERENCE_ROOT)
             }
             button(classes = "btn") {
                 attributes["data-key"] = "x"; attributes["data-act"] = "done"
