@@ -71,12 +71,12 @@ class SizeTriageTest {
     }
 
     @Test
-    fun inboxRendersTriagePanelWiring() = app { client ->
+    fun inboxRendersExpandedPanelWiring() = app { client ->
         commands.createTask("triage me", inbox)
         val home = client.get("/").bodyAsText()
-        assertTrue(home.contains("class=\"triage\""), "triage panel missing: $home")
+        assertTrue(home.contains("class=\"expanded\""), "expanded panel missing: $home")
         assertTrue(home.contains("data-show=") && home.contains("\$exp ==="), "expand wiring present")
-        assertTrue(home.contains("size-chips"))
-        assertTrue(home.contains("No file suggestions yet")) // wired stub slot
+        assertTrue(home.contains("drag-handle"), "drag handle present")
+        assertTrue(home.contains("data-act=\"file\"") && home.contains("data-act=\"snooze\""), "action row present")
     }
 }

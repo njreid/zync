@@ -130,7 +130,57 @@ document.addEventListener('pointercancel', (e) => {
   active = null;
 });
 
-// --- Keyboard ---
+// --- Drag-drop reorder (the .drag-handle in an expanded item) ---
+let dragItem = null;
+document.addEventListener('dragstart', (e) => {
+  const handle = e.target.closest && e.target.closest('[data-drag]');
+  if (!handle) return; // only the drag handle starts a reorder (swipe uses pointer events)
+  dragItem = handle.closest('li');
+  if (dragItem) { dragItem.classList.add('dragging'); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; }
+});
+document.addEventListener('dragover', (e) => {
+  if (!dragItem) return;
+  const over = e.target.closest && e.target.closest('li');
+  if (over && over !== dragItem) { e.preventDefault(); over.classList.add('drag-over'); }
+});
+document.addEventListener('dragleave', (e) => {
+  const over = e.target.closest && e.target.closest('li');
+  if (over) over.classList.remove('drag-over');
+});
+document.addEventListener('drop', (e) => {
+  if (!dragItem) return;
+  const over = e.target.closest && e.target.closest('li');
+  if (over && over !== dragItem) {
+    e.preventDefault();
+    const movingId = dragItem.getAttribute('data-node');
+    const beforeId = over.getAttribute('data-node'); // drop the moved item just before the target
+    if (movingId && beforeId) fetch('/node/' + movingId + '/reorder-before?before=' + beforeId, { method: 'POST' });
+  }
+  clearDrag();
+});
+document.addEventListener('dragend', clearDrag);
+function clearDrag() {
+  if (dragItem) dragItem.classList.remove('dragging');
+  dragItem = null;
+  document.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+}
+
+// --- List search ('/' everywhere): filter the visible rows by text ---
+const listSearch = document.querySelector('.list-search');
+if (listSearch) {
+  listSearch.addEventListener('input', () => {
+    const q = listSearch.value.trim().toLowerCase();
+    document.querySelectorAll('main li').forEach((li) => {
+      const t = (li.querySelector('.row-title, a')?.textContent || li.textContent || '').toLowerCase();
+      li.style.display = (!q || t.includes(q)) ? '' : 'none';
+    });
+  });
+  listSearch.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { listSearch.value = ''; listSearch.dispatchEvent(new Event('input')); listSearch.classList.remove('show'); listSearch.blur(); }
+  });
+}
+
+// --- Keyboard (desktop; VIM/Gmail-ish) ---
 
 function editing() {
   const el = document.activeElement;
@@ -138,7 +188,6 @@ function editing() {
   const tag = el.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
 }
-
 function setCursor(list, i) {
   list.forEach((r) => r.classList.remove('cursor'));
   if (i >= 0 && i < list.length) {
@@ -147,14 +196,33 @@ function setCursor(list, i) {
     list[i].scrollIntoView({ block: 'nearest' });
   }
 }
+function reorderKey(row, dir) {
+  const id = row.getAttribute('data-node');
+  if (id) fetch('/node/' + id + '/rank?dir=' + dir, { method: 'POST' });
+}
+// Trigger a row's action button (File/Snooze/Waiting), expanding the panel first if collapsed.
+function actOn(row, act) {
+  const btn = row.querySelector('[data-act="' + act + '"]');
+  if (!btn) return;
+  const panel = row.querySelector('.expanded');
+  if (panel && panel.offsetParent === null) row.querySelector('.row-title')?.click();
+  btn.click();
+}
+// On a page with no row list (the Edit page), act on a unique [data-act] button.
+function pageAction(key) {
+  const map = { x: 'done', '#': 'delete', f: 'file', s: 'snooze', w: 'waiting', e: 'edit' };
+  const btn = map[key] && document.querySelector('.actions [data-act="' + map[key] + '"]');
+  if (btn) btn.click();
+}
+function toggleHelp() { document.querySelector('.kbd-help')?.classList.toggle('show'); }
 
 document.addEventListener('keydown', (e) => {
-  if (editing()) {
-    if (e.key === 'Escape') document.activeElement.blur();
-    return;
-  }
+  if (editing()) { if (e.key === 'Escape') document.activeElement.blur(); return; }
 
-  // g-chord: `g` then a tab letter navigates via the tab bar's data-key links.
+  if (e.key === '/') { if (listSearch) { e.preventDefault(); listSearch.classList.add('show'); listSearch.focus(); } return; }
+  if (e.key === '?') { e.preventDefault(); toggleHelp(); return; }
+
+  // g-chord: `g` then a view letter (i/t/n/p/r) navigates via the View menu's data-key links.
   if (pendingG && (Date.now() - pendingG) < CHORD_MS) {
     pendingG = 0;
     const target = document.querySelector('a[data-key="' + e.key + '"]');
@@ -162,33 +230,27 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key === 'g') { pendingG = Date.now(); e.preventDefault(); return; }
-
-  if (e.key === '/') {
-    const search = document.querySelector('#search, input[type=search]');
-    if (search) { e.preventDefault(); search.focus(); }
-    return;
-  }
-  if (e.key === 'Escape') { pendingG = 0; setCursor(rows(), -1); cursor = -1; return; }
+  if (e.key === 'Escape') { pendingG = 0; document.querySelector('.kbd-help')?.classList.remove('show'); setCursor(rows(), -1); cursor = -1; return; }
 
   const list = rows();
-  if (list.length === 0) return;
+  if (list.length === 0) { pageAction(e.key); return; } // Edit page: act on its buttons
+  const cur = (cursor >= 0 && cursor < list.length) ? list[cursor] : null;
 
   switch (e.key) {
     case 'j': e.preventDefault(); setCursor(list, Math.min(cursor + 1, list.length - 1)); break;
     case 'k': e.preventDefault(); setCursor(list, Math.max(cursor - 1, 0)); break;
-    case ' ': // space → complete
-      if (cursor >= 0 && cursor < list.length) { e.preventDefault(); fire(list[cursor], 'complete'); }
-      break;
+    case 'J': if (cur) { e.preventDefault(); reorderKey(cur, 'down'); } break; // Shift+J = move down
+    case 'K': if (cur) { e.preventDefault(); reorderKey(cur, 'up'); } break;   // Shift+K = move up
+    case 'o':
+    case 'Enter': if (cur) { e.preventDefault(); cur.querySelector('.row-title')?.click(); } break; // expand
+    case 'x': if (cur) { e.preventDefault(); startPending(cur, 'complete'); } break; // Done (undo window)
+    case '#':
     case 'Delete':
-    case 'Backspace':
-      if (cursor >= 0 && cursor < list.length) { e.preventDefault(); fire(list[cursor], 'trash'); }
-      break;
-    case 'Enter':
-      if (cursor >= 0 && cursor < list.length) {
-        const link = list[cursor].querySelector('a[href^="/node/"]');
-        if (link) { e.preventDefault(); link.click(); }
-      }
-      break;
+    case 'Backspace': if (cur) { e.preventDefault(); startPending(cur, 'trash'); } break;
+    case 'e': if (cur) { const a = cur.querySelector('[data-act="edit"]'); if (a) { e.preventDefault(); location.href = a.getAttribute('href'); } } break;
+    case 'f': if (cur) { e.preventDefault(); actOn(cur, 'file'); } break;
+    case 's': if (cur) { e.preventDefault(); actOn(cur, 'snooze'); } break;
+    case 'w': if (cur) { e.preventDefault(); actOn(cur, 'waiting'); } break;
     default: break;
   }
 });

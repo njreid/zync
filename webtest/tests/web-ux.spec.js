@@ -45,26 +45,22 @@ test('renders seeded inbox and Datastar drives live mutations', async ({ page })
   expect(await page.locator('#inbox input:visible').count()).toBe(0);
   expect(await page.locator('.context-pill').count()).toBe(0);
 
-  // organize controls on the detail page (reached by expanding the row → Details): due + tag
-  const rb = page.locator('#inbox li.swipe-row', { hasText: 'Read a book' });
+  // expand an item and open its full editor via the Edit action in the panel
+  const rb = page.locator('#inbox li.swipe-row').filter({ has: page.locator('.row-title', { hasText: 'Read a book' }) });
   await rb.locator('.row-title').click();
-  await rb.locator('.triage a.details').click();
-  await expect(page.locator('main')).toContainText('Organize');
-  await page.locator('input[type="date"]').fill('2026-07-20');
-  await page.locator('button', { hasText: 'Set due' }).click();
-  await expect(page.locator('main')).toContainText('due 2026-07-20', { timeout: 5000 });
-  await page.locator('button', { hasText: '+ @errands' }).click();
-  await expect(page.locator('button', { hasText: '@errands ✕' })).toBeVisible({ timeout: 5000 });
+  await expect(rb.locator('.expanded')).toBeVisible();
+  await rb.locator('[data-act="edit"]').click();
+  await expect(page).toHaveURL(/\/node\//);
+  await expect(page.locator('main')).toContainText('Subtasks'); // the editor page
 
-  // context view (launcher L4, reached by URL / native selection): pill + tagged tasks
-  const untag = await page.locator('button', { hasText: '@errands ✕' }).getAttribute('data-on:click');
-  const contextId = untag.match(/context=([0-9A-Za-z]+)/)[1];
-  await page.goto(BASE + '/?context=' + contextId, { waitUntil: 'networkidle' });
-  // the top-bar Context dropdown reflects the selected context
+  // context filter via the top-bar Context dropdown (the seed tags "Plan the offsite" @errands)
+  await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+  await page.locator('.context-menu > summary').click();
+  const href = await page.locator('.context-menu a', { hasText: '@errands' }).getAttribute('href');
+  await page.goto(BASE + href, { waitUntil: 'networkidle' });
   await expect(page.locator('.context-menu > summary')).toContainText('@errands');
   await expect(page.locator('#inbox')).toContainText('Plan the offsite');
-  await expect(page.locator('#inbox')).toContainText('Read a book'); // just tagged above
-  // and the Context menu's "All" returns to the unfiltered inbox
+  // the Context menu's "All" returns to the unfiltered inbox
   await page.locator('.context-menu > summary').click();
   await page.locator('.context-menu a', { hasText: 'All' }).click();
   await expect(page.locator('#inbox')).toContainText('Read a book');

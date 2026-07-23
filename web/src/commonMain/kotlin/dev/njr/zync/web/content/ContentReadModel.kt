@@ -52,6 +52,8 @@ data class NodeView(
     /** Fetched preview of a shared URL: page title + first paragraph (shown when an item expands). */
     val linkTitle: String? = null,
     val linkPreview: String? = null,
+    /** The URL of a shared link (shown as an icon; full URL revealed in Edit). */
+    val linkUrl: String? = null,
 )
 
 /** One ranked file-location proposal for an inbox item (GTD triage §6). */
@@ -184,6 +186,30 @@ class ContentReadModel(private val store: StateStore) {
         } else {
             // Neighbour ranks collided; rewrite the whole sibling list to a clean order.
             items.zip(FractionalIndex.rebalance(items.size)).associate { (n, r) -> n.id to r }
+        }
+    }
+
+    /**
+     * Drag-drop reorder: move [id] to just before [beforeId] within its sibling list (the children
+     * of [id]'s parent — inbox root or a project). [beforeId] == null drops it at the end. Returns
+     * the rank writes (a single fractional index, or a full rebalance on a collision).
+     */
+    fun reorderBefore(id: Ulid, beforeId: Ulid?, now: Long = Long.MAX_VALUE): Map<Ulid, String> {
+        val parent = store.getParent(id)
+        val list = inbox(parent, now)
+        val moving = list.firstOrNull { it.id.toString() == id.toString() } ?: return emptyMap()
+        val siblings = list.filter { it.id.toString() != id.toString() }.toMutableList()
+        val idx = when (beforeId) {
+            null -> siblings.size
+            else -> siblings.indexOfFirst { it.id.toString() == beforeId.toString() }.let { if (it < 0) siblings.size else it }
+        }
+        siblings.add(idx, moving)
+        val lower = siblings.getOrNull(idx - 1)?.effectiveRank()
+        val upper = siblings.getOrNull(idx + 1)?.effectiveRank()
+        return if (lower == null || upper == null || lower < upper) {
+            mapOf(moving.id to FractionalIndex.between(lower, upper))
+        } else {
+            siblings.zip(FractionalIndex.rebalance(siblings.size)).associate { (n, r) -> n.id to r }
         }
     }
 
@@ -381,6 +407,7 @@ class ContentReadModel(private val store: StateStore) {
         summary = fields[Fields.SUMMARY].asString(),
         linkTitle = fields[Fields.LINK_TITLE].asString(),
         linkPreview = fields[Fields.LINK_PREVIEW].asString(),
+        linkUrl = fields[Fields.LINK_URL].asString(),
         parent = parent,
         tags = tags,
         alive = alive,

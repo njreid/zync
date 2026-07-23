@@ -39,6 +39,9 @@ object Fields {
     /** Operator-owned one-paragraph summary of a document's OCR text. */
     const val SUMMARY = "summary"
 
+    /** The URL of a shared link (shown as an icon; the full URL is revealed in Edit). */
+    const val LINK_URL = "linkUrl"
+
     /** Fetched <title> of a shared URL (preview shown when an inbox item is expanded). */
     const val LINK_TITLE = "linkTitle"
 

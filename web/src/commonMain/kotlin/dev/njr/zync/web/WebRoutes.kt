@@ -12,7 +12,7 @@ import dev.njr.zync.web.sse.respondDatastar
 import dev.njr.zync.web.views.Tab
 import dev.njr.zync.web.views.inboxSection
 import dev.njr.zync.web.views.nextSection
-import dev.njr.zync.web.views.nodeDetail
+import dev.njr.zync.web.views.nodeEditView
 import dev.njr.zync.web.views.page
 import dev.njr.zync.web.views.projectsSection
 import dev.njr.zync.web.views.readingView
@@ -157,7 +157,7 @@ fun Route.webRoutes(
         if (node == null) {
             call.respondText("not found", status = HttpStatusCode.NotFound)
         } else {
-            call.respondHtml { page(node.title ?: "Node", settingsHref, Tab.NONE, read.contexts(), call.selectedContext()) { div { id = "node-detail"; nodeDetail(read, node) } } }
+            call.respondHtml { page(node.title ?: "Node", settingsHref, Tab.NONE, read.contexts(), call.selectedContext()) { div { id = "node-detail"; nodeEditView(read, node) } } }
         }
     }
     get("/node/{id}/read") {
@@ -318,13 +318,24 @@ fun Route.webRoutes(
                 call.applied { writes.forEach { (node, rank) -> setRank(node, rank) } }
             }
         }
+        // Drag-drop reorder: move id to just before the dropped-on sibling (blank before = to end).
+        post("/node/{id}/reorder-before") {
+            val before = call.request.queryParameters["before"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+            val id = call.nodeId()
+            if (id == null) {
+                call.respondText("bad request", status = HttpStatusCode.BadRequest)
+            } else {
+                val writes = read.reorderBefore(id, before, now())
+                call.applied { writes.forEach { (node, rank) -> setRank(node, rank) } }
+            }
+        }
 
         // Detail-page actions patch #node-detail (not the inbox).
         suspend fun ApplicationCall.appliedDetail(id: Ulid, mutate: ContentCommands.() -> Unit) {
             commands.mutate()
             changes?.notifyChanged()
             val node = read.node(id) ?: return respondText("not found", status = HttpStatusCode.NotFound)
-            respondDatastar(patchElementsEvent(WebPlatform.renderFragment("node-detail") { nodeDetail(read, node) }))
+            respondDatastar(patchElementsEvent(WebPlatform.renderFragment("node-detail") { nodeEditView(read, node) }))
         }
         post("/node/{id}/subtask") {
             val title = call.request.queryParameters["title"]?.trim().orEmpty()
@@ -413,6 +424,29 @@ fun Route.webRoutes(
             val id = call.nodeId()
             if (id != null) call.appliedDetail(id) { setPerson(id, name) }
             else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
+        // Redesigned item editor: link URL, waiting-for (person + WAITING), and File-to-a-node.
+        post("/node/{id}/link") {
+            val url = call.request.queryParameters["url"].orEmpty().trim()
+            val id = call.nodeId()
+            if (id != null) call.appliedDetail(id) { setLink(id, url) }
+            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
+        post("/node/{id}/waiting") {
+            val name = call.request.queryParameters["name"]
+            val id = call.nodeId()
+            if (id != null) call.appliedDetail(id) { waitingFor(id, name) }
+            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
+        post("/node/{id}/file-to") {
+            val target = call.request.queryParameters["target"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+            val id = call.nodeId()
+            when {
+                id == null || target == null -> call.respondText("bad request", status = HttpStatusCode.BadRequest)
+                read.moveWouldExceedDepth(id, target) ->
+                    call.respondText("filing would exceed 4 levels", status = HttpStatusCode.Conflict)
+                else -> call.appliedDetail(id) { move(id, target) }
+            }
         }
     }
 }

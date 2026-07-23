@@ -4,10 +4,13 @@ import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.web.content.ContextView
 import kotlinx.html.FlowContent
 import kotlinx.html.HTML
+import kotlinx.html.InputType
 import kotlinx.html.a
 import kotlinx.html.body
 import kotlinx.html.details
+import kotlinx.html.div
 import kotlinx.html.head
+import kotlinx.html.input
 import kotlinx.html.li
 import kotlinx.html.link
 import kotlinx.html.main
@@ -17,6 +20,7 @@ import kotlinx.html.script
 import kotlinx.html.summary
 import kotlinx.html.title
 import kotlinx.html.ul
+import kotlinx.html.unsafe
 
 /**
  * The fixed GTD surfaces (spec: "some fixed categories which need to be easily accessible"),
@@ -70,10 +74,19 @@ fun HTML.page(
             contextMenu(activeTab, contexts, selectedContext)
         }
         main(classes = "container") {
-            // The inbox triage-panel open state is the Datastar `$exp` signal (holds the
-            // expanded node id). Created lazily on the first expand toggle and then living in
-            // Datastar's signal store — NOT the DOM — so it survives every #inbox SSE morph.
+            // List search: '/' reveals + focuses this box; the gesture layer filters visible rows.
+            input(type = InputType.search, classes = "list-search") { attributes["placeholder"] = "Filter…" }
+            // The item expand state is the Datastar `$exp` signal (holds the expanded node id),
+            // created lazily on first toggle and living in Datastar's store — NOT the DOM — so it
+            // survives every SSE morph.
             content()
+        }
+        // Desktop-only keyboard cheatsheet (toggled by '?'; hidden on touch — see custom.css).
+        div(classes = "kbd-help") {
+            unsafe {
+                +("<b>Keys</b><br>j/k move · o expand · x done · # delete · e edit · f file · s snooze · " +
+                    "w waiting · Shift+J/K reorder · / search · g then i/t/n/p/r · ? this")
+            }
         }
     }
 }

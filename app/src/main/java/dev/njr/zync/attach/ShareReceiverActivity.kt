@@ -52,6 +52,7 @@ class ShareReceiverActivity : ComponentActivity() {
                     // If a URL was shared, fetch a best-effort preview (title + first paragraph)
                     // shown when the inbox item is expanded. Failure is silent.
                     LinkPreview.firstUrl(sharedText)?.let { url ->
+                        app.opWriter.setField(node, dev.njr.zync.core.content.Fields.LINK_URL, kotlinx.serialization.json.JsonPrimitive(url))
                         LinkPreview.fetch(url)?.let { info ->
                             info.title?.let { app.opWriter.setField(node, dev.njr.zync.core.content.Fields.LINK_TITLE, kotlinx.serialization.json.JsonPrimitive(it)) }
                             info.paragraph?.let { app.opWriter.setField(node, dev.njr.zync.core.content.Fields.LINK_PREVIEW, kotlinx.serialization.json.JsonPrimitive(it)) }

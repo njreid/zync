@@ -50,12 +50,12 @@ test('swipe then Undo cancels the pending action', async ({ page }) => {
   await expect(page.locator('#inbox')).toContainText('Read a book');
 });
 
-test('a tap expands the item; Details opens the editor', async ({ page }) => {
+test('a tap expands the item; Edit opens the editor', async ({ page }) => {
   await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
-  const row = page.locator('#inbox li.swipe-row', { hasText: 'Buy milk' });
-  await row.locator('.row-title').click(); // tap the title → expand the triage panel
-  await expect(row.locator('.triage')).toBeVisible();
-  await row.locator('.triage a.details').click(); // Details → the full editor
+  const row = page.locator('#inbox li.swipe-row').filter({ has: page.locator('.row-title', { hasText: 'Buy milk' }) });
+  await row.locator('.row-title').click(); // tap the title → expand the read-only panel
+  await expect(row.locator('.expanded')).toBeVisible();
+  await row.locator('[data-act="edit"]').click(); // Edit → the full editor
   await expect(page).toHaveURL(/\/node\//);
 });
 
@@ -74,7 +74,7 @@ test('keyboard cursor + space completes', async ({ page }) => {
   const cursorRow = page.locator('#inbox li.swipe-row.cursor');
   await expect(cursorRow).toHaveCount(1);
   const title = (await cursorRow.locator('.row-title').innerText()).trim();
-  await page.keyboard.press(' '); // complete the cursor row (immediate; keyboard skips the undo window)
+  await page.keyboard.press('x'); // x = Done (enters the ~3s undo window, then commits)
   await expect(page.locator('#inbox')).not.toContainText(title, { timeout: 7000 });
 });
 

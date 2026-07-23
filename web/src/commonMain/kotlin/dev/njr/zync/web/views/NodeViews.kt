@@ -211,34 +211,13 @@ fun FlowContent.projectsSection(read: ContentReadModel, now: Long, inbox: Ulid? 
  */
 fun FlowContent.nodeRow(node: NodeView, reorderable: Boolean = false) {
     if (reorderable) {
-        // Tap the title to expand the triage panel (no leading decorator); Details in the panel
-        // opens the full editor. Non-triage surfaces keep the title as a link to the node.
+        // Collapsed = title only; tap to expand the panel (details + actions live there).
         span(classes = "row-title") {
             attributes["data-on:click"] = "\$exp = (\$exp === '${node.id}' ? '' : '${node.id}')"
             +(node.title ?: "(untitled)")
         }
-    } else {
-        a(href = "/node/${node.id}") { +(node.title ?: "(untitled)") }
-    }
-    node.person?.let { span("waiting") { +" @$it" } }
-    node.size?.let { span("size-badge") { +it } }
-    node.status?.let { span("status") { +" · $it" } }
-    if (!reorderable) {
-        // Inbox rows rely on swipes for complete/delete; every other surface keeps buttons.
-        button(classes = "action") {
-            attributes["data-on:click"] = "@post('/node/${node.id}/complete')"
-            attributes["title"] = "Complete"
-            +"✓"
-        }
-        button(classes = "action") {
-            attributes["data-on:click"] = "@post('/node/${node.id}/trash')"
-            attributes["title"] = "Trash"
-            +"🗑"
-        }
-    } else {
-        // Visually-hidden but FOCUSABLE + labeled Datastar triggers: the gesture helper
-        // .click()s them on swipe/keypress (swipe-right/space = complete, swipe-left/del =
-        // trash), and keyboard/screen-reader users can tab to and activate them directly.
+        // Visually-hidden but FOCUSABLE + labeled Datastar triggers: the gesture helper .click()s
+        // them on swipe/keypress (swipe-right/x = complete, swipe-left/# = trash).
         button(classes = "swipe-fire complete") {
             attributes["data-on:click"] = "@post('/node/${node.id}/complete')"
             attributes["aria-label"] = "Complete"
@@ -249,141 +228,131 @@ fun FlowContent.nodeRow(node: NodeView, reorderable: Boolean = false) {
             attributes["aria-label"] = "Delete"
             +"Delete"
         }
-        // Shown only during a swipe's 3s undo window (CSS: `.pending .undo`); the gesture
-        // layer cancels the pending complete/delete when tapped.
+        // Shown only during a swipe's 3s undo window (CSS: `.pending .undo`).
         button(classes = "undo") {
             attributes["data-undo"] = ""
             +"Undo"
+        }
+    } else {
+        a(href = "/node/${node.id}") { +(node.title ?: "(untitled)") }
+        node.person?.let { span("waiting") { +" @$it" } }
+        node.size?.let { span("size-badge") { +it } }
+        node.status?.let { span("status") { +" · $it" } }
+        button(classes = "action") {
+            attributes["data-on:click"] = "@post('/node/${node.id}/complete')"
+            attributes["title"] = "Complete"
+            +"✓"
+        }
+        button(classes = "action") {
+            attributes["data-on:click"] = "@post('/node/${node.id}/trash')"
+            attributes["title"] = "Trash"
+            +"🗑"
         }
     }
 }
 
 /**
- * The inline triage panel (spec §4), rendered collapsed inside each inbox `li`. Open
- * state is the Datastar signal `$exp` (holds the expanded node id) so it survives the
- * SSE morph and only one panel is open at a time. All controls are Datastar posts to
- * inbox-scoped routes that re-render `#inbox`. CSP-safe (no inline script/style).
+ * The Expanded panel: read-only fields + subtasks + a bottom action row (File · Snooze · Edit),
+ * with a drag handle top-left for reordering. Open state is the Datastar `$exp` signal (holds the
+ * expanded node id) so it survives the SSE morph and only one is open at a time. Fields render in
+ * the agreed order and a field is OMITTED when unset. CSP-safe (no inline script/style).
  */
 private fun FlowContent.triagePanel(read: ContentReadModel, node: NodeView) {
-    div(classes = "triage") {
+    div(classes = "expanded") {
         attributes["data-show"] = "\$exp === '${node.id}'"
 
-        // Reorder (hidden until expanded, per device feedback) + open the full editor.
-        div(classes = "org-row") {
-            button(classes = "action") {
-                attributes["data-on:click"] = "@post('/node/${node.id}/rank?dir=top')"
-                attributes["title"] = "Send to top"
-                +"⤒"
+        // Head: a drag handle (reorder, top-left next to the title) + the title.
+        div(classes = "exp-head") {
+            span(classes = "drag-handle") {
+                attributes["data-drag"] = ""
+                attributes["draggable"] = "true"
+                attributes["title"] = "Drag to reorder"
+                icon("grip")
             }
-            button(classes = "action") {
-                attributes["data-on:click"] = "@post('/node/${node.id}/rank?dir=up')"
-                attributes["title"] = "Move up"
-                +"↑"
-            }
-            button(classes = "action") {
-                attributes["data-on:click"] = "@post('/node/${node.id}/rank?dir=down')"
-                attributes["title"] = "Move down"
-                +"↓"
-            }
-            a(href = "/node/${node.id}", classes = "action details") { +"Details" }
+            span(classes = "exp-title") { +(node.title ?: "(untitled)") }
         }
 
-        // Fetched preview of a shared URL: page title + first paragraph.
-        if (node.linkTitle != null || node.linkPreview != null) {
-            div(classes = "link-preview") {
-                node.linkTitle?.let { span("link-title") { +it } }
-                node.linkPreview?.let { p("muted") { +it } }
+        // Read-only fields, in order (title is the head above); omitted when unset.
+        div(classes = "fields") {
+            val ctx = read.contexts().filter { c -> node.tags.any { it.toString() == c.id.toString() } }.mapNotNull { it.name }
+            if (ctx.isNotEmpty()) div(classes = "f-row") { icon("tag"); +ctx.joinToString(" ") }
+            node.dueDate?.let { d -> div(classes = "f-row") { icon("calendar"); +DueDates.format(d) } }
+            node.size?.let { s -> div(classes = "f-row") { icon("gauge"); +s } }
+            node.linkUrl?.let { url -> div(classes = "f-row") { icon("link"); a(href = url) { +linkLabel(url) } } }
+            node.notes?.let { n -> div(classes = "f-row") { +n } }
+            val atts = read.attachments(node.id)
+            if (atts.isNotEmpty()) div(classes = "f-row") {
+                icon("paperclip")
+                +atts.joinToString(", ") { it.filename ?: it.type ?: "file" }
+                node.ocrStatus?.let { +" · ${ocrLabel(it)}" }
             }
+            node.summary?.let { s -> div(classes = "f-row muted") { +s } }
+            node.person?.let { p -> div(classes = "f-row") { icon("waiting"); +"@$p" } }
         }
 
-        // Subtasks (children) shown on expand — one per line, nested to the model's 4 levels.
-        if (read.children(node.id).isNotEmpty()) {
-            div(classes = "org-row") { span("muted") { +"Subtasks" } }
-            subtaskTree(read, node.id, levelsLeft = 3) // this item is level 1; show levels 2–4
-        }
+        // Subtasks (nested to the model's 4 levels; tap one to open it).
+        if (read.children(node.id).isNotEmpty()) subtaskTree(read, node.id, levelsLeft = 3)
 
-        // Rename.
-        div(classes = "org-row") {
-            input(type = InputType.text) {
-                attributes["data-bind:t_${node.id}"] = ""
-                attributes["placeholder"] = node.title ?: "Title"
-            }
-            button(classes = "action") {
-                attributes["data-on:click"] = "@post('/node/${node.id}/rename?title=' + encodeURIComponent(\$t_${node.id}))"
-                +"Rename"
-            }
-        }
-
-        // Size: S/M/L chips (current highlighted) + clear.
-        div(classes = "org-row size-chips") {
-            Size.ALL.forEach { s ->
-                button(classes = if (node.size == s) "action chip-on" else "action") {
-                    attributes["data-on:click"] = "@post('/node/${node.id}/size?size=$s')"
-                    +s
-                }
-            }
-            button(classes = "action") {
-                attributes["data-on:click"] = "@post('/node/${node.id}/size?size=')"
-                +"clear"
-            }
-        }
-
-        // Split: add a subtask (⇒ the item becomes a project).
-        div(classes = "org-row") {
-            input(type = InputType.text) {
-                attributes["data-bind:s_${node.id}"] = ""
-                attributes["placeholder"] = "Add subtask (splits into a project)"
-            }
-            button(classes = "action") {
-                attributes["data-on:click"] = "@post('/node/${node.id}/split?title=' + encodeURIComponent(\$s_${node.id}))"
-                +"Split"
-            }
-        }
-
-        // Link / description (folded into notes for v1).
-        div(classes = "org-row") {
-            input(type = InputType.text) {
-                attributes["data-bind:n_${node.id}"] = ""
-                attributes["placeholder"] = node.notes ?: "Link or description"
-            }
-            button(classes = "action") {
-                attributes["data-on:click"] = "@post('/node/${node.id}/notes?notes=' + encodeURIComponent(\$n_${node.id}))"
-                +"Save"
-            }
-        }
-
-        // Attachment preview (filename + type; no thumbnail — no blob route yet).
-        val atts = read.attachments(node.id)
-        if (atts.isNotEmpty()) {
-            div(classes = "org-row") {
-                span("muted") { +"Attachments: " }
-                atts.forEach { att ->
-                    a(href = "/node/${node.id}/read") { +(att.filename ?: att.type ?: "file") }
-                    +" "
+        // Operator file suggestions (if any) remain available as quick chips.
+        if (node.fileSuggestions.isNotEmpty()) div(classes = "f-row chips-row") {
+            node.fileSuggestions.forEach { sug ->
+                button(classes = "btn") {
+                    attributes["data-on:click"] = "@post('/node/${node.id}/accept-file?target=${sug.targetId}')"
+                    icon("folder"); +sug.title
                 }
             }
         }
-        node.ocrStatus?.let { div(classes = "org-row") { span("muted") { +ocrLabel(it) } } }
 
-        // Suggested file locations (spec §6): accept a chip = the human Move.
-        div(classes = "org-row chips-row") {
-            if (node.fileSuggestions.isEmpty()) {
-                span("muted") { +"No file suggestions yet" }
-            } else {
-                node.fileSuggestions.forEach { sug ->
-                    button(classes = "action suggest-chip") {
-                        attributes["data-on:click"] = "@post('/node/${node.id}/accept-file?target=${sug.targetId}')"
-                        +"→ ${sug.title}"
+        // Action row: File · Snooze · Edit.
+        div(classes = "actions") {
+            div(classes = "snooze-wrap") {
+                button(classes = "btn") {
+                    attributes["data-act"] = "file"; attributes["data-key"] = "f"
+                    attributes["data-on:click"] = "\$fo_${node.id} = !\$fo_${node.id}"
+                    icon("folder"); +"File"
+                }
+                div(classes = "file-picker") {
+                    attributes["data-show"] = "\$fo_${node.id}"
+                    (read.projects() + read.reference()).filter { it.id.toString() != node.id.toString() }.forEach { t ->
+                        button(classes = "btn") {
+                            attributes["data-on:click"] = "@post('/node/${node.id}/file-to?target=${t.id}')"
+                            +(t.title ?: "(untitled)")
+                        }
                     }
                 }
-                button(classes = "action") {
-                    attributes["data-on:click"] = "@post('/node/${node.id}/dismiss-file')"
-                    +"✕ dismiss"
+            }
+            div(classes = "snooze-wrap") {
+                button(classes = "btn") {
+                    attributes["data-act"] = "snooze"; attributes["data-key"] = "s"
+                    attributes["data-on:click"] = "\$so_${node.id} = !\$so_${node.id}"
+                    icon("clock"); +"Snooze"
                 }
+                div(classes = "snooze-menu") {
+                    attributes["data-show"] = "\$so_${node.id}"
+                    snoozeOption(node.id, "Tomorrow", 1)
+                    snoozeOption(node.id, "In 2 days", 2)
+                    snoozeOption(node.id, "Next week", 7)
+                    snoozeOption(node.id, "In 2 weeks", 14)
+                }
+            }
+            a(href = "/node/${node.id}", classes = "btn") {
+                attributes["data-act"] = "edit"; attributes["data-key"] = "e"
+                icon("pencil"); +"Edit"
             }
         }
     }
 }
+
+/** A snooze preset: defer the node by [days], computed client-side (relative to now, not render). */
+private fun FlowContent.snoozeOption(id: Ulid, label: String, days: Int) {
+    button(classes = "btn") {
+        attributes["data-on:click"] = "@post('/node/$id/defer?until=' + (Date.now() + $days*86400000))"
+        +label
+    }
+}
+
+/** The host of a URL, for the compact link label (falls back to the whole URL). */
+private fun linkLabel(url: String): String = url.substringAfter("://").substringBefore("/").ifBlank { url }
 
 /**
  * The Reference surface (GTD triage §7): a keyword search box over ALL content plus
@@ -592,7 +561,7 @@ fun FlowContent.readingView(node: NodeView) {
 }
 
 /** Human-readable OCR lifecycle label for the detail meta line. */
-private fun ocrLabel(status: String): String = when (status) {
+internal fun ocrLabel(status: String): String = when (status) {
     "PENDING", "RUNNING" -> "OCR pending…"
     "DONE" -> "OCR done"
     "FAILED" -> "OCR failed"

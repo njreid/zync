@@ -298,3 +298,174 @@ button.action.suggest-chip { border-style: dashed; }
    Nesting indent + guide line come from the shared `main ul ul` rule. */
 .subtasks-list { width: 100%; }
 .subtasks-list li { padding: .3rem .2rem; font-size: .95em; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Redesigned GTD item view (collapsed row → expanded panel → full editor).
+   Dark theme, muted hairlines, no blue accents; all colours from --pico-*.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Inline SVG icon wrapper: <span class="icn"><svg…/></span>. Inherits currentColor. */
+.icn { display: inline-flex; width: 1.1em; height: 1.1em; vertical-align: -.15em; }
+.icn svg { width: 100%; height: 100%; }
+
+/* Collapsed list row + its tappable title. */
+.item { }
+.item .row-title { flex: 1 1 auto; cursor: pointer; overflow-wrap: anywhere; }
+
+/* Expanded panel (Datastar data-show toggles display). */
+.expanded {
+  flex-basis: 100%;
+  padding: .5rem .2rem;
+  border-top: 1px solid var(--pico-muted-border-color);
+}
+/* Header: drag handle (top-left) + title. */
+.exp-head { display: flex; align-items: center; gap: .5rem; }
+.exp-head .drag-handle {
+  cursor: grab;
+  touch-action: none;
+  color: var(--pico-muted-color);
+  flex: 0 0 auto;
+}
+.exp-head .exp-title { font-weight: 700; flex: 1 1 auto; }
+
+/* Field list — each field on its own line, leading icon muted. */
+.fields { margin: .4rem 0; }
+.f-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin: .35rem 0;
+  color: var(--pico-color);
+  font-size: .95rem;
+}
+.f-row .icn { color: var(--pico-muted-color); }
+
+/* Bottom button row. */
+.actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
+
+/* Compact action button (button + link form). */
+.btn, a.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  width: auto;
+  padding: .3rem .7rem;
+  font-size: .9rem;
+  text-decoration: none;
+  background: transparent;
+  color: var(--pico-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  cursor: pointer;
+}
+.btn:hover, a.btn:hover { background: var(--pico-card-background-color); }
+
+/* Snooze popup under the Snooze button. */
+.snooze-wrap { position: relative; }
+.snooze-menu {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 9rem;
+  padding: .2rem 0;
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  box-shadow: 0 .4rem 1.2rem rgba(0, 0, 0, .35);
+}
+.snooze-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--pico-color);
+  padding: .4rem .6rem;
+}
+.snooze-menu button:hover { background: var(--pico-card-background-color); }
+
+/* Full editor container + stacked labelled fields. */
+.edit-page { }
+.edit-field { margin: .6rem 0; display: flex; flex-direction: column; gap: .25rem; }
+.edit-field input, .edit-field textarea, .edit-field select { width: 100%; margin: 0; }
+.edit-field label, .edit-field .field-label {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .85rem;
+  color: var(--pico-muted-color);
+}
+.edit-field .field-label .icn { color: var(--pico-muted-color); }
+
+/* Revealed sub-panels (Datastar data-show toggles display). */
+.waiting-picker, .file-picker {
+  margin: .4rem 0;
+  padding: .5rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-background-color);
+}
+.file-picker button {
+  display: block;
+  width: auto;
+  min-width: 100%;
+  text-align: left;
+  margin: .15rem 0;
+  padding: .35rem .6rem;
+  background: transparent;
+  color: var(--pico-color);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+}
+.file-picker button:hover { background: var(--pico-card-background-color); }
+
+/* Active chip — filled look. */
+.chip-on { background: var(--pico-color); color: var(--pico-background-color); }
+
+/* '/'-triggered list search box (hidden until revealed). */
+.list-search {
+  display: none;
+  width: 100%;
+  margin: .2rem 0 .8rem;
+  min-height: 2.6rem;
+}
+.list-search.show { display: block; }
+
+/* Drag-and-drop reorder states. */
+.item.dragging { opacity: .45; }
+.item.drag-over { box-shadow: inset 0 2px 0 var(--pico-color); }
+
+/* Desktop-only keyboard hints + cheatsheet. On touch (no hover) these stay hidden. */
+@media (hover: hover) and (pointer: fine) {
+  .btn[data-key]::after {
+    content: " [" attr(data-key) "]";
+    opacity: .45;
+    font-size: .7em;
+    margin-left: .15rem;
+  }
+  .row-title[data-key]::after {
+    content: " [" attr(data-key) "]";
+    opacity: .45;
+    font-size: .7em;
+    margin-left: .15rem;
+  }
+  .kbd-help {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 100;
+    transform: translate(-50%, -50%);
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow: auto;
+    padding: 1rem 1.2rem;
+    background: var(--pico-card-background-color);
+    color: var(--pico-color);
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--pico-border-radius);
+    box-shadow: 0 .6rem 1.8rem rgba(0, 0, 0, .5);
+  }
+  .kbd-help.show { display: block; }
+}

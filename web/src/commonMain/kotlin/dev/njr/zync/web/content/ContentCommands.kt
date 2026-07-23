@@ -59,6 +59,17 @@ class ContentCommands(private val ops: OpEmitter) {
         ops.setField(node, Fields.PERSON, name?.trim()?.takeIf { it.isNotEmpty() }?.let(::JsonPrimitive) ?: JsonNull)
     fun move(node: Ulid, newParent: Ulid) = ops.move(node, newParent)
 
+    /** The URL of a shared link; null/blank clears. */
+    fun setLink(node: Ulid, url: String?) =
+        ops.setField(node, Fields.LINK_URL, url?.trim()?.takeIf { it.isNotEmpty() }?.let(::JsonPrimitive) ?: JsonNull)
+
+    /** Mark "waiting for" a person: set the person + status WAITING; blank clears both (back to ACTIVE). */
+    fun waitingFor(node: Ulid, name: String?) {
+        val who = name?.trim()?.takeIf { it.isNotEmpty() }
+        setPerson(node, who)
+        setStatus(node, if (who == null) Status.ACTIVE else Status.WAITING)
+    }
+
     /** Set a node's sibling-order fractional index (GTD triage §3; computed by the read model). */
     fun setRank(node: Ulid, rank: String) = ops.setField(node, Fields.RANK, JsonPrimitive(rank))
 
