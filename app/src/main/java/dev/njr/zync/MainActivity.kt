@@ -590,6 +590,9 @@ class MainActivity : ComponentActivity() {
 
     /** Center bar slot: launch the active context's app, or invite configuration. */
     private fun launchContextApp(contextName: String?) {
+        // The @dev context's "app" IS our custom search drawer — a reliable way to open the
+        // app/contact/settings launcher (the swipe-up gesture is device-flaky).
+        if (contextName == "dev") { searchOpen = true; return }
         val app = ContextApps.pick(this, contextName)
         if (app == null || !dev.njr.zync.launcher.AppLaunch.launch(this, app.toEntry())) {
             settingsTab = dev.njr.zync.ui.settings.BarTab.Context

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -85,8 +86,7 @@ fun HomeScreen(
             .fillMaxSize()
             .background(C.Surface)
             // Home gestures (device-tuned): rightward drag / hard-left-edge = the swipe app (Newz);
-            // leftward drag / right edge = Google web search. (Swipe-up = our drawer, handled by the
-            // OS home gesture in MainActivity.handleHomeIntent, so no vertical detector here.)
+            // leftward drag / right edge = Google web search.
             .pointerInput(Unit) {
                 val threshold = 64.dp.toPx()
                 var total = 0f
@@ -97,6 +97,18 @@ fun HomeScreen(
                         if (total > threshold) onSwipeLaunch()
                         else if (total < -threshold) onOpenGoogleSearch()
                     },
+                )
+            }
+            // Swipe UP = our custom search drawer. This MUST be an in-app detector: the OS home
+            // gesture does NOT fire when you're already on the home app (nothing to "go home" from),
+            // so it can't open the drawer. Separate detector so vertical doesn't steal from horizontal.
+            .pointerInput(Unit) {
+                val threshold = 72.dp.toPx()
+                var total = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { total = 0f },
+                    onVerticalDrag = { _, dy -> total += dy },
+                    onDragEnd = { if (total < -threshold) onOpenSearch() },
                 )
             },
         // Swipe-up = our custom drawer, but that's the OS home gesture (handled in

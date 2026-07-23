@@ -232,6 +232,15 @@ class ZyncApp : Application() {
                     contentChanges.notifyChanged()
                     prefs.edit().putBoolean("contexts_renamed_1", true).apply()
                 }
+                // Add the @dev context: its center-slot "app" opens our custom search drawer,
+                // a reliable way to launch apps (the swipe-up gesture is device-flaky).
+                if (!prefs.getBoolean("dev_context_added", false)) {
+                    if (contentRead.contexts().none { it.name == "@dev" }) {
+                        contentCommands.createContext("@dev")
+                        contentChanges.notifyChanged()
+                    }
+                    prefs.edit().putBoolean("dev_context_added", true).apply()
+                }
             }.onFailure { Log.w(TAG, "context seeding failed", it) }
         }.apply { name = "zync-seed-contexts"; start() }
     }
