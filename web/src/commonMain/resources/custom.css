@@ -473,3 +473,12 @@ button.action.suggest-chip { border-style: dashed; }
   }
   .kbd-help.show { display: block; }
 }
+
+/* Transactional editor: a buffered field shows a green border while its value differs from
+   the saved value (data-changed toggled reactively by Datastar). Save commits, Cancel discards. */
+.edit-field input[data-changed="true"],
+.edit-field textarea[data-changed="true"],
+.edit-field select[data-changed="true"] {
+  border-color: #199E70;
+  box-shadow: 0 0 0 1px #199E70;
+}

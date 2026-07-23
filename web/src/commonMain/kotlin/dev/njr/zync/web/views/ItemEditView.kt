@@ -1,7 +1,6 @@
 package dev.njr.zync.web.views
 
 import dev.njr.zync.core.content.Size
-import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.web.content.ContentReadModel
 import dev.njr.zync.web.content.DueDates
 import dev.njr.zync.web.content.NodeView
@@ -20,34 +19,42 @@ import kotlinx.html.p
 import kotlinx.html.span
 import kotlinx.html.textArea
 import kotlinx.html.ul
+import kotlinx.serialization.json.JsonPrimitive
+
+/** JSON-encode a string for a Datastar `data-signals` object literal (proper JS escaping). */
+private fun js(s: String?): String = JsonPrimitive(s ?: "").toString()
 
 /**
- * The full-page GTD item editor (save-as-you-go). Every control @posts on change and the
- * server re-patches `#node-detail` — there is no Save/Cancel; a Close link returns to the
- * list. The caller wraps this in `div{ id="node-detail" }`, so this renders the inner
- * content only. Datastar v1 COLON syntax (`data-on:click`, `data-bind:name`), CSP-safe.
+ * The full-page GTD item editor. TEXT fields (title, due, link, description, waiting-for person)
+ * are TRANSACTIONAL: they buffer into Datastar signals, show a green border while changed, and
+ * commit together on **Save** (Cancel discards, both leave the page). Chips (context, size, free
+ * tags), subtasks, and comments are IMMEDIATE one-tap ops. Datastar v1 colon syntax; CSP-safe.
+ * The caller wraps this in `div{ id="node-detail" }`.
  */
 fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
+    val title = node.title ?: ""
+    val due = node.dueDate?.let { DueDates.format(it) } ?: ""
+    val link = node.linkUrl ?: ""
+    val notes = node.notes ?: ""
+    val person = node.person ?: ""
     div(classes = "edit-page") {
+        // Buffer the text fields + their originals so Save can commit them together.
+        attributes["data-signals"] =
+            "{title: ${js(title)}, o_title: ${js(title)}, due: ${js(due)}, o_due: ${js(due)}, " +
+                "link: ${js(link)}, o_link: ${js(link)}, notes: ${js(notes)}, o_notes: ${js(notes)}, " +
+                "person: ${js(person)}, o_person: ${js(person)}, fopen: false}"
 
-        // 1. Title — Enter or the Save button renames.
+        // 1. Title (buffered).
         div(classes = "edit-field") {
             span("edit-label") { icon("pencil"); +" Title" }
             input(type = InputType.text) {
                 attributes["data-bind:title"] = ""
-                attributes["value"] = node.title ?: ""
-                attributes["placeholder"] = node.title ?: "Title"
-                attributes["data-on:keydown"] =
-                    "if (evt.key==='Enter'){ @post('/node/${node.id}/rename?title=' + encodeURIComponent(\$title)) }"
-            }
-            button(classes = "btn") {
-                attributes["data-on:click"] =
-                    "@post('/node/${node.id}/rename?title=' + encodeURIComponent(\$title))"
-                +"Save"
+                attributes["data-attr:data-changed"] = "\$title !== \$o_title ? 'true' : 'false'"
+                attributes["value"] = title
             }
         }
 
-        // 2. Context — chips; tagged toggle off, untagged toggle on.
+        // 2. Context — chips (immediate).
         div(classes = "edit-field") {
             span("edit-label") { icon("tag"); +" Context" }
             div(classes = "chips-row") {
@@ -62,27 +69,17 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
             }
         }
 
-        // 3. Due date — native date input; Set applies, Clear removes (only when set).
+        // 3. Due date (buffered).
         div(classes = "edit-field") {
             span("edit-label") { icon("calendar"); +" Due" }
             input(type = InputType.date) {
                 attributes["data-bind:due"] = ""
-                node.dueDate?.let { attributes["value"] = DueDates.format(it) }
-            }
-            button(classes = "btn") {
-                attributes["data-on:click"] =
-                    "@post('/node/${node.id}/due?date=' + encodeURIComponent(\$due))"
-                +"Set"
-            }
-            if (node.dueDate != null) {
-                button(classes = "btn") {
-                    attributes["data-on:click"] = "@post('/node/${node.id}/due?date=')"
-                    +"Clear"
-                }
+                attributes["data-attr:data-changed"] = "\$due !== \$o_due ? 'true' : 'false'"
+                attributes["value"] = due
             }
         }
 
-        // 4. Size — S/M/L chips (current highlighted) + a clear chip.
+        // 4. Size — S/M/L chips (immediate).
         div(classes = "edit-field") {
             span("edit-label") { icon("gauge"); +" Size" }
             div(classes = "chips-row") {
@@ -99,40 +96,30 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
             }
         }
 
-        // 5. Link — URL input; when set, an anchor opens it.
+        // 5. Link (buffered) + an open-anchor when set.
         div(classes = "edit-field") {
             span("edit-label") { icon("link"); +" Link" }
             input(type = InputType.text) {
                 attributes["data-bind:link"] = ""
-                node.linkUrl?.let { attributes["value"] = it }
+                attributes["data-attr:data-changed"] = "\$link !== \$o_link ? 'true' : 'false'"
+                attributes["value"] = link
                 attributes["placeholder"] = "https://…"
             }
-            button(classes = "btn") {
-                attributes["data-on:click"] =
-                    "@post('/node/${node.id}/link?url=' + encodeURIComponent(\$link))"
-                +"Save"
-            }
-            node.linkUrl?.let { url ->
-                a(href = url) { icon("link"); +" open" }
-            }
+            node.linkUrl?.let { url -> a(href = url) { icon("link"); +" open" } }
         }
 
-        // 6. Description — freeform notes; Save posts the current value.
+        // 6. Description (buffered).
         div(classes = "edit-field") {
             span("edit-label") { icon("doc"); +" Description" }
             textArea {
                 attributes["data-bind:notes"] = ""
-                attributes["placeholder"] = node.notes ?: "Notes…"
-                +(node.notes ?: "")
-            }
-            button(classes = "btn") {
-                attributes["data-on:click"] =
-                    "@post('/node/${node.id}/notes?notes=' + encodeURIComponent(\$notes))"
-                +"Save"
+                attributes["data-attr:data-changed"] = "\$notes !== \$o_notes ? 'true' : 'false'"
+                attributes["placeholder"] = "Notes…"
+                +notes
             }
         }
 
-        // 7. Attachment / OCR / summary — read-only (each shown independently when present).
+        // 7. Attachment / OCR / summary — read-only.
         val atts = read.attachments(node.id)
         if (atts.isNotEmpty() || node.ocrStatus != null || node.summary != null) {
             div(classes = "edit-field") {
@@ -145,13 +132,12 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
             }
         }
 
-        // 8. Free-form tags (mergeable per-label): current tags as removable chips + an add box.
-        //    This is how bots + humans label items; each chip is its own op.
+        // 8. Free-form tags — removable chips + add box (immediate; each is its own op).
         div(classes = "edit-field") {
             span("edit-label") { icon("tag"); +" Tags" }
             div(classes = "chips-row") {
                 node.freeTags.forEach { t ->
-                    button(classes = "action chip-on") {
+                    button(classes = "btn chip-on") {
                         attributes["data-on:click"] = "@post('/node/${node.id}/freetag?on=false&label=' + encodeURIComponent('$t'))"
                         +"#$t ✕"
                     }
@@ -165,35 +151,24 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
             }
         }
 
-        // 9. Waiting-for — toggled picker with a person input + recent-people datalist.
+        // 9. Waiting-for person (buffered; recent-people datalist). Saved via /save → status WAITING.
         div(classes = "edit-field") {
-            button(classes = "btn") {
-                attributes["data-key"] = "w"
-                attributes["data-act"] = "waiting"
-                attributes["data-on:click"] = "\$wopen = !\$wopen"
-                icon("waiting"); +" Waiting for"
+            span("edit-label") { icon("waiting"); +" Waiting for" }
+            input(type = InputType.text) {
+                attributes["data-bind:person"] = ""
+                attributes["data-attr:data-changed"] = "\$person !== \$o_person ? 'true' : 'false'"
+                attributes["value"] = person
+                attributes["placeholder"] = "Who?"
+                attributes["list"] = "waiting-people"
             }
-            div(classes = "waiting-picker") {
-                attributes["data-show"] = "\$wopen"
-                input(type = InputType.text) {
-                    attributes["data-bind:waiting"] = ""
-                    attributes["placeholder"] = node.person ?: "Who?"
-                    attributes["list"] = "waiting-people"
-                }
-                val people = read.nodes().mapNotNull { it.person }.distinct().take(8)
-                dataList {
-                    id = "waiting-people"
-                    people.forEach { option { value = it } }
-                }
-                button(classes = "btn") {
-                    attributes["data-on:click"] =
-                        "@post('/node/${node.id}/waiting?name=' + encodeURIComponent(\$waiting))"
-                    +"Set"
-                }
+            val people = read.nodes().mapNotNull { it.person }.distinct().take(8)
+            dataList {
+                id = "waiting-people"
+                people.forEach { option { value = it } }
             }
         }
 
-        // 10. Subtasks — children as links + a quick-add (Enter or +).
+        // 10. Subtasks — children as links + a quick-add (immediate).
         h3 { +"Subtasks" }
         val subs = read.children(node.id)
         if (subs.isNotEmpty()) {
@@ -220,7 +195,7 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
             }
         }
 
-        // 11. Comments — existing comments + a quick-add (Enter or button; clears after).
+        // 11. Comments — existing + a quick-add (immediate).
         h3 { +"Comments" }
         val comments = read.comments(node.id)
         if (comments.isNotEmpty()) {
@@ -240,25 +215,21 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
             }
         }
 
-        // Bottom action row: destructive + lifecycle + Close.
+        // Bottom action row: immediate Delete/File/Done, then Cancel + Save for the buffered fields.
         div(classes = "actions") {
             button(classes = "btn") {
-                attributes["data-key"] = "#"
-                attributes["data-act"] = "delete"
-                attributes["data-on:click"] = "@post('/node/${node.id}/trash')"
+                attributes["data-key"] = "#"; attributes["data-act"] = "delete"
+                attributes["data-on:click"] = "@post('/node/${node.id}/trash').then(() => location.href = '/')"
                 icon("trash"); +" Delete"
             }
             button(classes = "btn") {
-                attributes["data-key"] = "f"
-                attributes["data-act"] = "file"
+                attributes["data-key"] = "f"; attributes["data-act"] = "file"
                 attributes["data-on:click"] = "\$fopen = !\$fopen"
                 icon("folder"); +" File"
             }
             div(classes = "file-picker") {
                 attributes["data-show"] = "\$fopen"
-                val targets = (read.projects() + read.reference())
-                    .filter { it.id.toString() != node.id.toString() }
-                targets.forEach { t ->
+                (read.projects() + read.reference()).filter { it.id.toString() != node.id.toString() }.forEach { t ->
                     button(classes = "btn") {
                         attributes["data-on:click"] = "@post('/node/${node.id}/file-to?target=${t.id}')"
                         +(t.title ?: "(untitled)")
@@ -266,8 +237,7 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
                 }
             }
             button(classes = "btn") {
-                attributes["data-key"] = "x"
-                attributes["data-act"] = "done"
+                attributes["data-key"] = "x"; attributes["data-act"] = "done"
                 if (node.status == "DONE") {
                     attributes["data-on:click"] = "@post('/node/${node.id}/reopen')"
                     icon("check"); +" Reopen"
@@ -276,7 +246,16 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
                     icon("check"); +" Done"
                 }
             }
-            a(href = "/", classes = "btn") { icon("close"); +"Close" }
+            // Cancel is a plain anchor (browser owns navigation, per the Tao); pending signal
+            // edits are simply discarded when the page unloads.
+            a(href = "/", classes = "btn") { icon("close"); +" Cancel" }
+            button(classes = "btn save-btn") {
+                attributes["data-on:click"] =
+                    "@post('/node/${node.id}/save?title=' + encodeURIComponent(\$title) + '&notes=' + encodeURIComponent(\$notes) + " +
+                        "'&due=' + encodeURIComponent(\$due) + '&link=' + encodeURIComponent(\$link) + '&person=' + encodeURIComponent(\$person))" +
+                        ".then(() => location.href = '/')"
+                icon("check"); +" Save"
+            }
         }
     }
 }

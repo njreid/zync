@@ -438,6 +438,26 @@ fun Route.webRoutes(
             if (id != null) call.appliedDetail(id) { waitingFor(id, name) }
             else call.respondText("bad request", status = HttpStatusCode.BadRequest)
         }
+        // Transactional editor Save: commit all buffered text fields at once (chips/subtasks are
+        // immediate and not included here). Person routes through waitingFor (person + WAITING).
+        post("/node/{id}/save") {
+            val id = call.nodeId()
+            val q = call.request.queryParameters
+            val dueRaw = q["due"]?.trim()
+            val due = if (dueRaw.isNullOrEmpty()) null else DueDates.parse(dueRaw)
+            when {
+                id == null -> call.respondText("bad request", status = HttpStatusCode.BadRequest)
+                !dueRaw.isNullOrEmpty() && due == null ->
+                    call.respondText("invalid date: expected YYYY-MM-DD", status = HttpStatusCode.BadRequest)
+                else -> call.appliedDetail(id) {
+                    q["title"]?.trim()?.takeIf { it.isNotEmpty() }?.let { rename(id, it) }
+                    q["notes"]?.let { setNotes(id, it) }
+                    if (dueRaw != null) setDueDate(id, due) // blank clears
+                    q["link"]?.let { setLink(id, it) }
+                    q["person"]?.let { waitingFor(id, it) }
+                }
+            }
+        }
         post("/node/{id}/freetag") {
             val label = call.request.queryParameters["label"].orEmpty().trim()
             val on = call.request.queryParameters["on"] != "false"
