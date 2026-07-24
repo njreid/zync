@@ -1,8 +1,12 @@
 package dev.njr.zync.ui.home
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
+import dev.njr.zync.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -369,14 +373,15 @@ private fun Agenda(
 
 @Composable
 private fun ProfileBar(event: dev.njr.zync.home.CalEvent, alpha: Float) {
-    Box(
-        Modifier
-            .width(7.dp)
-            .height(20.dp)
-            .background(
-                (if (event.profile == dev.njr.zync.home.CalEvent.Profile.WORK) C.Work else C.Home).copy(alpha = alpha),
-                RoundedCornerShape(2.dp),
-            ),
+    // Identity as a tinted icon (replaces the old color bar + Work/Home label):
+    // a red briefcase for Work, a blue house for Home.
+    val work = event.profile == dev.njr.zync.home.CalEvent.Profile.WORK
+    val tint = (if (work) androidx.compose.ui.graphics.Color(0xFFE5484D) else androidx.compose.ui.graphics.Color(0xFF3987E5)).copy(alpha = alpha)
+    Image(
+        painter = painterResource(if (work) R.drawable.ic_profile_work else R.drawable.ic_profile_home),
+        contentDescription = if (work) "Work" else "Home",
+        colorFilter = ColorFilter.tint(tint),
+        modifier = Modifier.size(18.dp),
     )
 }
 
@@ -432,14 +437,6 @@ private fun EventRow(row: AgendaRow.Event, onOpenEvent: (dev.njr.zync.home.CalEv
                 )
             }
         }
-        BasicText(
-            when {
-                row.event.fromNotification -> "Notif"
-                row.event.profile == dev.njr.zync.home.CalEvent.Profile.WORK -> "Work"
-                else -> "Home"
-            },
-            style = TextStyle(color = fg2, fontSize = 11.sp, fontFamily = CharonMono, fontWeight = FontWeight.Bold),
-        )
     }
 }
 
