@@ -73,7 +73,10 @@ window.addEventListener('pagehide', flushPending);
 // --- Pointer / swipe ---
 
 document.addEventListener('pointerdown', (e) => {
-  if (e.target.closest && e.target.closest('[data-drag]')) return; // the drag handle owns this
+  // The drag handle owns its own pointer stream; and taps inside the expanded panel or on any
+  // interactive control are taps, never swipes — tracking them lets a few px of touch drift arm
+  // the trailing-click swallow and eat the tap (e.g. the File toggle would stick open).
+  if (e.target.closest && e.target.closest('[data-drag], .expanded, button, a, input, textarea, select, label')) return;
   const row = e.target.closest && e.target.closest('.swipe-row');
   if (!row) return;
   // No setPointerCapture: we delegate on `document`, so moves arrive anyway, and

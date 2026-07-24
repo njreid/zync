@@ -32,8 +32,14 @@ function pushAgenda() {
   var MAX_TITLE = 300;
   // The htmlLink is account-agnostic, so the phone's Calendar app would open it under
   // the DEFAULT (personal) profile. Pin it to THIS (work) account with authuser so it
-  // opens in the right profile. getEmail() may be '' on some domains → then we skip it.
-  var account = Session.getActiveUser().getEmail() || '';
+  // opens in the right profile. The primary calendar's id IS the account email — far more
+  // reliable than Session.getActiveUser().getEmail(), which is '' for many account types.
+  var account = '';
+  try {
+    account = Calendar.CalendarList.get('primary').id || '';
+  } catch (e) {
+    account = Session.getActiveUser().getEmail() || '';
+  }
   // Advanced Calendar service: singleEvents expands recurrences; each item carries
   // htmlLink (the deep link) that CalendarApp can't give us.
   var resp = Calendar.Events.list('primary', {
