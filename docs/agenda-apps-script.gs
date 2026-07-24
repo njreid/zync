@@ -88,3 +88,24 @@ function pushAgenda() {
     throw new Error('push failed: HTTP ' + response.getResponseCode() + ' ' + response.getContentText());
   }
 }
+
+/**
+ * Diagnostic — run this and read Executions/Logs to see what the deep-link pinning resolves to.
+ * If `account` is empty, that's why events open in the personal profile; if it's your work
+ * email but the phone still opens the personal profile, the Calendar app isn't honoring authuser.
+ */
+function whoAmI() {
+  var account = '';
+  try { account = Calendar.CalendarList.get('primary').id || '(empty)'; } catch (e) { account = 'CalendarList error: ' + e; }
+  var session = '';
+  try { session = Session.getActiveUser().getEmail() || '(empty)'; } catch (e) { session = 'error: ' + e; }
+  var sample = Calendar.Events.list('primary', { timeMin: new Date().toISOString(), maxResults: 1, singleEvents: true, orderBy: 'startTime' });
+  var htmlLink = (sample.items && sample.items[0] && sample.items[0].htmlLink) || '(no upcoming event)';
+  var pinned = htmlLink.indexOf('http') === 0 && account.indexOf('@') >= 0
+    ? htmlLink + (htmlLink.indexOf('?') >= 0 ? '&' : '?') + 'authuser=' + encodeURIComponent(account)
+    : htmlLink;
+  Logger.log('CalendarList primary id : ' + account);
+  Logger.log('Session active email    : ' + session);
+  Logger.log('sample htmlLink         : ' + htmlLink);
+  Logger.log('pinned link we push     : ' + pinned);
+}

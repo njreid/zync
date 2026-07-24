@@ -339,12 +339,26 @@ private fun Agenda(
 
         // 4. the look-ahead: subsequent days (label + their events, dimmed)
         agenda.upcoming.forEach { day ->
+            item(key = "day-div-" + day.label) {
+                // Subtle rule between days.
+                Box(Modifier.fillMaxWidth().padding(top = 8.dp).height(1.dp).background(C.Border))
+            }
             item(key = "day-" + day.label) {
-                BasicText(
-                    day.label,
-                    style = TextStyle(color = C.Ink3, fontSize = 13.sp, fontFamily = CharonMono, fontWeight = FontWeight.Bold),
-                    modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
-                )
+                // Split "Sat 25  🌧 18°" → date + forecast, so the weather glyph lands in the SAME
+                // 18dp icon column as the home/work event icons (date fills the 58dp time column).
+                val parts = day.label.split("  ", limit = 2)
+                val cast = parts.getOrNull(1)
+                val headStyle = TextStyle(color = C.Ink3, fontSize = 13.sp, fontFamily = CharonMono, fontWeight = FontWeight.Bold)
+                Row(Modifier.padding(top = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    BasicText(parts[0], style = headStyle, modifier = Modifier.width(58.dp))
+                    if (cast != null) {
+                        Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+                            BasicText(cast.substringBefore(' '), style = TextStyle(fontSize = 15.sp))
+                        }
+                        val temp = cast.substringAfter(' ', "")
+                        if (temp.isNotEmpty()) BasicText(temp, style = headStyle, modifier = Modifier.padding(start = 12.dp))
+                    }
+                }
             }
             items(day.allDay.size) { i ->
                 val e = day.allDay[i]
