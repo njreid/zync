@@ -126,6 +126,13 @@ object WellKnownNodes {
     val REFERENCE_ROOT: Ulid = Ulid.parse("000000000000000000000RFRNC")
 
     /**
+     * Parent of the Projects tree (items→tasks/folders model): a content node's TYPE is derived
+     * from its location — a leaf under here is a Task, a leaf with children is a Project (folder),
+     * a top-level leaf is an Inbox Item, and anything under [REFERENCE_ROOT] is Reference.
+     */
+    val PROJECTS_ROOT: Ulid = Ulid.parse("00000000000000000000PRJCTS")
+
+    /**
      * Sentinel "move to the top level" target: a Move whose `newParentId` is [ROOT] un-parents
      * the node (back to the Projects root / actionable top level). It is never a real node —
      * [reintegrateMoves] translates it to "no parent" rather than a child link.

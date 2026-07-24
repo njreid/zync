@@ -67,6 +67,12 @@ data class AttachmentView(val id: Ulid, val type: String?, val filename: String?
 /** A filing area (the two roots that are themselves valid destinations). */
 enum class FileArea { PROJECTS, REFERENCE }
 
+/** Derived content type (from tree location + children) — never stored on the node. */
+enum class NodeType { INBOX_ITEM, TASK, PROJECT, REFERENCE_ITEM, REFERENCE_FOLDER }
+
+/** A Project folder's derived lifecycle: ACTIVE (has an open task), DONE (all closed), STALLED (no tasks). */
+enum class ProjectState { ACTIVE, DONE, STALLED }
+
 /** A file-destination candidate: the target node, its path label, and a keyword-match score. */
 data class FileCandidate(val id: Ulid, val path: String, val score: Int)
 
@@ -225,6 +231,57 @@ class ContentReadModel(private val store: StateStore) {
 
     /** The Reference tree (GTD triage §7): live children of the well-known reference root. */
     fun reference(root: Ulid = WellKnownNodes.REFERENCE_ROOT): List<NodeView> = children(root)
+
+    // ---- Items / Tasks / Folders: type is DERIVED from location + children, never stored ----
+    // (spec 2026-07-24-items-tasks-folders): a content node is an Inbox Item (top-level leaf),
+    // a Task (leaf in the Projects tree), a Project (folder in the Projects tree), or a Reference
+    // item/folder. `kind` still tags the orthogonal entity types (context/comment/agent).
+
+    /** Is [s] a user content node (Item/Task/Project/Reference) rather than a context/comment/agent node? */
+    private fun isContent(s: EntitySnapshot): Boolean =
+        s.kind() != "context" && s.kind() != "comment" && s.kind() !in AgentFlow.INTERNAL_KINDS && !s.proposed()
+
+    /** True iff [id] has at least one live content child (→ it is a Folder, not a leaf). */
+    fun hasLiveChildren(id: Ulid): Boolean =
+        snapshots().any { isContent(it) && it.parent?.toString() == id.toString() }
+
+    /** Derived type of a content node from its tree location + whether it holds children. */
+    fun typeOf(id: Ulid): NodeType {
+        val folder = hasLiveChildren(id)
+        return when {
+            isUnder(id, WellKnownNodes.REFERENCE_ROOT) -> if (folder) NodeType.REFERENCE_FOLDER else NodeType.REFERENCE_ITEM
+            isUnder(id, WellKnownNodes.PROJECTS_ROOT) -> if (folder) NodeType.PROJECT else NodeType.TASK
+            else -> if (folder) NodeType.PROJECT else NodeType.INBOX_ITEM
+        }
+    }
+
+    /** Live content descendants of [id] (excludes [id] itself), cycle-safe. */
+    private fun contentDescendants(id: Ulid): List<EntitySnapshot> {
+        val byParent = snapshots().filter { isContent(it) }.groupBy { it.parent?.toString() }
+        val out = ArrayList<EntitySnapshot>()
+        val stack = ArrayDeque<String>().apply { add(id.toString()) }
+        val seen = HashSet<String>()
+        while (stack.isNotEmpty()) {
+            val p = stack.removeLast()
+            if (!seen.add(p)) continue
+            for (child in byParent[p].orEmpty()) { out += child; stack.addLast(child.entityId.toString()) }
+        }
+        return out
+    }
+
+    /**
+     * A Project is DONE when every leaf Task below it is closed (DONE/DROPPED); STALLED when it
+     * has no leaf Tasks at all (GTD "project with no next action"); otherwise ACTIVE.
+     */
+    fun projectState(id: Ulid): ProjectState {
+        val leaves = contentDescendants(id).filter { !hasLiveChildren(it.entityId) }
+        if (leaves.isEmpty()) return ProjectState.STALLED
+        val anyOpen = leaves.any {
+            val st = it.fields[Fields.STATUS].asString()
+            st != Status.DONE && st != Status.DROPPED && st != Status.FILED
+        }
+        return if (anyOpen) ProjectState.ACTIVE else ProjectState.DONE
+    }
 
     /**
      * File-destination candidates in an [area] (Projects or Reference), each with its path label
