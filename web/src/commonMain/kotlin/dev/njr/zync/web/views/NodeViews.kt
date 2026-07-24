@@ -351,7 +351,7 @@ private fun FlowContent.expandedPanel(read: ContentReadModel, node: NodeView, ca
                     attributes["data-show"] = "\$fo_${node.id}"
                     // Both roots are destinations: Projects → top level (ROOT sentinel un-parents),
                     // Reference → the reference root node.
-                    fileSection(read, node, FileArea.PROJECTS, "Projects", WellKnownNodes.ROOT)
+                    fileSection(read, node, FileArea.PROJECTS, "Projects", WellKnownNodes.PROJECTS_ROOT)
                     fileSection(read, node, FileArea.REFERENCE, "Reference", WellKnownNodes.REFERENCE_ROOT)
                 }
             }

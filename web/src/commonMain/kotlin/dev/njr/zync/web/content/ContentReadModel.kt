@@ -292,33 +292,19 @@ class ContentReadModel(private val store: StateStore) {
     fun fileCandidates(area: FileArea, forNode: Ulid): List<FileCandidate> {
         val self = node(forNode)
         val q = stemTokens((self?.title ?: "") + " " + (self?.notes ?: ""))
-        val refRoot = WellKnownNodes.REFERENCE_ROOT
-        val snaps = snapshots()
-        val kindById: Map<String, String?> = snaps.associate { it.entityId.toString() to it.kind() }
-        // A node is "in the projects tree" if it is a project or descends from one — so subtasks
-        // of a project are filing targets (filing under one elevates the project to an initiative),
-        // but the inbox container and loose top-level tasks are not.
-        fun inProjectTree(id: Ulid): Boolean {
-            var cur: Ulid? = id
-            val seen = HashSet<String>()
-            while (cur != null && seen.add(cur.toString())) {
-                if (kindById[cur.toString()] == "project") return true
-                cur = store.getParent(cur)
-            }
-            return false
-        }
-        return snaps
-            .filter { it.alive && it.kind() != "context" && it.kind() != "comment" && it.entityId.toString() != forNode.toString() }
-            .filter { snap ->
-                val underRef = isUnder(snap.entityId, refRoot)
-                if (area == FileArea.REFERENCE) underRef else (!underRef && inProjectTree(snap.entityId))
-            }
+        val root = if (area == FileArea.REFERENCE) WellKnownNodes.REFERENCE_ROOT else WellKnownNodes.PROJECTS_ROOT
+        // Candidates are the content nodes inside the chosen tree (folders and tasks alike — filing
+        // under a task promotes it to a project), path-labeled relative to that tree's root; the
+        // root itself is offered separately by the caller.
+        return snapshots()
+            .filter { isContent(it) && it.entityId.toString() != forNode.toString() }
+            .filter { isUnder(it.entityId, root) && it.entityId.toString() != root.toString() }
             .filter { !isUnder(it.entityId, forNode) }  // never offer the item's own descendants
             .map { snap ->
                 val titleToks = stemTokens(snap.fields[Fields.TITLE].asString() ?: "")
                 FileCandidate(
                     id = snap.entityId,
-                    path = pathLabel(snap.entityId, if (area == FileArea.REFERENCE) refRoot else null),
+                    path = pathLabel(snap.entityId, root),
                     score = titleToks.count { it in q },
                 )
             }

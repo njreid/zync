@@ -248,7 +248,7 @@ fun FlowContent.nodeEditView(read: ContentReadModel, node: NodeView) {
             }
             div(classes = "file-picker") {
                 attributes["data-show"] = "\$fopen"
-                fileSection(read, node, FileArea.PROJECTS, "Projects", WellKnownNodes.ROOT)
+                fileSection(read, node, FileArea.PROJECTS, "Projects", WellKnownNodes.PROJECTS_ROOT)
                 fileSection(read, node, FileArea.REFERENCE, "Reference", WellKnownNodes.REFERENCE_ROOT)
             }
             button(classes = "btn icon-btn") {
