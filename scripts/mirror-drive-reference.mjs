@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 // Mirror the top two levels of the Google Drive folder structure into the zync Reference tree.
-// One-time seed (NOT idempotent — running twice makes duplicates). Node 18+ (global fetch).
+// IDEMPOTENT: each folder gets a deterministic node id (hash of its path), and we set title +
+// parent via setField/move (last-write-wins). Re-running converges to the same tree — no dupes —
+// and a human rename later wins over this bot (human-beats-bot merge), so re-runs won't clobber it.
+// Node 18+ (global fetch).
 //
-//   ZYNC_URL=https://dev.choosh.ai ZYNC_BOT_TOKEN=<bot token with create capability> \
+//   ZYNC_URL=https://dev.choosh.ai ZYNC_BOT_TOKEN=<bot token with setField+move> \
 //     node scripts/mirror-drive-reference.mjs
 //
 // Captured from Drive on 2026-07-25 (the numbered 01–10 PARA scheme; legacy top-level folders
-// — Personal, Family Docs, Reading, Projects, Unsorted Files, Colab Notebooks, Archive — omitted).
+// omitted). Add legacy areas to TREE and re-run to extend.
+
+import { createHash } from 'node:crypto';
 
 const ZYNC_URL = process.env.ZYNC_URL;
 const TOKEN = process.env.ZYNC_BOT_TOKEN;
@@ -29,6 +34,24 @@ const TREE = {
   '10 Friends & Correspondence': ['Amfo - Science Book', 'Damian & Nicole'],
 };
 
+// Deterministic ULID from a stable path — mirrors core Ulid's Crockford encode (2 pad bits, so the
+// leading char is always ≤ 7 and Ulid.parse round-trips it).
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+function ulidFor(path) {
+  const h = createHash('sha256').update('zync-ref:' + path).digest();
+  let acc = 0, bits = 2, out = '';
+  for (let i = 0; i < 16; i++) {
+    acc = (acc << 8) | h[i];
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      out += CROCKFORD[(acc >>> bits) & 31];
+      acc &= (1 << bits) - 1;
+    }
+  }
+  return out;
+}
+
 async function ops(intents) {
   const r = await fetch(ZYNC_URL + '/api/ops', {
     method: 'POST',
@@ -39,17 +62,21 @@ async function ops(intents) {
   const body = await r.json();
   const bad = (body.results || []).find((x) => x.status === 'error');
   if (bad) throw new Error('intent error: ' + JSON.stringify(bad));
-  return body.results;
 }
 
-const areas = Object.keys(TREE);
-// Level 1: create the areas directly under the Reference root.
-const l1 = await ops(areas.map((title) => ({ op: 'create', title, parent: 'reference' })));
-const idOf = Object.fromEntries(areas.map((t, i) => [t, l1[i].nodeId]));
-
-// Level 2: create each area's subfolders under it.
-const subs = [];
-for (const area of areas) for (const sub of TREE[area]) subs.push({ op: 'create', title: sub, parent: idOf[area] });
-if (subs.length) await ops(subs);
-
-console.log(`Created ${areas.length} areas + ${subs.length} subfolders under Reference.`);
+const intents = [];
+let areas = 0, subs = 0;
+for (const [area, children] of Object.entries(TREE)) {
+  const aid = ulidFor(area);
+  intents.push({ op: 'setField', target: aid, field: 'title', value: area });
+  intents.push({ op: 'move', target: aid, parent: 'reference' });
+  areas++;
+  for (const sub of children) {
+    const sid = ulidFor(area + '/' + sub);
+    intents.push({ op: 'setField', target: sid, field: 'title', value: sub });
+    intents.push({ op: 'move', target: sid, parent: aid });
+    subs++;
+  }
+}
+await ops(intents);
+console.log(`Mirrored ${areas} areas + ${subs} subfolders into Reference (idempotent — safe to re-run).`);
