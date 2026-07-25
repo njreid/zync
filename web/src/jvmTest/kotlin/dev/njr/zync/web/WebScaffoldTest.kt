@@ -19,21 +19,22 @@ class WebScaffoldTest {
         val store = InMemoryStateStore()
         val commands = ContentCommands(RecordingEmitter(store))
         val inbox = commands.createProject("Inbox")
-        val task = commands.createTask("Buy milk", parent = inbox)
-        commands.createTask("Read book", parent = task) // a subtask, for the tree/detail
+        commands.createTask("Buy milk", parent = inbox) // an Inbox Item (leaf)
+        val proj = commands.createTask("Groceries", parent = inbox)
+        commands.createTask("Read book", parent = proj) // a subtask ⇒ Groceries is a Project
         val read = ContentReadModel(store)
 
         application { routing { webRoutes(read, inbox = { inbox }) } }
 
         val home = client.get("/").bodyAsText()
-        assertTrue(home.contains("Buy milk"), "inbox should list the task: $home")
+        assertTrue(home.contains("Buy milk"), "inbox should list the item: $home")
         assertTrue(home.contains("<h2>Inbox</h2>"))
 
         val tree = client.get("/tree").bodyAsText()
-        assertTrue(tree.contains("Buy milk") && tree.contains("Read book"))
+        assertTrue(tree.contains("Groceries") && tree.contains("Read book"))
 
-        val detail = client.get("/node/$task").bodyAsText()
-        assertTrue(detail.contains("Buy milk"))
+        val detail = client.get("/node/$proj").bodyAsText()
+        assertTrue(detail.contains("Groceries"))
         assertTrue(detail.contains("Subtasks") && detail.contains("Read book"))
 
         assertEquals(HttpStatusCode.NotFound, client.get("/node/not-a-ulid").status)

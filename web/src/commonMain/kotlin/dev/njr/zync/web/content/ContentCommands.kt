@@ -16,8 +16,12 @@ import kotlinx.serialization.json.JsonPrimitive
  * reopen are reversible `status` writes (not tombstones); [purge] is the hard tombstone.
  */
 class ContentCommands(private val ops: OpEmitter) {
-    fun createTask(title: String, parent: Ulid? = null): Ulid = create(title, "task", parent)
-    fun createProject(title: String, parent: Ulid? = null): Ulid = create(title, "project", parent)
+    /** Create a content node. Top-level (parent null) it reads as an Inbox Item; filed into the
+     *  Projects/Reference tree or given children it derives as a Task/Project/Reference node. */
+    fun createTask(title: String, parent: Ulid? = null): Ulid = create(title, parent)
+
+    /** Convenience alias — a "project" is just a content node that has children (type is derived). */
+    fun createProject(title: String, parent: Ulid? = null): Ulid = create(title, parent)
 
     fun createContext(name: String): Ulid {
         val id = ops.newId()
@@ -81,11 +85,7 @@ class ContentCommands(private val ops: OpEmitter) {
      * Split during triage (spec §4: "add a subtask ⇒ it becomes a project"): add the
      * child and make the parent a project. Returns the new child id.
      */
-    fun split(parent: Ulid, childTitle: String): Ulid {
-        val child = addSubtask(parent, childTitle)
-        convertToProject(parent)
-        return child
-    }
+    fun split(parent: Ulid, childTitle: String): Ulid = addSubtask(parent, childTitle)
 
     /** File a node into the Reference tree (GTD triage §7): status FILED + Move under the root. */
     fun file(node: Ulid) {
@@ -124,8 +124,6 @@ class ContentCommands(private val ops: OpEmitter) {
 
     /** Reject a suggestion: tombstone it, no change to the target. */
     fun rejectSuggestion(suggestion: Ulid) = ops.tombstone(suggestion)
-    fun convertToProject(node: Ulid) = ops.setField(node, "kind", JsonPrimitive("project"))
-    fun convertToTask(node: Ulid) = ops.setField(node, "kind", JsonPrimitive("task"))
 
     fun addTag(node: Ulid, context: Ulid) = ops.addTag(node, context)
     fun removeTag(node: Ulid, context: Ulid) = ops.removeTag(node, context)
@@ -161,9 +159,11 @@ class ContentCommands(private val ops: OpEmitter) {
 
     private fun setStatus(node: Ulid, status: String) = ops.setField(node, "status", JsonPrimitive(status))
 
-    private fun create(title: String, kind: String, parent: Ulid?): Ulid {
+    // Content nodes carry no `kind` — their type (Inbox Item / Task / Project / Reference) is
+    // DERIVED from tree location + children (see ContentReadModel.typeOf). `kind` is reserved for
+    // the orthogonal entity types (context/comment/agent).
+    private fun create(title: String, parent: Ulid?): Ulid {
         val id = ops.newId()
-        ops.setField(id, "kind", JsonPrimitive(kind))
         ops.setField(id, "title", JsonPrimitive(title))
         ops.setField(id, "status", JsonPrimitive("ACTIVE"))
         if (parent != null) ops.move(id, parent)

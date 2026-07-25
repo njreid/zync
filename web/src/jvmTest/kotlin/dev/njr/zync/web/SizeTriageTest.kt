@@ -50,7 +50,7 @@ class SizeTriageTest {
         client.post("/node/$t/rename?title=new")
         assertEquals("new", read.node(t)!!.title)
         client.post("/node/$t/split?title=child")
-        assertEquals("project", read.node(t)!!.kind)
+        assertEquals(dev.njr.zync.web.content.NodeType.PROJECT, read.typeOf(t))
         client.post("/node/$t/notes?notes=https://ex.com")
         assertEquals("https://ex.com", read.node(t)!!.notes)
     }

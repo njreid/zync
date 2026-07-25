@@ -82,8 +82,8 @@ class ExternalOpApi(
                 val badField = i.fields?.keys?.firstOrNull { allowedFields != null && it !in allowedFields }
                 if (badField != null) return err(i, "field '$badField' not permitted")
                 if (!i.tags.isNullOrEmpty() && "addTag" !in caps.verbs) return err(i, "addTag not permitted")
-                val id = if (i.kind == "project") c.createProject(i.title.orEmpty(), resolveParent(i.parent))
-                else c.createTask(i.title.orEmpty(), resolveParent(i.parent))
+                // Type is derived from location + children, so create is uniform (i.kind ignored).
+                val id = c.createTask(i.title.orEmpty(), resolveParent(i.parent))
                 i.fields?.forEach { (f, v) -> e.setField(id, f, v) }
                 i.tags?.forEach { c.addTag(id, Ulid.parse(it)) }
                 if (propose) { e.setField(id, AgentFlow.FIELD_PROPOSED, JsonPrimitive(true)); proposed(i, id) } else ok(i, id)

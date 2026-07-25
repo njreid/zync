@@ -69,8 +69,8 @@ class OperatorHarness(
         db.transportQueries.operatorRuns(operatorId, entity.toString()).executeAsList().map { it.status }
 
     /** The human ops that put a fresh task in the inbox (root, ACTIVE, kind=task). */
+    // Real capture writes kindless content (type is derived); the operator scope keys on that.
     fun captureTask(entity: Ulid, at: Long, title: String = "Buy milk"): List<Op> = listOf(
-        ops.setField(entity, "kind", str("task"), hlc(at)),
         ops.setField(entity, "title", str(title), hlc(at, 1)),
         ops.setField(entity, "status", str("ACTIVE"), hlc(at, 2)),
     )

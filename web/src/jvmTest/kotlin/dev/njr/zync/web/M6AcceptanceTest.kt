@@ -47,8 +47,9 @@ class M6AcceptanceTest {
         assertEquals(serverTree, phoneTree)   // identical tree UI on both surfaces
 
         // and the content is actually there / filtered correctly
-        assertTrue(serverInbox.contains("Buy milk") && serverInbox.contains("Launch"))
-        assertTrue(!serverInbox.contains(">old<")) // completed task hidden from inbox
-        assertTrue(serverTree.contains("Design"))  // subtask appears in the tree
+        assertTrue(serverInbox.contains("Buy milk"))          // Inbox Item shows
+        assertTrue(!serverInbox.contains("Launch"))           // a Project (has a subtask) is not in the inbox
+        assertTrue(!serverInbox.contains(">old<"))            // completed task hidden from inbox
+        assertTrue(serverTree.contains("Design"))             // subtask appears in the tree
     }
 }

@@ -51,7 +51,7 @@ class ContentTest {
         val inbox = commands.createProject("Inbox")
         val t = commands.createTask("Buy milk", parent = inbox)
         val view = read.node(t)!!
-        assertEquals("task", view.kind)
+        assertEquals(NodeType.TASK, read.typeOf(t)) // nested leaf → Task (derived, no stored kind)
         assertEquals("Buy milk", view.title)
         assertEquals("ACTIVE", view.status)
         assertEquals(inbox, view.parent)
@@ -91,8 +91,9 @@ class ContentTest {
         commands.move(t, b)
         assertEquals(b, read.node(t)!!.parent)
 
-        commands.convertToProject(t)
-        assertEquals("project", read.node(t)!!.kind)
+        // Type is derived: giving a node a child makes it a Project (no stored kind).
+        commands.addSubtask(t, "sub")
+        assertEquals(NodeType.PROJECT, read.typeOf(t))
 
         val ctx = commands.createContext("errands")
         commands.addTag(t, ctx)

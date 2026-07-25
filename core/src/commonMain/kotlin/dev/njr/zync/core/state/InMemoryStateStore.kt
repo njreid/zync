@@ -48,7 +48,7 @@ class InMemoryStateStore : StateStore {
         val tokens = FtsQuery.tokens(query)
         if (tokens.isEmpty()) return emptyList()
         return project().values.asSequence()
-            .filter { it.alive && it.fields["kind"].stringContent() in SEARCHABLE_KINDS && it.fields["status"].stringContent() != "DROPPED" }
+            .filter { it.alive && it.fields["kind"].stringContent().let { k -> k == null || k in SEARCHABLE_KINDS } && it.fields["status"].stringContent() != "DROPPED" }
             .filter { snap ->
                 // Substring AND-match over the joined body — mirrors the durable store's LIKE.
                 val body = listOf("title", "notes", "summary")

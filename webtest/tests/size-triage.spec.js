@@ -20,9 +20,10 @@ test('tapping the title expands the read-only panel with its actions', async ({ 
 });
 
 test('expanding a parent shows its subtasks', async ({ page }) => {
-  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
-  // "Launch website" is a seeded inbox item with a subtask "Draft the launch copy".
-  const row = page.locator('#inbox li.swipe-row').filter({ has: page.locator('.row-title', { hasText: 'Launch website' }) });
+  await page.goto(BASE + '/projects', { waitUntil: 'domcontentloaded' });
+  // "Launch website" is a seeded Project (has the subtask "Draft the launch copy"), so it
+  // lives in the Projects view now, not the inbox.
+  const row = page.locator('#projects li.swipe-row').filter({ has: page.locator('.row-title', { hasText: 'Launch website' }) });
   await expect(row).toBeVisible();
   await row.locator('.row-title').click(); // expand
   const subs = row.locator('.subtasks-list');

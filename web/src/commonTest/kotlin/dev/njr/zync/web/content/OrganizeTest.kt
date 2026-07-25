@@ -56,8 +56,9 @@ class OrganizeTest {
 
     @Test
     fun projectsAreTheMoveTargetsAndMoveFilesIntoTheTree() {
-        val house = commands.createProject("House")
-        val work = commands.createProject("Work")
+        // A Project is a folder — a node with children. Trashed projects aren't move targets.
+        val house = commands.createProject("House"); commands.createTask("frame", house)
+        val work = commands.createProject("Work"); commands.createTask("email", work)
         commands.trash(work)
         val task = commands.createTask("Buy paint")
 

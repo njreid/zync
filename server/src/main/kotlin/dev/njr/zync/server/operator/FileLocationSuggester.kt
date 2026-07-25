@@ -27,6 +27,7 @@ data class Candidate(val nodeId: Ulid, val title: String, val tree: String) // "
 class ReferenceIndex(
     private val store: StateStore,
     private val referenceRoot: Ulid = WellKnownNodes.REFERENCE_ROOT,
+    private val projectsRoot: Ulid = WellKnownNodes.PROJECTS_ROOT,
     private val floor: Double = 0.15,
 ) {
     fun rank(query: String, exclude: Ulid, trees: Set<String>, limit: Int = 3): List<Pair<Candidate, Double>> {
@@ -50,11 +51,12 @@ class ReferenceIndex(
         if ((snap.fields[dev.njr.zync.core.agent.AgentFlow.FIELD_PROPOSED] as? JsonPrimitive)?.content == "true") return null
         val status = asString(snap.fields[Fields.STATUS])
         if (status == "DROPPED") return null
+        // Filing targets are the roots of the two trees the File picker files into.
         val underReference = snap.parent?.toString() == referenceRoot.toString()
-        val isProject = asString(snap.fields[Fields.KIND]) == "project"
-        if (!isProject && !underReference) return null
-        // An archived (FILED) project is not an active Projects-tree target.
-        if (isProject && !underReference && status == "FILED") return null
+        val underProjects = snap.parent?.toString() == projectsRoot.toString()
+        if (!underProjects && !underReference) return null
+        // An archived (FILED) node is not an active Projects-tree target.
+        if (underProjects && status == "FILED") return null
         return Candidate(
             nodeId = snap.entityId,
             title = asString(snap.fields[Fields.TITLE]) ?: "(untitled)",

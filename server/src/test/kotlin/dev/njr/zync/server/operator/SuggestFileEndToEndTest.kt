@@ -26,8 +26,8 @@ class SuggestFileEndToEndTest {
     )
 
     private fun project(id: dev.njr.zync.core.id.Ulid, title: String, h: OperatorHarness) = listOf(
-        h.ops.setField(id, Fields.KIND, str("project"), hlc(5)),
         h.ops.setField(id, Fields.TITLE, str(title), hlc(5, 1)),
+        h.ops.move(id, dev.njr.zync.core.content.WellKnownNodes.PROJECTS_ROOT, hlc(5, 2)),
     )
 
     @Test

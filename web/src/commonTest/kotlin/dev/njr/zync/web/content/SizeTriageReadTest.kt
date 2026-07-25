@@ -30,7 +30,7 @@ class SizeTriageReadTest {
     fun splitMakesParentAProject() {
         val t = commands.createTask("plan trip")
         val child = commands.split(t, "book flights")
-        assertEquals("project", read.node(t)!!.kind)
+        assertEquals(NodeType.PROJECT, read.typeOf(t)) // gaining a child makes it a Project (derived)
         assertTrue(read.children(t).any { it.id == child })
     }
 

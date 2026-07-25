@@ -54,7 +54,7 @@ object ReadScopes {
         s.alive &&
             s.parent == null &&
             s.tags.isEmpty() &&
-            s.fields["kind"].asString() == "task" &&
+            s.fields["kind"].asString() == null &&
             (s.fields["status"].asString() ?: "ACTIVE") == "ACTIVE"
     }
 
@@ -78,7 +78,7 @@ object ReadScopes {
         reads = setOf(Fields.KIND, Fields.STATUS, Fields.TITLE, Fields.NOTES, Fields.SUMMARY),
     ) { s ->
         s.alive && s.parent == null &&
-            s.fields[Fields.KIND].asString() == "task" &&
+            s.fields[Fields.KIND].asString() == null &&
             (s.fields[Fields.STATUS].asString() ?: "ACTIVE") == "ACTIVE"
     }
 
@@ -88,7 +88,7 @@ object ReadScopes {
         reads = setOf(Fields.KIND, Fields.STATUS, Fields.TITLE, Fields.NOTES, Fields.SUMMARY),
     ) { s ->
         s.alive &&
-            s.fields[Fields.KIND].asString() == "task" &&
+            s.fields[Fields.KIND].asString() == null &&
             s.fields[Fields.STATUS].asString() == "DONE"
     }
 

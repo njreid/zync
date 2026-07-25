@@ -185,7 +185,10 @@ class SqlDelightStateStore(
         if (db.tombstoneQueries.getTombstone(id).executeAsOneOrNull() != null) return
         val fields = db.searchIndexQueries.docFields(id).executeAsList()
             .associate { it.field_name to json.decodeFromString(JsonElement.serializer(), it.field_value).stringContent() }
-        if (fields["kind"] !in SEARCHABLE_KINDS) return
+        // Content nodes (Item/Task/Project) carry no `kind`; index those + attachments, but not
+        // contexts/comments/agent nodes (which all have a non-searchable kind).
+        val kind = fields["kind"]
+        if (kind != null && kind !in SEARCHABLE_KINDS) return
         if (fields["status"] == "DROPPED") return // trashed items drop out of search
         val body = listOf(fields["title"], fields["notes"], fields["summary"])
             .filter { !it.isNullOrBlank() }

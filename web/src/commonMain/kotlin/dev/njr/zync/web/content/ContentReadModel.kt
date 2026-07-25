@@ -168,6 +168,9 @@ class ContentReadModel(private val store: StateStore) {
      */
     fun inbox(inbox: Ulid?, now: Long = Long.MAX_VALUE): List<NodeView> =
         children(inbox)
+            // Inbox holds only Items — leaves (folders are Projects) — and never the tree roots.
+            .filter { it.id.toString() != WellKnownNodes.PROJECTS_ROOT.toString() && it.id.toString() != WellKnownNodes.REFERENCE_ROOT.toString() }
+            .filter { !hasLiveChildren(it.id) }
             .filter {
                 it.status != "DONE" && it.status != "DROPPED" && it.status != Status.FILED && (it.deferUntil == null || it.deferUntil <= now)
             }
@@ -245,13 +248,24 @@ class ContentReadModel(private val store: StateStore) {
     fun hasLiveChildren(id: Ulid): Boolean =
         snapshots().any { isContent(it) && it.parent?.toString() == id.toString() }
 
-    /** Derived type of a content node from its tree location + whether it holds children. */
+    /** An actionable leaf (Inbox Item or Task) — a content leaf outside the Reference tree. */
+    private fun isActionableLeaf(s: EntitySnapshot): Boolean =
+        isContent(s) && !hasLiveChildren(s.entityId) && !isUnder(s.entityId, WellKnownNodes.REFERENCE_ROOT)
+
+    /**
+     * Derived type of a content node from its tree location + whether it holds children:
+     * anything under Reference is Reference; any folder (has children) elsewhere is a Project;
+     * any nested leaf is a Task (incl. a single-action leaf under PROJECTS_ROOT); a top-level
+     * leaf is an Inbox Item. Location-agnostic beyond Reference so legacy top-level projects and
+     * their tasks derive correctly before the PROJECTS_ROOT migration lands.
+     */
     fun typeOf(id: Ulid): NodeType {
         val folder = hasLiveChildren(id)
         return when {
             isUnder(id, WellKnownNodes.REFERENCE_ROOT) -> if (folder) NodeType.REFERENCE_FOLDER else NodeType.REFERENCE_ITEM
-            isUnder(id, WellKnownNodes.PROJECTS_ROOT) -> if (folder) NodeType.PROJECT else NodeType.TASK
-            else -> if (folder) NodeType.PROJECT else NodeType.INBOX_ITEM
+            folder -> NodeType.PROJECT
+            store.getParent(id) != null -> NodeType.TASK
+            else -> NodeType.INBOX_ITEM
         }
     }
 
@@ -361,19 +375,22 @@ class ContentReadModel(private val store: StateStore) {
         val order = nextOrder()
         val byId = snapshots().associate { it.entityId.toString() to it.toView() }
 
-        val candidates = snapshots()
-            .filter { it.kind() == "task" && !it.proposed() }
+        val projRoot = WellKnownNodes.PROJECTS_ROOT.toString()
+        // Next = Tasks only (Inbox Items have no parent and are excluded). A synthetic inbox
+        // container passed as [inbox] is likewise excluded so untriaged items don't leak in.
+        val tasks = snapshots()
+            .filter { isActionableLeaf(it) }
             .map { it.toView() }
+            .filter { it.parent != null && it.parent.toString() != inbox?.toString() }
             .filter { completableNow(it, context, now) }
-            .filter { inbox == null || it.parent?.toString() != inbox.toString() }
 
-        val loose = candidates
-            .filter { it.parent == null }
-            .minWithOrNull(order)
-            ?.let { NextRow(it, null) }
+        // Single actions (leaves directly under the Projects root) each stand alone.
+        val singles = tasks.filter { it.parent!!.toString() == projRoot }
+            .sortedWith(order)
+            .map { NextRow(it, null) }
 
-        val perProject = candidates
-            .filter { it.parent != null }
+        // Project actions: the first completable Task of each project folder.
+        val perProject = tasks.filter { it.parent!!.toString() != projRoot }
             .groupBy { it.parent!!.toString() }
             .mapNotNull { (pid, actions) ->
                 val first = actions.minWithOrNull(order) ?: return@mapNotNull null
@@ -381,7 +398,7 @@ class ContentReadModel(private val store: StateStore) {
             }
             .sortedWith(compareBy({ it.project?.effectiveRank() ?: "" }, { it.project?.id?.toString() ?: "" }))
 
-        return listOfNotNull(loose) + perProject
+        return singles + perProject
     }
 
     /** Completable in [context] now: ACTIVE, not deferred, not delegated, tag-matched. */
@@ -424,7 +441,7 @@ class ContentReadModel(private val store: StateStore) {
     /** All live, active, non-deferred tasks (any context) — the Next pool. */
     fun activeTasks(now: Long = Long.MAX_VALUE): List<NodeView> =
         snapshots()
-            .filter { it.kind() == "task" && !it.proposed() }
+            .filter { isActionableLeaf(it) }
             .map { it.toView() }
             .filter { it.status != "DONE" && it.status != "DROPPED" && it.status != Status.FILED && (it.deferUntil == null || it.deferUntil <= now) }
             .sortedBy { it.title ?: "" }
@@ -436,14 +453,17 @@ class ContentReadModel(private val store: StateStore) {
     /** Live tasks due at/before [byMillis] (incl. overdue), soonest first — the Today view. */
     fun dueTasks(byMillis: Long): List<NodeView> =
         snapshots()
-            .filter { it.kind() == "task" && !it.proposed() }
+            .filter { isActionableLeaf(it) }
             .map { it.toView() }
             .filter { it.status != "DONE" && it.status != "DROPPED" && it.status != Status.FILED && it.dueDate != null && it.dueDate <= byMillis }
             .sortedBy { it.dueDate }
 
-    /** Live projects — the move targets for organizing tasks into the tree. */
+    /** Live Projects — folders outside Reference (derived), the move targets for organizing tasks. */
     fun projects(): List<NodeView> =
-        snapshots().filter { it.kind() == "project" && !it.proposed() }
+        snapshots()
+            .filter { isContent(it) }
+            .filter { it.entityId.toString() != WellKnownNodes.PROJECTS_ROOT.toString() && it.entityId.toString() != WellKnownNodes.REFERENCE_ROOT.toString() }
+            .filter { !isUnder(it.entityId, WellKnownNodes.REFERENCE_ROOT) && hasLiveChildren(it.entityId) }
             .map { it.toView() }
             .filter { it.status != "DROPPED" && it.status != Status.FILED }
             .sortedBy { it.title ?: "" }
@@ -454,7 +474,7 @@ class ContentReadModel(private val store: StateStore) {
      */
     fun contextTasks(context: Ulid, now: Long = Long.MAX_VALUE): List<NodeView> =
         snapshots()
-            .filter { it.kind() == "task" && !it.proposed() && it.tags.any { t -> t.toString() == context.toString() } }
+            .filter { isActionableLeaf(it) && it.tags.any { t -> t.toString() == context.toString() } }
             .map { it.toView() }
             .filter { it.status != "DONE" && it.status != "DROPPED" && it.status != Status.FILED && (it.deferUntil == null || it.deferUntil <= now) }
             .sortedBy { it.title ?: "" }
