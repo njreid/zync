@@ -70,4 +70,28 @@ class ReferenceTest {
         assertTrue(read.reference().any { it.id == t })
         assertTrue(read.search("taxes").any { it.id == t })
     }
+
+    @Test
+    fun readingViewRendersNewzMarkdownAndKeepsRawHtmlInert() = app { client ->
+        val article = commands.createTask("A saved article")
+        commands.setNotes(article, """Source: Example News
+Original: https://example.com/story
+
+## Heading
+
+Useful [reading](https://example.com/more).
+
+- One
+- Two
+
+<script>alert('no')</script>""")
+
+        val page = client.get("/node/$article/read").bodyAsText()
+        assertTrue(page.contains("Open original"))
+        assertTrue(page.contains("<h3>Heading</h3>"))
+        assertTrue(page.contains("<li>One</li>"))
+        assertTrue(page.contains("href=\"https://example.com/more\""))
+        assertTrue(page.contains("&lt;script&gt;alert('no')&lt;/script&gt;"))
+        assertFalse(page.contains("<script>alert('no')</script>"))
+    }
 }

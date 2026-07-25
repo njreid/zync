@@ -12,15 +12,19 @@ import dev.njr.zync.web.content.ProjectState
 import kotlinx.html.FlowContent
 import kotlinx.html.InputType
 import kotlinx.html.a
+import kotlinx.html.article
 import kotlinx.html.button
+import kotlinx.html.code
 import kotlinx.html.details
 import kotlinx.html.div
+import kotlinx.html.h4
 import kotlinx.html.summary
 import kotlinx.html.h2
 import kotlinx.html.h3
 import kotlinx.html.id
 import kotlinx.html.input
 import kotlinx.html.li
+import kotlinx.html.pre
 import kotlinx.html.option
 import kotlinx.html.p
 import kotlinx.html.select
@@ -666,17 +670,89 @@ private fun FlowContent.organizeSection(read: ContentReadModel, node: NodeView) 
     }
 }
 
-/** A long-form reading view: title + summary + notes as prose. */
+/** A long-form reading view for saved articles as well as ordinary Reference notes. */
 fun FlowContent.readingView(node: NodeView) {
-    h2 { +(node.title ?: "(untitled)") }
-    node.summary?.let { s ->
-        div(classes = "summary") {
-            span("summary-label") { +"Summary" }
-            p { +s }
+    val document = readingDocument(node.notes.orEmpty())
+    article(classes = "reading-view") {
+        h2 { +(node.title ?: "(untitled)") }
+        document.source?.let { source -> p("muted") { +source } }
+        document.originalUrl?.let { url ->
+            p("reader-source") { a(href = url) { +"Open original" } }
+        }
+        node.summary?.let { s ->
+            div(classes = "summary") {
+                span("summary-label") { +"Summary" }
+                p { +s }
+            }
+        }
+        renderReaderMarkdown(document.markdown)
+    }
+    a(href = "/node/${node.id}") { +"Back" }
+}
+
+private data class ReadingDocument(val source: String?, val originalUrl: String?, val markdown: String)
+
+/** Newz exports two small metadata lines before its Markdown. Keep ordinary notes untouched. */
+private fun readingDocument(notes: String): ReadingDocument {
+    val lines = notes.lines()
+    var index = 0
+    val source = lines.getOrNull(index)?.removePrefix("Source: ")?.takeIf { lines.getOrNull(index)?.startsWith("Source: ") == true }
+    if (source != null) index++
+    val original = lines.getOrNull(index)?.removePrefix("Original: ")?.takeIf { lines.getOrNull(index)?.startsWith("Original: ") == true }
+    if (original != null) index++
+    while (lines.getOrNull(index).isNullOrBlank()) index++
+    return ReadingDocument(source, original?.takeIf(::safeExternalUrl), lines.drop(index).joinToString("\n"))
+}
+
+private fun safeExternalUrl(value: String): Boolean = value.startsWith("https://")
+
+/** Conservative Markdown renderer: all text is emitted through kotlinx.html and raw HTML stays text. */
+private fun FlowContent.renderReaderMarkdown(markdown: String) {
+    val lines = markdown.lines()
+    var index = 0
+    while (index < lines.size) {
+        val line = lines[index]
+        when {
+            line.isBlank() -> index++
+            line.startsWith("```") -> {
+                index++
+                val codeLines = mutableListOf<String>()
+                while (index < lines.size && !lines[index].startsWith("```")) codeLines += lines[index++]
+                if (index < lines.size) index++
+                pre { code { +codeLines.joinToString("\n") } }
+            }
+            line.startsWith("### ") -> { h4 { renderInlineMarkdown(line.removePrefix("### ")) }; index++ }
+            line.startsWith("## ") -> { h3 { renderInlineMarkdown(line.removePrefix("## ")) }; index++ }
+            line.startsWith("# ") -> { h3 { renderInlineMarkdown(line.removePrefix("# ")) }; index++ }
+            line.startsWith("- ") || line.startsWith("* ") -> {
+                ul {
+                    while (index < lines.size && (lines[index].startsWith("- ") || lines[index].startsWith("* "))) {
+                        li { renderInlineMarkdown(lines[index].drop(2)) }
+                        index++
+                    }
+                }
+            }
+            else -> {
+                val paragraph = mutableListOf<String>()
+                while (index < lines.size && lines[index].isNotBlank() && !lines[index].startsWith("#") && !lines[index].startsWith("- ") && !lines[index].startsWith("* ") && !lines[index].startsWith("```")) paragraph += lines[index++]
+                p { renderInlineMarkdown(paragraph.joinToString(" ")) }
+            }
         }
     }
-    node.notes?.split("\n\n")?.forEach { para -> p { +para } }
-    a(href = "/node/${node.id}") { +"Back" }
+}
+
+private val markdownLink = Regex("\\[([^]]+)]\\(([^)]+)\\)")
+
+private fun FlowContent.renderInlineMarkdown(text: String) {
+    var position = 0
+    markdownLink.findAll(text).forEach { match ->
+        +text.substring(position, match.range.first)
+        val label = match.groupValues[1]
+        val url = match.groupValues[2]
+        if (safeExternalUrl(url)) a(href = url) { +label } else +match.value
+        position = match.range.last + 1
+    }
+    +text.substring(position)
 }
 
 /** Human-readable OCR lifecycle label for the detail meta line. */

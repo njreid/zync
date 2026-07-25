@@ -262,6 +262,13 @@ button.action.expand { border: none; }
 /* Reference search box (GTD triage §7). */
 #reference input[type=search] { width: 100%; margin: .2rem 0 .8rem; min-height: 2.6rem; }
 
+/* Long-form saved reading: a narrow, calm measure that also works in the phone WebView. */
+.reading-view { max-width: 44rem; margin: 0 auto; }
+.reading-view h2 { line-height: 1.15; margin-bottom: .4rem; }
+.reading-view p, .reading-view li { line-height: 1.72; }
+.reading-view pre { overflow-x: auto; padding: 1rem; border-radius: .4rem; }
+.reader-source { margin-bottom: 1.25rem; }
+
 /* File-location suggestions + DONE→Reference banner (GTD triage §6/§7). */
 button.action.suggest-chip { border-style: dashed; }
 .file-banner {
