@@ -99,7 +99,7 @@ jobs:
         run: |
           haloy validate-config
           # Free disk on the target before pushing the new image (old rollbacks pile up).
-          haloy prune-images --keep 3 --yes || true
+          haloy prune-images --keep 1 --yes || true
           haloy deploy
 
       - name: Health check

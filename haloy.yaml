@@ -26,9 +26,9 @@ volumes:
   - "/opt/zync/data:/data"
 
 image:
-  # Keep fewer rollback images on the small EC2 volume (was defaulting to 6 → disk pressure).
+  # Keep only one rollback image on the small EC2 volume (was defaulting to 6 → disk pressure).
   history:
-    count: 3
+    count: 2
   build_config:
     dockerfile: "server/Dockerfile"
     context: "."
