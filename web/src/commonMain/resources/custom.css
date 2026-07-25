@@ -272,6 +272,10 @@ button.action.expand { border: none; }
 .reading-state { color: var(--pico-muted-color); font-size: .9rem; margin-right: .2rem; }
 .reading-queue { margin-bottom: 1.1rem; }
 .reading-meta { color: var(--pico-muted-color); display: block; font-size: .85rem; }
+.reading-progress { margin: .8rem 0 1.25rem; }
+.reading-progress progress { margin: 0 .5rem 0 0; width: min(15rem, 60%); }
+.reading-progress-control { align-items: center; display: flex; gap: .5rem; margin-top: .45rem; }
+.reading-progress-control input { margin: 0; max-width: 15rem; }
 
 /* File-location suggestions + DONE→Reference banner (GTD triage §6/§7). */
 button.action.suggest-chip { border-style: dashed; }

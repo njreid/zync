@@ -35,12 +35,15 @@ class ItemsTasksFoldersTest {
         assertEquals(NodeType.PROJECT, read.typeOf(item))
         assertEquals(NodeType.TASK, read.typeOf(child))
 
-        // Reference tree: leaf = reference item, with a child = reference folder.
+        // Reference tree: an unmarked leaf is a reference item; the folder marker (not has-children)
+        // makes a node a folder — even an empty one (reference-and-archive spec).
         val refItem = commands.createTask("a receipt")
         commands.move(refItem, WellKnownNodes.REFERENCE_ROOT)
         assertEquals(NodeType.REFERENCE_ITEM, read.typeOf(refItem))
-        commands.addSubtask(refItem, "page 2")
-        assertEquals(NodeType.REFERENCE_FOLDER, read.typeOf(refItem))
+        commands.addSubtask(refItem, "page 2") // children alone do NOT make a reference folder
+        assertEquals(NodeType.REFERENCE_ITEM, read.typeOf(refItem))
+        val refFolder = commands.createFolder("Receipts", WellKnownNodes.REFERENCE_ROOT)
+        assertEquals(NodeType.REFERENCE_FOLDER, read.typeOf(refFolder)) // empty but marked
     }
 
     @Test

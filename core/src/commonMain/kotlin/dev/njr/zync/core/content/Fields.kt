@@ -42,6 +42,9 @@ object Fields {
     /** Personal reading lifecycle for saved articles; deliberately independent of GTD status. */
     const val READING_STATE = "readingState"
 
+    /** Last explicitly saved reader position as a whole-document percentage (0..100). */
+    const val READING_PROGRESS = "readingProgress"
+
     /** The URL of a shared link (shown as an icon; the full URL is revealed in Edit). */
     const val LINK_URL = "linkUrl"
 
@@ -51,6 +54,21 @@ object Fields {
      * SetField op + the human-beats-bot rule. Bots label items here so they can find relevant work.
      */
     const val FREE_TAG_PREFIX = "tag:"
+
+    /**
+     * Explicit marker (boolean register, `true`) that a node under [WellKnownNodes.REFERENCE_ROOT] is
+     * a **folder** rather than an item — the one deliberate asymmetry with derived Projects. It lets
+     * an *empty* folder still read as a folder (so "add child" is well-defined); `typeOf` under
+     * Reference keys on this marker, not on has-children (see reference-and-archive spec).
+     */
+    const val FOLDER = "folder"
+
+    /**
+     * Prefix for a Task's Reference links (reference-and-archive spec): each linked URL is its OWN
+     * boolean register field (`ref:<url>` = true), so links merge per-URL like free tags — two
+     * devices adding different links both survive. The read model exposes the list via referenceLinks.
+     */
+    const val REF_LINK_PREFIX = "ref:"
 
     /** Fetched <title> of a shared URL (preview shown when an inbox item is expanded). */
     const val LINK_TITLE = "linkTitle"
@@ -142,6 +160,14 @@ object WellKnownNodes {
      * a top-level leaf is an Inbox Item, and anything under [REFERENCE_ROOT] is Reference.
      */
     val PROJECTS_ROOT: Ulid = Ulid.parse("00000000000000000000PRJCTS")
+
+    /**
+     * Parent of the Archive area (reference-and-archive spec), sibling to Projects/Reference: a
+     * Project is archived by Moving it (and its subtree) under here. Anything under this root is
+     * **inert** — excluded from Next/Today/context/notifications — but still searchable, and moving
+     * it back under Projects makes it live again.
+     */
+    val ARCHIVE_ROOT: Ulid = Ulid.parse("00000000000000000000ARCHVE")
 
     /**
      * Sentinel "move to the top level" target: a Move whose `newParentId` is [ROOT] un-parents

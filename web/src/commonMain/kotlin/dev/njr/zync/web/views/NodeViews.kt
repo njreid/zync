@@ -26,6 +26,7 @@ import kotlinx.html.id
 import kotlinx.html.input
 import kotlinx.html.li
 import kotlinx.html.pre
+import kotlinx.html.progress
 import kotlinx.html.option
 import kotlinx.html.p
 import kotlinx.html.select
@@ -516,7 +517,7 @@ private fun FlowContent.readLaterQueue(read: ContentReadModel) {
                     a(href = "/node/${article.id}/read") { +(article.title ?: "(untitled)") }
                     span("reading-meta") {
                         document.source?.let { +it }
-                        +" · ${readingMinutes(document.markdown)} min"
+                        +" · ${readingMinutes(document.markdown)} min · ${article.readingProgress}%"
                     }
                 }
             }
@@ -567,6 +568,7 @@ internal fun typeLabel(t: NodeType): String = when (t) {
     NodeType.TASK -> "task"
     NodeType.PROJECT -> "project"
     NodeType.REFERENCE_ITEM, NodeType.REFERENCE_FOLDER -> "reference"
+    NodeType.ARCHIVED -> "archive"
 }
 
 /** A node's detail: title, type/status, notes, organize controls, subtasks, comments. */
@@ -586,21 +588,6 @@ fun FlowContent.nodeDetail(read: ContentReadModel, node: NodeView) {
         }
     }
     node.notes?.let { p { +it } }
-    // Operator proposal to file a DONE task into Reference (GTD §7, Q5).
-    node.proposedFileParent?.let { target ->
-        val area = read.node(target)
-        div(classes = "file-banner") {
-            +"File to ${area?.title ?: "Reference"}? "
-            button(classes = "action") {
-                attributes["data-on:click"] = "@post('/node/${node.id}/file-done?target=$target')"
-                +"Accept"
-            }
-            button(classes = "action") {
-                attributes["data-on:click"] = "@post('/node/${node.id}/file-done-reject')"
-                +"No"
-            }
-        }
-    }
     a(href = "/node/${node.id}/read") { +"Read" }
     // File into Reference (GTD triage §7): archive + move under the reference root.
     if (node.status != "FILED") {
@@ -717,6 +704,14 @@ fun FlowContent.readingView(node: NodeView, canChangeReadingState: Boolean) {
                     readingStateAction(node, ReadingState.FINISHED, "Finished")
                 }
             }
+            div(classes = "reading-progress") {
+                progress {
+                    attributes["value"] = node.readingProgress.toString()
+                    attributes["max"] = "100"
+                }
+                span("reading-meta") { +"${node.readingProgress}% read" }
+                if (canChangeReadingState) readingProgressControl(node)
+            }
         }
         node.summary?.let { s ->
             div(classes = "summary") {
@@ -727,6 +722,22 @@ fun FlowContent.readingView(node: NodeView, canChangeReadingState: Boolean) {
         renderReaderMarkdown(document.markdown)
     }
     a(href = "/node/${node.id}") { +"Back" }
+}
+
+private fun FlowContent.readingProgressControl(node: NodeView) {
+    div(classes = "reading-progress-control") {
+        attributes["data-signals"] = "{ readerProgress: ${node.readingProgress} }"
+        input(type = InputType.range) {
+            attributes["min"] = "0"
+            attributes["max"] = "100"
+            attributes["step"] = "1"
+            attributes["data-bind:readerProgress"] = ""
+        }
+        button(classes = "action") {
+            attributes["data-on:click"] = "@post('/node/${node.id}/reading-progress?percent=' + \$readerProgress)"
+            +"Save position"
+        }
+    }
 }
 
 private fun FlowContent.readingStateAction(node: NodeView, state: String, label: String) {

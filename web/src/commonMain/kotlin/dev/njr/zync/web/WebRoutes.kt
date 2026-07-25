@@ -355,6 +355,13 @@ fun Route.webRoutes(
                 call.appliedReader(id) { setReadingState(id, state) }
             } else call.respondText("bad request", status = HttpStatusCode.BadRequest)
         }
+        post("/node/{id}/reading-progress") {
+            val id = call.nodeId()
+            val percent = call.request.queryParameters["percent"]?.toIntOrNull()
+            if (id != null && percent != null && percent in 0..100) {
+                call.appliedReader(id) { setReadingProgress(id, percent) }
+            } else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
         post("/node/{id}/subtask") {
             val title = call.request.queryParameters["title"]?.trim().orEmpty()
             val id = call.nodeId()
@@ -420,21 +427,6 @@ fun Route.webRoutes(
         }
         post("/node/{id}/dismiss-file") {
             call.nodeId()?.let { id -> call.applied { dismissFileSuggestions(id) } }
-                ?: call.respondText("bad request", status = HttpStatusCode.BadRequest)
-        }
-        // DONE→Reference proposal (spec §7): accept files under it / reject clears. Detail-scoped.
-        post("/node/{id}/file-done") {
-            val target = call.request.queryParameters["target"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
-            val id = call.nodeId()
-            when {
-                id == null || target == null -> call.respondText("bad request", status = HttpStatusCode.BadRequest)
-                read.moveWouldExceedDepth(id, target) ->
-                    call.respondText("filing would exceed 4 levels", status = HttpStatusCode.Conflict)
-                else -> call.appliedDetail(id) { acceptProposedFile(id, target) }
-            }
-        }
-        post("/node/{id}/file-done-reject") {
-            call.nodeId()?.let { id -> call.appliedDetail(id) { rejectProposedFile(id) } }
                 ?: call.respondText("bad request", status = HttpStatusCode.BadRequest)
         }
         post("/node/{id}/person") {

@@ -118,4 +118,15 @@ Useful [reading](https://example.com/more).
         assertTrue(page.contains("Long saved article"))
         assertTrue(page.contains("Example News · 2 min"))
     }
+
+    @Test
+    fun readerPersistsExplicitReadingPosition() = app { client ->
+        val article = commands.createTask("A saved article")
+        commands.setNotes(article, "Source: Example\nOriginal: https://example.com/story\n\nBody")
+
+        val changed = client.post("/node/$article/reading-progress?percent=42").bodyAsText()
+        assertTrue(changed.contains("42% read"))
+        assertEquals(42, read.node(article)!!.readingProgress)
+        assertTrue(client.get("/reference").bodyAsText().contains("1 min · 42%"))
+    }
 }

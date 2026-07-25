@@ -24,6 +24,40 @@ class ContentCommands(private val ops: OpEmitter) {
     /** Convenience alias — a "project" is just a content node that has children (type is derived). */
     fun createProject(title: String, parent: Ulid? = null): Ulid = create(title, parent)
 
+    /**
+     * Create a Reference **folder** under [parent] (reference-and-archive spec): a node carrying the
+     * explicit [Fields.FOLDER] marker so it reads as a folder even while empty. Parent is normally a
+     * reference folder or the reference root; the marker (not has-children) drives `typeOf`.
+     */
+    fun createFolder(title: String, parent: Ulid): Ulid {
+        val id = ops.newId()
+        ops.setField(id, Fields.TITLE, JsonPrimitive(title))
+        ops.setField(id, Fields.FOLDER, JsonPrimitive(true))
+        ops.move(id, parent)
+        return id
+    }
+
+    /** Archive a Project (reference-and-archive spec): Move it (and its subtree) under the Archive
+     *  root, making it inert — out of Next/Today/context — while staying searchable and reversible. */
+    fun archiveProject(node: Ulid) = ops.move(node, WellKnownNodes.ARCHIVE_ROOT)
+
+    /** Un-archive: Move a project back under Projects (default the Projects root), going live again. */
+    fun unarchive(node: Ulid, toParent: Ulid = WellKnownNodes.PROJECTS_ROOT) = ops.move(node, toParent)
+
+    /**
+     * Link a Task to a Reference URL (reference-and-archive spec): its own `ref:<url>` boolean
+     * register, so concurrent adds on two devices both survive (mergeable set, like free tags).
+     * URLs are reference-tree paths (`/Personal/Family/info`) or external; blank is a no-op.
+     */
+    fun addReferenceLink(node: Ulid, url: String) {
+        val u = url.trim().takeIf { it.isNotEmpty() } ?: return
+        ops.setField(node, Fields.REF_LINK_PREFIX + u, JsonPrimitive(true))
+    }
+
+    /** Remove a Task's Reference link (clears its register). */
+    fun removeReferenceLink(node: Ulid, url: String) =
+        ops.setField(node, Fields.REF_LINK_PREFIX + url.trim(), JsonNull)
+
     fun createContext(name: String): Ulid {
         val id = ops.newId()
         ops.setField(id, "kind", JsonPrimitive("context"))
@@ -53,6 +87,11 @@ class ContentCommands(private val ops: OpEmitter) {
     fun setReadingState(node: Ulid, state: String) {
         require(state in ReadingState.ALL) { "invalid reading state" }
         ops.setField(node, Fields.READING_STATE, JsonPrimitive(state))
+    }
+
+    fun setReadingProgress(node: Ulid, percent: Int) {
+        require(percent in 0..100) { "reading progress must be 0..100" }
+        ops.setField(node, Fields.READING_PROGRESS, JsonPrimitive(percent))
     }
 
     fun complete(node: Ulid) = setStatus(node, "DONE")
@@ -109,15 +148,9 @@ class ContentCommands(private val ops: OpEmitter) {
     /** Dismiss the file-location suggestions without filing. */
     fun dismissFileSuggestions(node: Ulid) = ops.setField(node, Fields.FILE_SUGGESTIONS, JsonNull)
 
-    /** Accept the DONE→Reference proposal (GTD §7, Q5): Move under it + status FILED + clear. */
-    fun acceptProposedFile(node: Ulid, target: Ulid) {
-        ops.move(node, target)
-        ops.setField(node, Fields.STATUS, JsonPrimitive(Status.FILED))
-        ops.setField(node, Fields.PROPOSED_FILE_PARENT, JsonNull)
-    }
-
-    /** Reject the DONE→Reference proposal (clear the operator field). */
-    fun rejectProposedFile(node: Ulid) = ops.setField(node, Fields.PROPOSED_FILE_PARENT, JsonNull)
+    // The old DONE→Reference proposal flow (acceptProposedFile/rejectProposedFile) is removed:
+    // Projects now retire to Archive, and completed tasks no longer file into Reference
+    // (reference-and-archive spec).
 
     /**
      * Accept a bot's proposed field edit (external-op-api §4): emit the real SetField as a

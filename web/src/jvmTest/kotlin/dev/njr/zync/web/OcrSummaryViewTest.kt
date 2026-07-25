@@ -5,7 +5,6 @@ import dev.njr.zync.core.state.InMemoryStateStore
 import dev.njr.zync.web.content.ContentCommands
 import dev.njr.zync.web.content.ContentReadModel
 import dev.njr.zync.web.content.RecordingEmitter
-import dev.njr.zync.web.sse.ChangeNotifier
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.server.application.install
@@ -34,7 +33,7 @@ class OcrSummaryViewTest {
 
         application {
             install(SSE)
-            routing { webRoutes(read, changes = ChangeNotifier(), commands = commands) }
+            routing { webRoutes(read, commands = commands) }
         }
 
         val pending = client.get("/node/$doc").bodyAsText()

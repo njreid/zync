@@ -1,7 +1,6 @@
 package dev.njr.zync.web
 
 import dev.njr.zync.core.content.Fields
-import dev.njr.zync.core.content.Status
 import dev.njr.zync.core.state.InMemoryStateStore
 import dev.njr.zync.web.content.ContentCommands
 import dev.njr.zync.web.content.ContentReadModel
@@ -19,7 +18,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-/** Accepting/dismissing file-location suggestions + the DONE→Reference proposal (build S5). */
+/** Accepting/dismissing file-location suggestion chips (build S5). */
 class FileSuggestionTest {
     private val store = InMemoryStateStore()
     private val emitter = RecordingEmitter(store)
@@ -56,28 +55,5 @@ class FileSuggestionTest {
         emitter.setField(task, Fields.FILE_SUGGESTIONS, buildJsonArray { add(buildJsonObject { put("targetId", JsonPrimitive(inbox.toString())); put("title", JsonPrimitive("x")); put("tree", JsonPrimitive("projects")); put("score", JsonPrimitive(0.2)) }) })
         client.post("/node/$task/dismiss-file")
         assertEquals(emptyList(), read.node(task)!!.fileSuggestions)
-    }
-
-    @Test
-    fun acceptingProposalFilesUnderReferenceArea() = app { client ->
-        val area = commands.createProject("Receipts")
-        val task = commands.createTask("done thing")
-        commands.complete(task)
-        emitter.setField(task, Fields.PROPOSED_FILE_PARENT, JsonPrimitive(area.toString()))
-
-        client.post("/node/$task/file-done?target=$area")
-        val v = read.node(task)!!
-        assertEquals(Status.FILED, v.status)
-        assertEquals(area, v.parent)
-        assertNull(v.proposedFileParent)
-    }
-
-    @Test
-    fun rejectingProposalClearsIt() = app { client ->
-        val area = commands.createProject("Receipts")
-        val task = commands.createTask("done thing")
-        emitter.setField(task, Fields.PROPOSED_FILE_PARENT, JsonPrimitive(area.toString()))
-        client.post("/node/$task/file-done-reject")
-        assertNull(read.node(task)!!.proposedFileParent)
     }
 }

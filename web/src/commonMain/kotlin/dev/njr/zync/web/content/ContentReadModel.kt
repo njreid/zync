@@ -3,6 +3,7 @@ package dev.njr.zync.web.content
 import dev.njr.zync.core.agent.AgentFlow
 import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.content.FractionalIndex
+import dev.njr.zync.core.content.ReadingState
 import dev.njr.zync.core.content.Size
 import dev.njr.zync.core.content.Status
 import dev.njr.zync.core.content.KIND_SUGGESTION
@@ -38,6 +39,8 @@ data class NodeView(
     val summary: String?,
     /** Personal lifecycle for saved reading; absent fields are intentionally unread. */
     val readingState: String = "UNREAD",
+    /** Last explicitly saved reader position, clamped so malformed remote data cannot break UI. */
+    val readingProgress: Int = 0,
     val parent: Ulid?,
     val tags: Set<Ulid>,
     val alive: Boolean,
@@ -58,6 +61,8 @@ data class NodeView(
     val linkUrl: String? = null,
     /** Free-form tags (mergeable per-label); how bots + humans label items. */
     val freeTags: List<String> = emptyList(),
+    /** A Task's Reference links (mergeable per-URL `ref:` registers); reference-and-archive spec. */
+    val referenceLinks: List<String> = emptyList(),
 )
 
 /** One ranked file-location proposal for an inbox item (GTD triage §6). */
@@ -70,7 +75,10 @@ data class AttachmentView(val id: Ulid, val type: String?, val filename: String?
 enum class FileArea { PROJECTS, REFERENCE }
 
 /** Derived content type (from tree location + children) — never stored on the node. */
-enum class NodeType { INBOX_ITEM, TASK, PROJECT, REFERENCE_ITEM, REFERENCE_FOLDER }
+enum class NodeType { INBOX_ITEM, TASK, PROJECT, REFERENCE_ITEM, REFERENCE_FOLDER, ARCHIVED }
+
+/** Which well-known area a node lives in (by `isUnder` the roots) — reference-and-archive spec. */
+enum class Location { INBOX, PROJECTS, REFERENCE, ARCHIVE }
 
 /** A Project folder's derived lifecycle: ACTIVE (has an open task), DONE (all closed), STALLED (no tasks). */
 enum class ProjectState { ACTIVE, DONE, STALLED }
@@ -238,6 +246,31 @@ class ContentReadModel(private val store: StateStore) {
     fun reference(root: Ulid = WellKnownNodes.REFERENCE_ROOT): List<NodeView> = children(root)
 
     /**
+     * The Reading list (reference-and-archive spec): a flat list of Reference **items** you've
+     * started or finished — `readingState ∈ {READING, FINISHED}`. UNREAD (the universal default)
+     * stays out. Folders are excluded (they're not readable items).
+     */
+    fun reading(): List<NodeView> =
+        snapshots()
+            .filter {
+                isContent(it) && it.entityId.toString() != WellKnownNodes.REFERENCE_ROOT.toString() &&
+                    isUnder(it.entityId, WellKnownNodes.REFERENCE_ROOT) && !isFolderMarked(it.entityId)
+            }
+            .map { it.toView() }
+            .filter { it.readingState == ReadingState.READING || it.readingState == ReadingState.FINISHED }
+            .sortedBy { it.title ?: "" }
+
+    /** A Task's Reference links (reference-and-archive spec): the URLs of its live `ref:` registers. */
+    fun referenceLinks(task: Ulid): List<String> =
+        store.project()[task]?.takeIf { it.alive }?.let { refLinksOf(it) } ?: emptyList()
+
+    private fun refLinksOf(s: EntitySnapshot): List<String> =
+        s.fields.entries
+            .filter { it.key.startsWith(Fields.REF_LINK_PREFIX) && (it.value as? JsonPrimitive)?.content == "true" }
+            .map { it.key.removePrefix(Fields.REF_LINK_PREFIX) }
+            .sorted()
+
+    /**
      * Newz exports a stable two-line source/original preamble before article Markdown. These
      * articles may still live under the dedicated Read Later project rather than the general
      * Reference root, so expose them as one personal reading queue wherever they are filed.
@@ -261,25 +294,42 @@ class ContentReadModel(private val store: StateStore) {
     fun hasLiveChildren(id: Ulid): Boolean =
         snapshots().any { isContent(it) && it.parent?.toString() == id.toString() }
 
-    /** An actionable leaf (Inbox Item or Task) — a content leaf outside the Reference tree. */
+    /**
+     * An actionable leaf (Inbox Item or Task) — a content leaf outside the Reference **and** Archive
+     * trees. Archived subtrees are inert, so their leaves never surface in Next/Today/context.
+     */
     private fun isActionableLeaf(s: EntitySnapshot): Boolean =
-        isContent(s) && !hasLiveChildren(s.entityId) && !isUnder(s.entityId, WellKnownNodes.REFERENCE_ROOT)
+        isContent(s) && !hasLiveChildren(s.entityId) &&
+            !isUnder(s.entityId, WellKnownNodes.REFERENCE_ROOT) &&
+            !isUnder(s.entityId, WellKnownNodes.ARCHIVE_ROOT)
+
+    /** Explicit reference-folder marker (`folder = true`) — the one stored type signal. */
+    private fun isFolderMarked(id: Ulid): Boolean =
+        (store.project()[id]?.fields?.get(Fields.FOLDER) as? JsonPrimitive)?.content == "true"
+
+    /** Which well-known area [id] lives in (by `isUnder` the roots); top-level leaves are Inbox. */
+    fun locationOf(id: Ulid): Location = when {
+        isUnder(id, WellKnownNodes.REFERENCE_ROOT) -> Location.REFERENCE
+        isUnder(id, WellKnownNodes.ARCHIVE_ROOT) -> Location.ARCHIVE
+        store.getParent(id) == null && !hasLiveChildren(id) -> Location.INBOX
+        else -> Location.PROJECTS
+    }
 
     /**
-     * Derived type of a content node from its tree location + whether it holds children:
-     * anything under Reference is Reference; any folder (has children) elsewhere is a Project;
-     * any nested leaf is a Task (incl. a single-action leaf under PROJECTS_ROOT); a top-level
-     * leaf is an Inbox Item. Location-agnostic beyond Reference so legacy top-level projects and
-     * their tasks derive correctly before the PROJECTS_ROOT migration lands.
+     * Derived type of a content node from its tree location + whether it holds children — with two
+     * asymmetries: anything under Archive is [NodeType.ARCHIVED] (inert), and under Reference the
+     * folder/item split keys on the explicit `folder` **marker** (not has-children) so an empty
+     * marked folder is still a folder. Elsewhere any folder is a Project, any nested leaf a Task,
+     * a top-level leaf an Inbox Item. Location-agnostic beyond the roots so legacy top-level
+     * projects/tasks derive correctly before the PROJECTS_ROOT migration lands.
      */
-    fun typeOf(id: Ulid): NodeType {
-        val folder = hasLiveChildren(id)
-        return when {
-            isUnder(id, WellKnownNodes.REFERENCE_ROOT) -> if (folder) NodeType.REFERENCE_FOLDER else NodeType.REFERENCE_ITEM
-            folder -> NodeType.PROJECT
-            store.getParent(id) != null -> NodeType.TASK
-            else -> NodeType.INBOX_ITEM
-        }
+    fun typeOf(id: Ulid): NodeType = when {
+        isUnder(id, WellKnownNodes.ARCHIVE_ROOT) -> NodeType.ARCHIVED
+        isUnder(id, WellKnownNodes.REFERENCE_ROOT) ->
+            if (isFolderMarked(id)) NodeType.REFERENCE_FOLDER else NodeType.REFERENCE_ITEM
+        hasLiveChildren(id) -> NodeType.PROJECT
+        store.getParent(id) != null -> NodeType.TASK
+        else -> NodeType.INBOX_ITEM
     }
 
     /** Live content descendants of [id] (excludes [id] itself), cycle-safe. */
@@ -471,12 +521,15 @@ class ContentReadModel(private val store: StateStore) {
             .filter { it.status != "DONE" && it.status != "DROPPED" && it.status != Status.FILED && it.dueDate != null && it.dueDate <= byMillis }
             .sortedBy { it.dueDate }
 
-    /** Live Projects — folders outside Reference (derived), the move targets for organizing tasks. */
+    /** Live Projects — folders outside Reference/Archive (derived), the move targets for tasks. */
     fun projects(): List<NodeView> =
         snapshots()
             .filter { isContent(it) }
             .filter { it.entityId.toString() != WellKnownNodes.PROJECTS_ROOT.toString() && it.entityId.toString() != WellKnownNodes.REFERENCE_ROOT.toString() }
-            .filter { !isUnder(it.entityId, WellKnownNodes.REFERENCE_ROOT) && hasLiveChildren(it.entityId) }
+            .filter {
+                !isUnder(it.entityId, WellKnownNodes.REFERENCE_ROOT) &&
+                    !isUnder(it.entityId, WellKnownNodes.ARCHIVE_ROOT) && hasLiveChildren(it.entityId)
+            }
             .map { it.toView() }
             .filter { it.status != "DROPPED" && it.status != Status.FILED }
             .sortedBy { it.title ?: "" }
@@ -561,6 +614,7 @@ class ContentReadModel(private val store: StateStore) {
         ocrBlobHash = fields[Fields.OCR_BLOB_HASH].asString(),
         summary = fields[Fields.SUMMARY].asString(),
         readingState = fields[Fields.READING_STATE].asString() ?: "UNREAD",
+        readingProgress = fields[Fields.READING_PROGRESS].asString()?.toIntOrNull()?.coerceIn(0, 100) ?: 0,
         linkTitle = fields[Fields.LINK_TITLE].asString(),
         linkPreview = fields[Fields.LINK_PREVIEW].asString(),
         linkUrl = fields[Fields.LINK_URL].asString(),
@@ -568,6 +622,7 @@ class ContentReadModel(private val store: StateStore) {
             .filter { it.key.startsWith(Fields.FREE_TAG_PREFIX) && (it.value as? JsonPrimitive)?.content == "true" }
             .map { it.key.removePrefix(Fields.FREE_TAG_PREFIX) }
             .sorted(),
+        referenceLinks = refLinksOf(this),
         parent = parent,
         tags = tags,
         alive = alive,
