@@ -98,6 +98,8 @@ jobs:
           ZYNC_NEWZ_REDEEM_TOKEN: ${{ secrets.ZYNC_NEWZ_REDEEM_TOKEN }}
         run: |
           haloy validate-config
+          # Free disk on the target before pushing the new image (old rollbacks pile up).
+          haloy prune-images --keep 3 --yes || true
           haloy deploy
 
       - name: Health check
