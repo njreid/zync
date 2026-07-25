@@ -1,6 +1,7 @@
 package dev.njr.zync.web.views
 
 import dev.njr.zync.core.content.Size
+import dev.njr.zync.core.content.ReadingState
 import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.web.content.ContentReadModel
@@ -671,13 +672,23 @@ private fun FlowContent.organizeSection(read: ContentReadModel, node: NodeView) 
 }
 
 /** A long-form reading view for saved articles as well as ordinary Reference notes. */
-fun FlowContent.readingView(node: NodeView) {
+fun FlowContent.readingView(node: NodeView, canChangeReadingState: Boolean) {
     val document = readingDocument(node.notes.orEmpty())
     article(classes = "reading-view") {
         h2 { +(node.title ?: "(untitled)") }
         document.source?.let { source -> p("muted") { +source } }
         document.originalUrl?.let { url ->
             p("reader-source") { a(href = url) { +"Open original" } }
+        }
+        if (document.originalUrl != null) {
+            div(classes = "reading-actions") {
+                span("reading-state") { +readingStateLabel(node.readingState) }
+                if (canChangeReadingState) {
+                    readingStateAction(node, ReadingState.UNREAD, "Unread")
+                    readingStateAction(node, ReadingState.READING, "Reading")
+                    readingStateAction(node, ReadingState.FINISHED, "Finished")
+                }
+            }
         }
         node.summary?.let { s ->
             div(classes = "summary") {
@@ -688,6 +699,20 @@ fun FlowContent.readingView(node: NodeView) {
         renderReaderMarkdown(document.markdown)
     }
     a(href = "/node/${node.id}") { +"Back" }
+}
+
+private fun FlowContent.readingStateAction(node: NodeView, state: String, label: String) {
+    button(classes = "action") {
+        attributes["data-on:click"] = "@post('/node/${node.id}/reading-state?state=$state')"
+        attributes["aria-pressed"] = (node.readingState == state).toString()
+        +label
+    }
+}
+
+private fun readingStateLabel(state: String): String = when (state) {
+    ReadingState.READING -> "Reading"
+    ReadingState.FINISHED -> "Finished"
+    else -> "Unread"
 }
 
 private data class ReadingDocument(val source: String?, val originalUrl: String?, val markdown: String)

@@ -39,6 +39,9 @@ object Fields {
     /** Operator-owned one-paragraph summary of a document's OCR text. */
     const val SUMMARY = "summary"
 
+    /** Personal reading lifecycle for saved articles; deliberately independent of GTD status. */
+    const val READING_STATE = "readingState"
+
     /** The URL of a shared link (shown as an icon; the full URL is revealed in Edit). */
     const val LINK_URL = "linkUrl"
 
@@ -99,6 +102,14 @@ object OcrStatus {
     const val RUNNING = "RUNNING"
     const val DONE = "DONE"
     const val FAILED = "FAILED"
+}
+
+/** Reading lifecycle values for [Fields.READING_STATE]. Missing means [UNREAD]. */
+object ReadingState {
+    const val UNREAD = "UNREAD"
+    const val READING = "READING"
+    const val FINISHED = "FINISHED"
+    val ALL = setOf(UNREAD, READING, FINISHED)
 }
 
 /** GTD status values for [Fields.STATUS] (spec §1: extends ACTIVE/DONE/DROPPED with WAITING/FILED). */

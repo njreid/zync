@@ -20,8 +20,8 @@ Reference.
 
 ## Priority 1 — make Read Later a reading queue
 
-- Detect imported Newz articles by stable fields/tags, and provide an `Unread`,
-  `Reading`, and `Finished` state that is separate from task completion.
+- [x] Detect imported Newz articles from their stable source metadata, and provide
+  an `Unread`, `Reading`, and `Finished` state that is separate from task completion.
 - Add an article row with source, saved date, read-time estimate, and reading
   progress; opening an article resumes its position.
 - Add a lightweight `Mark finished` action that offers, but never forces,

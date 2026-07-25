@@ -164,7 +164,11 @@ fun Route.webRoutes(
     get("/node/{id}/read") {
         val node = call.parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }?.let(read::node)
         if (node == null) call.respondText("not found", status = HttpStatusCode.NotFound)
-        else call.respondHtml { page(node.title ?: "Read", settingsHref, Tab.NONE, read.contexts(), call.selectedContext()) { readingView(node) } }
+        else call.respondHtml {
+            page(node.title ?: "Read", settingsHref, Tab.NONE, read.contexts(), call.selectedContext()) {
+                div { id = "reader"; readingView(node, canChangeReadingState = commands != null) }
+            }
+        }
     }
     get("/assets/datastar.js") {
         call.respondText(WebPlatform.datastarRuntime(), ContentType("application", "javascript"))
@@ -337,6 +341,19 @@ fun Route.webRoutes(
             changes?.notifyChanged()
             val node = read.node(id) ?: return respondText("not found", status = HttpStatusCode.NotFound)
             respondDatastar(patchElementsEvent(WebPlatform.renderFragment("node-detail") { nodeEditView(read, node) }))
+        }
+        suspend fun ApplicationCall.appliedReader(id: Ulid, mutate: ContentCommands.() -> Unit) {
+            commands.mutate()
+            changes?.notifyChanged()
+            val node = read.node(id) ?: return respondText("not found", status = HttpStatusCode.NotFound)
+            respondDatastar(patchElementsEvent(WebPlatform.renderFragment("reader") { readingView(node, canChangeReadingState = true) }))
+        }
+        post("/node/{id}/reading-state") {
+            val id = call.nodeId()
+            val state = call.request.queryParameters["state"]
+            if (id != null && state != null && state in dev.njr.zync.core.content.ReadingState.ALL) {
+                call.appliedReader(id) { setReadingState(id, state) }
+            } else call.respondText("bad request", status = HttpStatusCode.BadRequest)
         }
         post("/node/{id}/subtask") {
             val title = call.request.queryParameters["title"]?.trim().orEmpty()

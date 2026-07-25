@@ -3,6 +3,7 @@ package dev.njr.zync.web.content
 import dev.njr.zync.core.agent.AgentFlow
 import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.content.Size
+import dev.njr.zync.core.content.ReadingState
 import dev.njr.zync.core.content.Status
 import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.id.Ulid
@@ -47,6 +48,12 @@ class ContentCommands(private val ops: OpEmitter) {
 
     fun rename(node: Ulid, title: String) = ops.setField(node, "title", JsonPrimitive(title))
     fun setNotes(node: Ulid, notes: String) = ops.setField(node, "notes", JsonPrimitive(notes))
+
+    /** Reading is personal progress, not task completion or filing. */
+    fun setReadingState(node: Ulid, state: String) {
+        require(state in ReadingState.ALL) { "invalid reading state" }
+        ops.setField(node, Fields.READING_STATE, JsonPrimitive(state))
+    }
 
     fun complete(node: Ulid) = setStatus(node, "DONE")
     fun reopen(node: Ulid) = setStatus(node, "ACTIVE")

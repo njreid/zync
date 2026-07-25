@@ -94,4 +94,15 @@ Useful [reading](https://example.com/more).
         assertTrue(page.contains("&lt;script&gt;alert('no')&lt;/script&gt;"))
         assertFalse(page.contains("<script>alert('no')</script>"))
     }
+
+    @Test
+    fun readerTracksPersonalReadingStateWithoutCompletingArticle() = app { client ->
+        val article = commands.createTask("A saved article")
+        commands.setNotes(article, "Source: Example\nOriginal: https://example.com/story\n\nBody")
+
+        val changed = client.post("/node/$article/reading-state?state=READING").bodyAsText()
+        assertTrue(changed.contains("Reading"))
+        assertEquals("READING", read.node(article)!!.readingState)
+        assertEquals(Status.ACTIVE, read.node(article)!!.status)
+    }
 }

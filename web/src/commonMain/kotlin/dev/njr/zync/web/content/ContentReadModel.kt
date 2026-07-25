@@ -36,6 +36,8 @@ data class NodeView(
     val ocrBlobHash: String?,
     /** Operator-written document summary, once summarize has run. */
     val summary: String?,
+    /** Personal lifecycle for saved reading; absent fields are intentionally unread. */
+    val readingState: String = "UNREAD",
     val parent: Ulid?,
     val tags: Set<Ulid>,
     val alive: Boolean,
@@ -547,6 +549,7 @@ class ContentReadModel(private val store: StateStore) {
         ocrStatus = fields[Fields.OCR_STATUS].asString(),
         ocrBlobHash = fields[Fields.OCR_BLOB_HASH].asString(),
         summary = fields[Fields.SUMMARY].asString(),
+        readingState = fields[Fields.READING_STATE].asString() ?: "UNREAD",
         linkTitle = fields[Fields.LINK_TITLE].asString(),
         linkPreview = fields[Fields.LINK_PREVIEW].asString(),
         linkUrl = fields[Fields.LINK_URL].asString(),
