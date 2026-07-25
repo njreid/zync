@@ -17,6 +17,7 @@ import dev.njr.zync.web.views.nodeEditView
 import dev.njr.zync.web.views.page
 import dev.njr.zync.web.views.projectsSection
 import dev.njr.zync.web.views.readingView
+import dev.njr.zync.web.views.referenceItemView
 import dev.njr.zync.web.views.referenceResults
 import dev.njr.zync.web.views.referenceSection
 import dev.njr.zync.web.views.todaySection
@@ -148,7 +149,22 @@ fun Route.webRoutes(
     get("/reference/search") {
         // A read (works even without the commands block); patches #reference-results.
         val q = call.request.queryParameters["q"]
-        call.respondDatastar(patchElementsEvent(WebPlatform.renderFragment("reference-results") { referenceResults(read, q) }))
+        call.respondDatastar(patchElementsEvent(WebPlatform.renderFragment("reference-results") { referenceResults(read, null, q) }))
+    }
+    // Drill into a reference folder, or open a reference item's markdown preview.
+    get("/reference/{id}") {
+        val refId = call.parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+        val node = refId?.let { read.node(it) }
+        if (refId == null || node == null) { call.respondText("not found", status = HttpStatusCode.NotFound); return@get }
+        val isFolder = read.typeOf(refId) == dev.njr.zync.web.content.NodeType.REFERENCE_FOLDER
+        call.respondHtml {
+            page("Reference", settingsHref, Tab.REFERENCE, read.contexts(), call.selectedContext()) {
+                div {
+                    id = "reference"
+                    if (isFolder) referenceSection(read, folder = refId) else referenceItemView(read, node)
+                }
+            }
+        }
     }
     get("/tree") {
         call.respondHtml { page("Tree", settingsHref, Tab.PROJECTS, read.contexts(), call.selectedContext()) { h2 { +"Tree" }; treeSection(read, null) } }

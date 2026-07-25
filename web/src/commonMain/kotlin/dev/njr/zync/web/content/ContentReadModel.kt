@@ -245,6 +245,43 @@ class ContentReadModel(private val store: StateStore) {
     /** The Reference tree (GTD triage §7): live children of the well-known reference root. */
     fun reference(root: Ulid = WellKnownNodes.REFERENCE_ROOT): List<NodeView> = children(root)
 
+    /** Folders + items directly inside [folder], folders first then items, each title-sorted. */
+    fun referenceChildren(folder: Ulid): List<NodeView> =
+        children(folder).sortedWith(compareBy({ if (isFolderMarked(it.id)) 0 else 1 }, { it.title ?: "" }))
+
+    /** Reference ancestors of [id] top→down (child of root first), excluding the root and [id] — for breadcrumbs. */
+    fun referenceAncestors(id: Ulid): List<NodeView> {
+        val chain = ArrayDeque<NodeView>()
+        var cur = store.getParent(id)
+        val seen = HashSet<String>()
+        while (cur != null && cur.toString() != WellKnownNodes.REFERENCE_ROOT.toString() && seen.add(cur.toString())) {
+            node(cur)?.let { chain.addFirst(it) }
+            cur = store.getParent(cur)
+        }
+        return chain.toList()
+    }
+
+    /** The "a / b / c" folder path *containing* [id] ("" at the root) — for a search-hit breadcrumb. */
+    fun referenceCrumb(id: Ulid): String =
+        store.getParent(id)?.let { pathLabel(it, WellKnownNodes.REFERENCE_ROOT) } ?: ""
+
+    /** Resolve a "/a/b/c" reference path (case-insensitive titles) to a node id, or null. */
+    fun referenceNodeByPath(path: String): Ulid? {
+        val segs = path.trim('/').split('/').map { it.trim() }.filter { it.isNotEmpty() }
+        if (segs.isEmpty()) return null
+        var parent: Ulid = WellKnownNodes.REFERENCE_ROOT
+        var found: Ulid? = null
+        for (seg in segs) {
+            val match = children(parent).firstOrNull { (it.title ?: "").equals(seg, ignoreCase = true) } ?: return null
+            found = match.id; parent = match.id
+        }
+        return found
+    }
+
+    /** An attachment on [node] whose filename matches [name] (case-insensitive) — for inline media. */
+    fun attachmentByName(node: Ulid, name: String): AttachmentView? =
+        attachments(node).firstOrNull { it.filename.equals(name, ignoreCase = true) }
+
     /**
      * The Reading list (reference-and-archive spec): a flat list of Reference **items** you've
      * started or finished — `readingState ∈ {READING, FINISHED}`. UNREAD (the universal default)

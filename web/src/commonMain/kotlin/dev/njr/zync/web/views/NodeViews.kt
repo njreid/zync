@@ -23,6 +23,7 @@ import kotlinx.html.summary
 import kotlinx.html.h2
 import kotlinx.html.h3
 import kotlinx.html.id
+import kotlinx.html.img
 import kotlinx.html.input
 import kotlinx.html.li
 import kotlinx.html.pre
@@ -476,7 +477,7 @@ private fun linkLabel(url: String): String = url.substringAfter("://").substring
  * the filed tree. Search debounces a GET that patches #reference-results (Datastar v1
  * COLON syntax; no inline script — CSP-safe).
  */
-fun FlowContent.referenceSection(read: ContentReadModel, query: String? = null) {
+fun FlowContent.referenceSection(read: ContentReadModel, folder: Ulid? = null, query: String? = null) {
     h2 { +"Reference" }
     input(type = InputType.search) {
         id = "search"
@@ -486,18 +487,77 @@ fun FlowContent.referenceSection(read: ContentReadModel, query: String? = null) 
     }
     div {
         id = "reference-results"
-        referenceResults(read, query)
+        referenceResults(read, folder, query)
     }
 }
 
-fun FlowContent.referenceResults(read: ContentReadModel, query: String?) {
+fun FlowContent.referenceResults(read: ContentReadModel, folder: Ulid?, query: String?) {
     if (!query.isNullOrBlank()) {
         val hits = read.search(query)
-        if (hits.isEmpty()) p("muted") { +"No matches." } else ul { hits.forEach { itemLi(read, it) } }
-    } else {
-        readLaterQueue(read)
-        val filed = read.reference()
-        if (filed.isEmpty()) p("muted") { +"Nothing filed yet." } else ul { filed.forEach { itemLi(read, it) } }
+        if (hits.isEmpty()) p("muted") { +"No matches." }
+        else ul(classes = "ref-list") { hits.forEach { li(classes = "ref-row") { referenceHitRow(read, it) } } }
+        return
+    }
+    readLaterQueue(read)
+    referenceBreadcrumb(read, folder)
+    val here = folder ?: WellKnownNodes.REFERENCE_ROOT
+    val kids = read.referenceChildren(here)
+    if (kids.isEmpty()) p("muted") { +(if (folder == null) "Nothing filed yet." else "Empty folder.") }
+    else ul(classes = "ref-list") { kids.forEach { li(classes = "ref-row") { referenceRow(read, it) } } }
+}
+
+/** Reference breadcrumb: Reference / folder / … up to (but not including) the current folder's name. */
+private fun FlowContent.referenceBreadcrumb(read: ContentReadModel, folder: Ulid?) {
+    div(classes = "ref-crumb") {
+        a(href = "/reference") { +"Reference" }
+        if (folder != null) {
+            read.referenceAncestors(folder).forEach { f -> +" / "; a(href = "/reference/${f.id}") { +(f.title ?: "(folder)") } }
+            read.node(folder)?.let { +" / "; span { +(it.title ?: "(folder)") } }
+        }
+    }
+}
+
+/** One name-only reference row: a folder (drills in) or an item (opens its preview). data-ref-id
+ *  carries the id + type for the long-press context menu. */
+private fun FlowContent.referenceRow(read: ContentReadModel, node: NodeView) {
+    val folder = read.typeOf(node.id) == NodeType.REFERENCE_FOLDER
+    a(href = "/reference/${node.id}", classes = "ref-link") {
+        attributes["data-ref-id"] = node.id.toString()
+        attributes["data-ref-kind"] = if (folder) "folder" else "item"
+        icon(if (folder) "folder" else "doc")
+        +" ${node.title ?: "(untitled)"}"
+    }
+}
+
+/** A search hit: title (linked to where it lives) + a "in a / b" breadcrumb for reference hits. */
+private fun FlowContent.referenceHitRow(read: ContentReadModel, node: NodeView) {
+    val isRef = read.locationOf(node.id) == dev.njr.zync.web.content.Location.REFERENCE
+    a(href = if (isRef) "/reference/${node.id}" else "/node/${node.id}", classes = "ref-link") { +(node.title ?: "(untitled)") }
+    if (isRef) {
+        val crumb = read.referenceCrumb(node.id)
+        if (crumb.isNotBlank()) div(classes = "ref-crumb-mini") { +"in $crumb" }
+    }
+}
+
+/** A reference item's default view: breadcrumb, title, tags, then the markdown body with media
+ *  inline (attachment-by-filename images, "/"-path reference links) + a fallback media list. */
+fun FlowContent.referenceItemView(read: ContentReadModel, node: NodeView) {
+    div(classes = "ref-crumb") {
+        a(href = "/reference") { +"Reference" }
+        read.referenceAncestors(node.id).forEach { f -> +" / "; a(href = "/reference/${f.id}") { +(f.title ?: "(folder)") } }
+    }
+    h2 { +(node.title ?: "(untitled)") }
+    if (node.freeTags.isNotEmpty()) div(classes = "f-row") { icon("tag"); +node.freeTags.joinToString(" ") { "#$it" } }
+    article(classes = "ref-body") {
+        renderReaderMarkdown(
+            node.notes ?: "",
+            image = { name -> read.attachmentByName(node.id, name)?.blobHash?.let { "/blob/$it" } },
+            link = { path -> read.referenceNodeByPath(path)?.let { "/reference/$it" } },
+        )
+    }
+    val atts = read.attachments(node.id)
+    if (atts.isNotEmpty()) div(classes = "ref-media") {
+        atts.forEach { att -> att.blobHash?.let { h -> a(href = "/blob/$h") { +(att.filename ?: att.type ?: "file") } } }
     }
 }
 
@@ -770,8 +830,17 @@ private fun readingDocument(notes: String): ReadingDocument {
 
 private fun safeExternalUrl(value: String): Boolean = value.startsWith("https://")
 
-/** Conservative Markdown renderer: all text is emitted through kotlinx.html and raw HTML stays text. */
-private fun FlowContent.renderReaderMarkdown(markdown: String) {
+/**
+ * Conservative Markdown renderer: all text is emitted through kotlinx.html and raw HTML stays text.
+ * Optional [image]/[link] resolvers wire the reference-item rules — a relative image name resolves
+ * to that item's attachment, a "/"-rooted link to a reference-tree path (both return null = render
+ * the literal). Defaults resolve nothing (external https only), so the Newz reader is unchanged.
+ */
+private fun FlowContent.renderReaderMarkdown(
+    markdown: String,
+    image: (String) -> String? = { null },
+    link: (String) -> String? = { null },
+) {
     val lines = markdown.lines()
     var index = 0
     while (index < lines.size) {
@@ -785,13 +854,13 @@ private fun FlowContent.renderReaderMarkdown(markdown: String) {
                 if (index < lines.size) index++
                 pre { code { +codeLines.joinToString("\n") } }
             }
-            line.startsWith("### ") -> { h4 { renderInlineMarkdown(line.removePrefix("### ")) }; index++ }
-            line.startsWith("## ") -> { h3 { renderInlineMarkdown(line.removePrefix("## ")) }; index++ }
-            line.startsWith("# ") -> { h3 { renderInlineMarkdown(line.removePrefix("# ")) }; index++ }
+            line.startsWith("### ") -> { h4 { renderInlineMarkdown(line.removePrefix("### "), image, link) }; index++ }
+            line.startsWith("## ") -> { h3 { renderInlineMarkdown(line.removePrefix("## "), image, link) }; index++ }
+            line.startsWith("# ") -> { h3 { renderInlineMarkdown(line.removePrefix("# "), image, link) }; index++ }
             line.startsWith("- ") || line.startsWith("* ") -> {
                 ul {
                     while (index < lines.size && (lines[index].startsWith("- ") || lines[index].startsWith("* "))) {
-                        li { renderInlineMarkdown(lines[index].drop(2)) }
+                        li { renderInlineMarkdown(lines[index].drop(2), image, link) }
                         index++
                     }
                 }
@@ -799,21 +868,41 @@ private fun FlowContent.renderReaderMarkdown(markdown: String) {
             else -> {
                 val paragraph = mutableListOf<String>()
                 while (index < lines.size && lines[index].isNotBlank() && !lines[index].startsWith("#") && !lines[index].startsWith("- ") && !lines[index].startsWith("* ") && !lines[index].startsWith("```")) paragraph += lines[index++]
-                p { renderInlineMarkdown(paragraph.joinToString(" ")) }
+                p { renderInlineMarkdown(paragraph.joinToString(" "), image, link) }
             }
         }
     }
 }
 
-private val markdownLink = Regex("\\[([^]]+)]\\(([^)]+)\\)")
+// Matches both a link [label](href) and an image ![alt](src) (the leading "!" is captured).
+private val markdownLink = Regex("(!?)\\[([^]]*)]\\(([^)]+)\\)")
 
-private fun FlowContent.renderInlineMarkdown(text: String) {
+private fun FlowContent.renderInlineMarkdown(
+    text: String,
+    image: (String) -> String? = { null },
+    link: (String) -> String? = { null },
+) {
     var position = 0
     markdownLink.findAll(text).forEach { match ->
         +text.substring(position, match.range.first)
-        val label = match.groupValues[1]
-        val url = match.groupValues[2]
-        if (safeExternalUrl(url)) a(href = url) { +label } else +match.value
+        val isImage = match.groupValues[1] == "!"
+        val label = match.groupValues[2]
+        val target = match.groupValues[3]
+        if (isImage) {
+            val src = when {
+                target.startsWith("https://") -> target
+                !target.startsWith("/") && !target.contains("://") -> image(target) // relative → attachment
+                else -> null
+            }
+            if (src != null) img(alt = label, src = src) else +match.value
+        } else {
+            val href = when {
+                safeExternalUrl(target) -> target
+                target.startsWith("/") -> link(target) // reference-tree path
+                else -> null
+            }
+            if (href != null) a(href = href) { +label } else +match.value
+        }
         position = match.range.last + 1
     }
     +text.substring(position)

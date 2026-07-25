@@ -570,3 +570,16 @@ nav.topbar .context-menu ul a { font-family: "Iosevka Charon Mono", ui-monospace
 
 /* Stalled project (no next action) — the GTD red flag. */
 .status.stalled { color: #ffb454; font-weight: 700; }
+
+/* Reference: names-only tree, breadcrumb, item markdown preview. */
+.ref-list { list-style: none; padding: 0; margin: .5rem 0; }
+.ref-row { padding: .1rem 0; }
+.ref-link { display: inline-flex; align-items: center; gap: .4rem; text-decoration: none; }
+.ref-link .icn { color: var(--pico-muted-color); flex: 0 0 auto; }
+.ref-crumb { font-size: .85rem; color: var(--pico-muted-color); margin: .3rem 0 .6rem; }
+.ref-crumb a { text-decoration: none; }
+.ref-crumb-mini { font-size: .75rem; color: var(--pico-muted-color); margin-left: .1rem; }
+.ref-body { display: block; margin-top: .5rem; overflow-wrap: anywhere; }
+.ref-body img { max-width: 100%; height: auto; border-radius: .4rem; margin: .5rem 0; }
+.ref-media { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .8rem; }
+.ref-media a { font-size: .85rem; }
