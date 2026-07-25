@@ -552,3 +552,6 @@ nav.topbar .context-menu ul a { font-family: "Iosevka Charon Mono", ui-monospace
 
 /* Editor title wraps (textarea, not input). */
 .edit-title { width: 100%; resize: vertical; overflow-wrap: anywhere; }
+
+/* Stalled project (no next action) — the GTD red flag. */
+.status.stalled { color: #ffb454; font-weight: 700; }

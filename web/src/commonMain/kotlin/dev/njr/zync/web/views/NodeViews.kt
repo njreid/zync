@@ -6,7 +6,9 @@ import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.web.content.ContentReadModel
 import dev.njr.zync.web.content.FileArea
 import dev.njr.zync.web.content.DueDates
+import dev.njr.zync.web.content.NodeType
 import dev.njr.zync.web.content.NodeView
+import dev.njr.zync.web.content.ProjectState
 import kotlinx.html.FlowContent
 import kotlinx.html.InputType
 import kotlinx.html.a
@@ -117,7 +119,6 @@ fun FlowContent.proposalsSection(read: ContentReadModel) {
         proposals.forEach { node ->
             li {
                 span("proposed") { +(node.title ?: "(untitled proposal)") }
-                node.kind?.let { span("status") { +" · $it" } }
                 button(classes = "action") {
                     attributes["data-on:click"] = "@post('/proposal/${node.id}/accept')"
                     attributes["title"] = "Accept"
@@ -176,16 +177,20 @@ fun FlowContent.todaySection(read: ContentReadModel, now: Long, context: Ulid? =
  */
 fun FlowContent.projectsSection(read: ContentReadModel, now: Long, inbox: Ulid? = null) {
     h2 { +"Projects" }
-    // The inbox is a project node under the hood; it has its own tab, so keep it out here.
     val projects = read.projects().filter { it.id.toString() != inbox?.toString() }
     if (projects.isEmpty()) {
-        p("muted") { +"No projects yet. Convert an inbox item into a project to start one." }
+        p("muted") { +"No projects yet. Give an inbox item a subtask to start one." }
         return
     }
     ul {
         projects.forEach { project ->
-            val open = read.inbox(project.id, now).size
-            itemLi(read, project, now = now, lead = { span("status") { +(if (open == 0) " · done" else " · $open open") } })
+            // Derived project state: STALLED (no next action) is the GTD red flag; else open count.
+            val badge: FlowContent.() -> Unit = when (read.projectState(project.id)) {
+                ProjectState.STALLED -> { { span("status stalled") { +" · stalled" } } }
+                ProjectState.DONE -> { { span("status") { +" · done" } } }
+                ProjectState.ACTIVE -> { { span("status") { +" · ${read.inbox(project.id, now).size} open" } } }
+            }
+            itemLi(read, project, now = now, lead = badge)
         }
     }
 }
@@ -523,11 +528,19 @@ fun FlowContent.treeSection(read: ContentReadModel, parent: Ulid?) {
     }
 }
 
-/** A node's detail: title, kind/status, notes, organize controls, subtasks, comments. */
+/** Friendly derived-type word for the detail header. */
+internal fun typeLabel(t: NodeType): String = when (t) {
+    NodeType.INBOX_ITEM -> "item"
+    NodeType.TASK -> "task"
+    NodeType.PROJECT -> "project"
+    NodeType.REFERENCE_ITEM, NodeType.REFERENCE_FOLDER -> "reference"
+}
+
+/** A node's detail: title, type/status, notes, organize controls, subtasks, comments. */
 fun FlowContent.nodeDetail(read: ContentReadModel, node: NodeView) {
     h2 { +(node.title ?: "(untitled)") }
     p("muted") {
-        +"${node.kind ?: "node"} · ${node.status ?: ""}"
+        +"${typeLabel(read.typeOf(node.id))} · ${node.status ?: ""}"
         node.dueDate?.let { +" · due ${DueDates.format(it)}" }
         node.person?.let { +" · @$it" }
         node.ocrStatus?.let { +" · ${ocrLabel(it)}" }
