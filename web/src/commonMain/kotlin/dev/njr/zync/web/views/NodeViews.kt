@@ -764,7 +764,7 @@ private fun readingDocument(notes: String): ReadingDocument {
     if (source != null) index++
     val original = lines.getOrNull(index)?.removePrefix("Original: ")?.takeIf { lines.getOrNull(index)?.startsWith("Original: ") == true }
     if (original != null) index++
-    while (lines.getOrNull(index).isNullOrBlank()) index++
+    while (index < lines.size && lines[index].isBlank()) index++
     return ReadingDocument(source, original?.takeIf(::safeExternalUrl), lines.drop(index).joinToString("\n"))
 }
 
