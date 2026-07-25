@@ -293,6 +293,31 @@ fun Route.webRoutes(
                 else -> call.applied { move(id, parent) }
             }
         }
+        // --- Reference context-menu actions (names-only tree; rename reuses /node/{id}/rename) ---
+        post("/reference/{id}/add-folder") {
+            val id = call.nodeId(); val title = call.request.queryParameters["title"]?.trim().orEmpty()
+            if (id != null && title.isNotEmpty()) call.applied { createFolder(title, id) }
+            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
+        post("/reference/{id}/add-item") {
+            val id = call.nodeId(); val title = call.request.queryParameters["title"]?.trim().orEmpty()
+            if (id != null && title.isNotEmpty()) call.applied { createTask(title, id) }
+            else call.respondText("bad request", status = HttpStatusCode.BadRequest)
+        }
+        post("/reference/{id}/delete") {
+            val id = call.nodeId()
+            if (id == null) call.respondText("bad request", status = HttpStatusCode.BadRequest)
+            else { val ids = read.subtreeIds(id); call.applied { ids.forEach { purge(it) } } } // recursive
+        }
+        post("/reference/{id}/move") {
+            val id = call.nodeId()
+            val to = call.request.queryParameters["to"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+            when {
+                id == null || to == null -> call.respondText("bad request", status = HttpStatusCode.BadRequest)
+                read.moveWouldExceedDepth(id, to) -> call.respondText("too deep", status = HttpStatusCode.Conflict)
+                else -> call.applied { move(id, to) }
+            }
+        }
         // --- Inbox triage panel (spec §4): size / rename / split / link-description ---
         post("/node/{id}/size") {
             val size = call.request.queryParameters["size"]

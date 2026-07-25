@@ -249,6 +249,17 @@ class ContentReadModel(private val store: StateStore) {
     fun referenceChildren(folder: Ulid): List<NodeView> =
         children(folder).sortedWith(compareBy({ if (isFolderMarked(it.id)) 0 else 1 }, { it.title ?: "" }))
 
+    /** [id] plus all its live content descendants (for a recursive delete), cycle-safe. */
+    fun subtreeIds(id: Ulid): List<Ulid> =
+        listOf(id) + contentDescendants(id).map { it.entityId }
+
+    /** Every reference folder (for a "move to folder" picker), each with its path label. */
+    fun referenceFolders(): List<FileCandidate> =
+        snapshots()
+            .filter { isContent(it) && isFolderMarked(it.entityId) }
+            .map { FileCandidate(it.entityId, pathLabel(it.entityId, WellKnownNodes.REFERENCE_ROOT), 0) }
+            .sortedBy { it.path.lowercase() }
+
     /** Reference ancestors of [id] top→down (child of root first), excluding the root and [id] — for breadcrumbs. */
     fun referenceAncestors(id: Ulid): List<NodeView> {
         val chain = ArrayDeque<NodeView>()

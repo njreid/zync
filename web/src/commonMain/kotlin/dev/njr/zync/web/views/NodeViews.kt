@@ -489,6 +489,7 @@ fun FlowContent.referenceSection(read: ContentReadModel, folder: Ulid? = null, q
         id = "reference-results"
         referenceResults(read, folder, query)
     }
+    referenceContextMenu(read)
 }
 
 fun FlowContent.referenceResults(read: ContentReadModel, folder: Ulid?, query: String?) {
@@ -501,6 +502,16 @@ fun FlowContent.referenceResults(read: ContentReadModel, folder: Ulid?, query: S
     readLaterQueue(read)
     referenceBreadcrumb(read, folder)
     val here = folder ?: WellKnownNodes.REFERENCE_ROOT
+    // A place to start a top-level folder (nested folders/items come from a folder's long-press menu).
+    if (folder == null) div(classes = "ref-root-add") {
+        attributes["data-signals"] = "{nf: ''}"
+        input(type = InputType.text) { attributes["data-bind:nf"] = ""; attributes["placeholder"] = "New folder…" }
+        button {
+            attributes["data-on:click"] =
+                "@post('/reference/${WellKnownNodes.REFERENCE_ROOT}/add-folder?title=' + encodeURIComponent(\$nf)).then(() => location.reload())"
+            +"Add folder"
+        }
+    }
     val kids = read.referenceChildren(here)
     if (kids.isEmpty()) p("muted") { +(if (folder == null) "Nothing filed yet." else "Empty folder.") }
     else ul(classes = "ref-list") { kids.forEach { li(classes = "ref-row") { referenceRow(read, it) } } }
@@ -526,6 +537,38 @@ private fun FlowContent.referenceRow(read: ContentReadModel, node: NodeView) {
         attributes["data-ref-kind"] = if (folder) "folder" else "item"
         icon(if (folder) "folder" else "doc")
         +" ${node.title ?: "(untitled)"}"
+    }
+    // Hidden Datastar trigger the long-press handler .click()s to open the context menu (CSP-safe,
+    // mirrors the swipe-fire pattern).
+    button(classes = "ref-ctx-fire") {
+        attributes["data-ctx-fire"] = node.id.toString()
+        attributes["data-on:click"] = "\$rctx = '${node.id}'; \$rkind = '${if (folder) "folder" else "item"}'"
+        +"menu"
+    }
+}
+
+/** The reference context menu (one per page): actions target whichever row long-press opened it. */
+private fun FlowContent.referenceContextMenu(read: ContentReadModel) {
+    fun reload(post: String) = "@post('$post').then(() => location.reload())"
+    div(classes = "ref-ctx") {
+        attributes["data-signals"] = "{rctx: '', rkind: '', rname: '', cname: '', mto: ''}"
+        attributes["data-show"] = "\$rctx !== ''"
+        input(type = InputType.text) { attributes["data-bind:rname"] = ""; attributes["placeholder"] = "Rename to…" }
+        button { attributes["data-on:click"] = reload("/node/' + \$rctx + '/rename?title=' + encodeURIComponent(\$rname) + '"); +"Rename" }
+        div {
+            attributes["data-show"] = "\$rkind === 'folder'"
+            input(type = InputType.text) { attributes["data-bind:cname"] = ""; attributes["placeholder"] = "New child name…" }
+            button { attributes["data-on:click"] = reload("/reference/' + \$rctx + '/add-folder?title=' + encodeURIComponent(\$cname) + '"); +"Add folder" }
+            button { attributes["data-on:click"] = reload("/reference/' + \$rctx + '/add-item?title=' + encodeURIComponent(\$cname) + '"); +"Add item" }
+        }
+        select {
+            attributes["data-bind:mto"] = ""
+            option { value = ""; +"Move to folder…" }
+            read.referenceFolders().forEach { f -> option { value = f.id.toString(); +f.path.ifBlank { "(root)" } } }
+        }
+        button { attributes["data-on:click"] = reload("/reference/' + \$rctx + '/move?to=' + \$mto + '"); +"Move" }
+        button(classes = "danger") { attributes["data-on:click"] = reload("/reference/' + \$rctx + '/delete"); +"Delete" }
+        button { attributes["data-on:click"] = "\$rctx = ''"; +"Close" }
     }
 }
 

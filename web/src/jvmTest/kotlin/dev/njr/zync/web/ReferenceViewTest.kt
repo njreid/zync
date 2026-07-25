@@ -62,4 +62,29 @@ class ReferenceViewTest {
         val html2 = WebPlatform.renderFragment("ref") { referenceItemView(read, read.node(item)!!) }
         assertTrue(html2.contains("[x](/Nope/Missing)"), html2)
     }
+
+    /** The context-menu operations: subtree ids for recursive delete, add-child, and move. */
+    @Test
+    fun contextMenuOperations() {
+        val a = commands.createFolder("A", WellKnownNodes.REFERENCE_ROOT)
+        val sub = commands.createFolder("Sub", a)
+        val leaf = commands.createTask("leaf").also { commands.move(it, sub) }
+        val b = commands.createFolder("B", WellKnownNodes.REFERENCE_ROOT)
+
+        // Recursive delete gathers the folder + all descendants.
+        assertEquals(setOf(a, sub, leaf), read.subtreeIds(a).toSet())
+
+        // Move the leaf under B; it re-parents.
+        commands.move(leaf, b)
+        assertEquals(b.toString(), read.node(leaf)!!.parent.toString())
+
+        // referenceFolders lists every folder by path (for the move picker).
+        val folders = read.referenceFolders().map { it.path }.toSet()
+        assertTrue(folders.containsAll(setOf("A", "A / Sub", "B")), "folders: $folders")
+
+        // Recursive purge removes the whole subtree.
+        read.subtreeIds(a).forEach { commands.purge(it) }
+        assertNull(read.node(a))
+        assertNull(read.node(sub))
+    }
 }

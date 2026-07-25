@@ -265,3 +265,30 @@ document.addEventListener('keydown', (e) => {
     default: break;
   }
 });
+
+// --- Reference long-press → context menu ---
+// A ~500ms press (no drag) on a reference row .click()s its hidden Datastar trigger, which sets
+// the $rctx/$rkind signals that reveal the shared context menu. Cancels the row's navigation.
+(function () {
+  let timer = null, startX = 0, startY = 0, fired = false, row = null;
+  const clear = () => { if (timer) { clearTimeout(timer); timer = null; } row = null; };
+  document.addEventListener('pointerdown', (e) => {
+    const r = e.target.closest && e.target.closest('[data-ref-id]');
+    if (!r) return;
+    row = r; startX = e.clientX; startY = e.clientY; fired = false;
+    timer = setTimeout(() => {
+      fired = true;
+      const fire = row.parentNode && row.parentNode.querySelector('.ref-ctx-fire[data-ctx-fire="' + row.getAttribute('data-ref-id') + '"]');
+      if (fire) fire.click();
+    }, 500);
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (timer && (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10)) clear();
+  });
+  document.addEventListener('pointerup', () => clear());
+  document.addEventListener('pointercancel', () => clear());
+  // Swallow the trailing navigation click when a long-press fired.
+  document.addEventListener('click', (e) => {
+    if (fired && e.target.closest && e.target.closest('[data-ref-id]')) { e.preventDefault(); e.stopPropagation(); fired = false; }
+  }, true);
+})();

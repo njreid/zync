@@ -583,3 +583,14 @@ nav.topbar .context-menu ul a { font-family: "Iosevka Charon Mono", ui-monospace
 .ref-body img { max-width: 100%; height: auto; border-radius: .4rem; margin: .5rem 0; }
 .ref-media { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .8rem; }
 .ref-media a { font-size: .85rem; }
+
+/* Reference context menu (long-press) + its hidden per-row triggers. */
+.ref-ctx-fire { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); border: 0; }
+.ref-ctx {
+  position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%); z-index: 300;
+  display: flex; flex-direction: column; gap: .4rem; width: min(92vw, 26rem);
+  background: var(--pico-card-background-color, #1a212b); border: 1px solid var(--pico-muted-border-color, #2a313c);
+  border-radius: .6rem; padding: .8rem; box-shadow: 0 8px 40px rgba(0, 0, 0, .5);
+}
+.ref-ctx input, .ref-ctx select, .ref-ctx button { margin: 0; }
+.ref-ctx .danger { color: #ff5555; }
