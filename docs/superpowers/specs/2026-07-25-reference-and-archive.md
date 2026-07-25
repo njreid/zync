@@ -46,9 +46,15 @@ The tree shows **names only** — no swipe/File/Snooze/Edit buttons. Interaction
 
 ### Reading view
 
-Reference items carrying the **`read` free tag** appear in **Reading** — a flat list. Membership
-is exactly "has the `read` tag" (not a separate reading-state field). This establishes a general
-pattern: **some tag values carry semantic power** (drive a view/behavior); `read` is the first.
+Driven by the existing **`readingState`** field (UNREAD | READING | FINISHED; missing = UNREAD),
+not a tag — it also carries partial-progress, which is useful. **Reading** is a flat list of
+reference items with `readingState ∈ {READING, FINISHED}` (i.e. you've started or finished);
+UNREAD is the universal default and stays out of the list. You enter the list by setting READING
+from an item's reader view. (If a "queued / to-read" bucket is wanted later, add a `TO_READ`
+state rather than overloading UNREAD.)
+
+Note the general pattern still stands for *other* cases: **a tag value can carry semantic power**
+(drive a view/behavior) — Reading just happens to use the richer `readingState` field instead.
 
 ## Task → Reference links
 
@@ -96,8 +102,8 @@ Anything under `ARCHIVE_ROOT` is **inert**:
 1. **Roots + markers**: `ARCHIVE_ROOT`; a `folder` marker for reference folders; commands
    `createFolder`, `archiveProject`, `unarchive`, `addReferenceLink`/`removeReferenceLink`.
 2. **Read model**: `locationOf` (add ARCHIVE); exclude Archive from Next/Today/context/notifications
-   (keep in search); reference folder/item derivation via the marker; Reading = `read`-tagged
-   reference items; task reference-URL list.
+   (keep in search); reference folder/item derivation via the marker; Reading = reference items
+   with `readingState ∈ {READING, FINISHED}`; task reference-URL list.
 3. **Markdown**: sanitized md→HTML with attachment-by-filename embeds + `/`-path reference links.
 4. **Reference UI**: names-only tree, folder drill-down + breadcrumb, long-press context menus,
    item markdown preview; search-hit breadcrumb + click-to-locate.
