@@ -105,4 +105,17 @@ Useful [reading](https://example.com/more).
         assertEquals("READING", read.node(article)!!.readingState)
         assertEquals(Status.ACTIVE, read.node(article)!!.status)
     }
+
+    @Test
+    fun referenceShowsNewzExportsAsGroupedReadLaterQueue() = app { client ->
+        val article = commands.createTask("Long saved article")
+        commands.setNotes(article, "Source: Example News\nOriginal: https://example.com/story\n\n" + "word ".repeat(250))
+        commands.setReadingState(article, "READING")
+
+        val page = client.get("/reference").bodyAsText()
+        assertTrue(page.contains("Read Later"))
+        assertTrue(page.contains("Reading"))
+        assertTrue(page.contains("Long saved article"))
+        assertTrue(page.contains("Example News · 2 min"))
+    }
 }

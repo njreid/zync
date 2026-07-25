@@ -270,6 +270,8 @@ button.action.expand { border: none; }
 .reader-source { margin-bottom: 1.25rem; }
 .reading-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .45rem; margin: .75rem 0 1.25rem; }
 .reading-state { color: var(--pico-muted-color); font-size: .9rem; margin-right: .2rem; }
+.reading-queue { margin-bottom: 1.1rem; }
+.reading-meta { color: var(--pico-muted-color); display: block; font-size: .85rem; }
 
 /* File-location suggestions + DONE→Reference banner (GTD triage §6/§7). */
 button.action.suggest-chip { border-style: dashed; }

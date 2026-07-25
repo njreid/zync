@@ -22,8 +22,8 @@ Reference.
 
 - [x] Detect imported Newz articles from their stable source metadata, and provide
   an `Unread`, `Reading`, and `Finished` state that is separate from task completion.
-- Add an article row with source, saved date, read-time estimate, and reading
-  progress; opening an article resumes its position.
+- [x] Add grouped article rows with source and read-time estimate.
+- Add saved date and reading progress; opening an article resumes its position.
 - Add a lightweight `Mark finished` action that offers, but never forces,
   filing into the wider Reference tree.
 

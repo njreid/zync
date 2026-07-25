@@ -494,10 +494,38 @@ fun FlowContent.referenceResults(read: ContentReadModel, query: String?) {
         val hits = read.search(query)
         if (hits.isEmpty()) p("muted") { +"No matches." } else ul { hits.forEach { itemLi(read, it) } }
     } else {
+        readLaterQueue(read)
         val filed = read.reference()
         if (filed.isEmpty()) p("muted") { +"Nothing filed yet." } else ul { filed.forEach { itemLi(read, it) } }
     }
 }
+
+/** A reading-first view over Newz exports, independent of where the Read Later project lives. */
+private fun FlowContent.readLaterQueue(read: ContentReadModel) {
+    val articles = read.savedArticles()
+    if (articles.isEmpty()) return
+    h3 { +"Read Later" }
+    listOf(ReadingState.READING, ReadingState.UNREAD, ReadingState.FINISHED).forEach { state ->
+        val matching = articles.filter { it.readingState == state }
+        if (matching.isEmpty()) return@forEach
+        h4 { +readingStateLabel(state) }
+        ul(classes = "reading-queue") {
+            matching.forEach { article ->
+                val document = readingDocument(article.notes.orEmpty())
+                li {
+                    a(href = "/node/${article.id}/read") { +(article.title ?: "(untitled)") }
+                    span("reading-meta") {
+                        document.source?.let { +it }
+                        +" · ${readingMinutes(document.markdown)} min"
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun readingMinutes(markdown: String): Int =
+    ((markdown.split(Regex("\\s+")).count { it.isNotBlank() } + 199) / 200).coerceAtLeast(1)
 
 /**
  * The descendant task tree under [parent], one row per line and indented per level, capped at

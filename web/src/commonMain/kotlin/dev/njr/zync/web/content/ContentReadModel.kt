@@ -237,6 +237,17 @@ class ContentReadModel(private val store: StateStore) {
     /** The Reference tree (GTD triage §7): live children of the well-known reference root. */
     fun reference(root: Ulid = WellKnownNodes.REFERENCE_ROOT): List<NodeView> = children(root)
 
+    /**
+     * Newz exports a stable two-line source/original preamble before article Markdown. These
+     * articles may still live under the dedicated Read Later project rather than the general
+     * Reference root, so expose them as one personal reading queue wherever they are filed.
+     */
+    fun savedArticles(): List<NodeView> = snapshots()
+        .filter { it.kind() != "context" && it.kind() != "comment" && it.kind() !in AgentFlow.INTERNAL_KINDS && !it.proposed() }
+        .map { it.toView() }
+        .filter { it.notes.isNewzArticleExport() }
+        .sortedByDescending { it.id }
+
     // ---- Items / Tasks / Folders: type is DERIVED from location + children, never stored ----
     // (spec 2026-07-24-items-tasks-folders): a content node is an Inbox Item (top-level leaf),
     // a Task (leaf in the Projects tree), a Project (folder in the Projects tree), or a Reference
@@ -585,4 +596,10 @@ class ContentReadModel(private val store: StateStore) {
     }
 
     private fun JsonElement?.asString(): String? = stringContent()
+}
+
+private fun String?.isNewzArticleExport(): Boolean {
+    val lines = this?.lineSequence()?.take(2)?.toList().orEmpty()
+    return lines.getOrNull(0)?.startsWith("Source: ") == true &&
+        lines.getOrNull(1)?.startsWith("Original: https://") == true
 }
