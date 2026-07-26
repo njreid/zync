@@ -148,9 +148,7 @@ class ContentCommands(private val ops: OpEmitter) {
     /** Dismiss the file-location suggestions without filing. */
     fun dismissFileSuggestions(node: Ulid) = ops.setField(node, Fields.FILE_SUGGESTIONS, JsonNull)
 
-    // The old DONE→Reference proposal flow (acceptProposedFile/rejectProposedFile) is removed:
-    // Projects now retire to Archive, and completed tasks no longer file into Reference
-    // (reference-and-archive spec).
+    // (Completed work retires to Archive, not Reference — reference-and-archive spec.)
 
     /**
      * Accept a bot's proposed field edit (external-op-api §4): emit the real SetField as a

@@ -94,13 +94,6 @@ object Fields {
      */
     const val FILE_SUGGESTIONS = "fileSuggestions"
 
-    /**
-     * Operator-owned single Reference-tree node id proposed as the filing parent for a
-     * DONE task (GTD triage §7, RESOLVED Q5). Accepting = Move under it + status FILED;
-     * owner Operator("auto-file-done").
-     */
-    const val PROPOSED_FILE_PARENT = "proposedFileParent"
-
     // --- Suggestion nodes (external-op-api spec §4): a bot's proposed edit to a field on an
     // existing node. kind="suggestion", proposed=true; accepting emits the real SetField. ---
     /** The node the suggestion targets. */

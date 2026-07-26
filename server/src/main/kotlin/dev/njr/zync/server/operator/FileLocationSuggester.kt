@@ -124,12 +124,4 @@ object FileSuggesters {
             }
             """{"${Fields.FILE_SUGGESTIONS}":$array}"""
         }
-
-    /** The top Reference-area `proposedFileParent` for a DONE task (§7). */
-    fun autoFileDone(index: ReferenceIndex, blobText: (String) -> String? = { null }): CompletionSource =
-        FileRetrievalSource(index, blobText, trees = setOf("reference"), limit = 1) { ranked ->
-            ranked.firstOrNull()
-                ?.let { """{"${Fields.PROPOSED_FILE_PARENT}":"${it.first.nodeId}"}""" }
-                ?: "{}"
-        }
 }

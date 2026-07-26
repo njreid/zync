@@ -14,10 +14,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Increment A: the shared GTD vocab base — NodeView surfaces size / fileSuggestions /
- * proposedFileParent, and setSize / file() write the expected ops. (Nothing writes
- * fileSuggestions/proposedFileParent yet — those land with build #6 — so the read
- * path is verified against hand-written fields.)
+ * Increment A: the shared GTD vocab base — NodeView surfaces size / fileSuggestions, and
+ * setSize / file() write the expected ops. (The read path is verified against hand-written
+ * fields.)
  */
 class GtdVocabTest {
     private val store = InMemoryStateStore()
@@ -70,13 +69,5 @@ class GtdVocabTest {
         val t = commands.createTask("bad data")
         emitter.setField(t, Fields.FILE_SUGGESTIONS, JsonPrimitive("not-an-array"))
         assertTrue(read.node(t)!!.fileSuggestions.isEmpty())
-    }
-
-    @Test
-    fun proposedFileParentParses() {
-        val t = commands.createTask("done task")
-        val area = commands.createProject("Receipts")
-        emitter.setField(t, Fields.PROPOSED_FILE_PARENT, JsonPrimitive(area.toString()))
-        assertEquals(area, read.node(t)!!.proposedFileParent)
     }
 }

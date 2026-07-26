@@ -83,26 +83,8 @@ object OperatorManifests {
         fuel = Fuel(maxOpsPerFiring = 1, maxOpsPerCascade = 8),
     )
 
-    /**
-     * When a task is marked DONE, propose a Reference-area filing parent (GTD triage §7,
-     * RESOLVED Q5 = operator proposes, human accepts). Owns only `proposedFileParent`.
-     */
-    fun autoFileDone(): OperatorManifest = OperatorManifest(
-        id = "auto-file-done",
-        name = "File completed task to Reference",
-        readScope = ReadScopeHandle(ReadScopes.DONE_TASK_REF),
-        writeScope = WriteScope(fields = setOf(Fields.PROPOSED_FILE_PARENT)),
-        trigger = TriggerKind.EntityChangesInScope,
-        output = OutputSchema(
-            fields = mapOf(Fields.PROPOSED_FILE_PARENT to FieldType.String),
-            required = emptySet(), // absent = below floor, no proposal
-        ),
-        retries = 0,
-        fuel = Fuel(maxOpsPerFiring = 1, maxOpsPerCascade = 8),
-    )
-
     /** The retrieval operators that need no LLM — registered even without ANTHROPIC_API_KEY. */
-    fun retrievalOnly(): List<OperatorManifest> = listOf(suggestFileLocations(), autoFileDone())
+    fun retrievalOnly(): List<OperatorManifest> = listOf(suggestFileLocations())
 
     /** Parse every `*.json` file in [dir] as an [OperatorManifest]. */
     fun load(dir: Path, json: Json = Json): List<OperatorManifest> {

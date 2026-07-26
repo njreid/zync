@@ -52,8 +52,6 @@ data class NodeView(
     val size: String? = null,
     /** Operator-suggested file locations for an inbox item (GTD triage §6); empty until #6. */
     val fileSuggestions: List<FileSuggestion> = emptyList(),
-    /** Reference node proposed as the filing parent for a DONE task (GTD triage §7); null = none. */
-    val proposedFileParent: Ulid? = null,
     /** Fetched preview of a shared URL: page title + first paragraph (shown when an item expands). */
     val linkTitle: String? = null,
     val linkPreview: String? = null,
@@ -678,8 +676,6 @@ class ContentReadModel(private val store: StateStore) {
         rank = fields[Fields.RANK].asString(),
         size = fields[Fields.SIZE].asString(),
         fileSuggestions = parseFileSuggestions(fields[Fields.FILE_SUGGESTIONS]),
-        proposedFileParent = fields[Fields.PROPOSED_FILE_PARENT].asString()
-            ?.let { runCatching { Ulid.parse(it) }.getOrNull() },
     )
 
     /** Parse the operator-written `fileSuggestions` JSON array; malformed/absent → empty. */

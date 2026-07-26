@@ -153,7 +153,6 @@ private fun wireOperators(db: ZyncDatabase, service: SyncService, hook: Settable
     val index = dev.njr.zync.server.operator.ReferenceIndex(service.stateStore)
     val completers = mapOf(
         "suggest-file" to dev.njr.zync.server.operator.FileSuggesters.suggestFile(index, blobText),
-        "auto-file-done" to dev.njr.zync.server.operator.FileSuggesters.autoFileDone(index, blobText),
     )
     val operators = if (llm != null) OperatorManifests.fromEnv() else OperatorManifests.retrievalOnly()
 
