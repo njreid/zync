@@ -76,6 +76,9 @@ object Fields {
     /** First text paragraph fetched from a shared URL (preview shown when expanded). */
     const val LINK_PREVIEW = "linkPreview"
 
+    /** Hero image URL for a shared link (og:image / twitter:image), if present. */
+    const val LINK_IMAGE = "linkImage"
+
     /**
      * Fractional-index string giving a node a total order *among its siblings*
      * (GTD triage spec §3): drives FIFO inbox reorder, project reorder, and

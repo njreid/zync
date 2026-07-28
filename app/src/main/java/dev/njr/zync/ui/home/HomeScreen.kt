@@ -119,6 +119,7 @@ fun HomeScreen(
         // MainActivity.handleHomeIntent) — no in-content vertical detector here, so the agenda scrolls.
     ) {
         TileRow(state, onTap = onTileTap)
+        ContextInfoRow(state)
         Hero(state, onContextSelect, onEnableWeather)
         Agenda(state, onCompleteTask, onEnableCalendar, onOpenEvent, onEnableNotifications)
     }
@@ -150,12 +151,12 @@ private fun Tile(tile: HomeTile, count: Int, hint: String, modifier: Modifier, o
             .border(1.dp, if (tile == HomeTile.Inbox) C.Accent else C.Border, RoundedCornerShape(10.dp))
             .background(C.Card, RoundedCornerShape(10.dp))
             .clickable(onClick = onTap)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
         BasicText(tile.name, style = TextStyle(color = C.Ink2, fontSize = 11.sp, fontFamily = ZyncSans))
         BasicText(
             "$count",
-            style = TextStyle(color = C.Ink, fontSize = 20.sp, fontFamily = ZyncSans, fontWeight = FontWeight.SemiBold),
+            style = TextStyle(color = C.Ink, fontSize = 18.sp, fontFamily = ZyncSans, fontWeight = FontWeight.SemiBold),
         )
         BasicText(hint, style = TextStyle(color = C.Ink3, fontSize = 10.sp, fontFamily = ZyncSans))
     }
@@ -182,8 +183,48 @@ private fun SyncTile(state: dev.njr.zync.sync.SyncState, modifier: Modifier, onT
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
         BasicText("Sync", style = TextStyle(color = C.Ink2, fontSize = 11.sp, fontFamily = ZyncSans))
-        BasicText(glyph, style = TextStyle(color = tone, fontSize = 20.sp, fontWeight = FontWeight.SemiBold))
+        BasicText(glyph, style = TextStyle(color = tone, fontSize = 18.sp, fontWeight = FontWeight.SemiBold))
         BasicText(hint, style = TextStyle(color = C.Ink3, fontSize = 10.sp, fontFamily = ZyncSans))
+    }
+}
+
+/**
+ * A row of context-specific info boxes below the tiles. Wired now with data we already have
+ * (weather, agenda free/busy, and a context-varied count); the richer per-context feeds
+ * (@home Nest/thermostat, @work stocks + VIP Slack) slot in here once their integrations land.
+ */
+@Composable
+private fun ContextInfoRow(state: HomeState) {
+    val ctx = state.contextName?.lowercase() ?: ""
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 10.dp).padding(bottom = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        InfoBox("Weather", state.weatherLine ?: "—", Modifier.weight(1f))
+        InfoBox("Agenda", state.agenda.freeMinutes?.let { "free ${it}m" } ?: "busy", Modifier.weight(1f))
+        when {
+            ctx.contains("work") -> InfoBox("Due", "${state.todayCount}", Modifier.weight(1f))
+            ctx.contains("home") -> InfoBox("Waiting", "${state.waitingCount}", Modifier.weight(1f))
+            else -> InfoBox("Inbox", "${state.inboxCount}", Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun InfoBox(label: String, value: String, modifier: Modifier) {
+    Column(
+        modifier
+            .border(1.dp, C.Border, RoundedCornerShape(10.dp))
+            .background(C.Card, RoundedCornerShape(10.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        BasicText(label, style = TextStyle(color = C.Ink3, fontSize = 10.sp, fontFamily = ZyncSans))
+        BasicText(
+            value,
+            style = TextStyle(color = C.Ink, fontSize = 13.sp, fontFamily = ZyncSans),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

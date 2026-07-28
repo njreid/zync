@@ -61,6 +61,8 @@ data class NodeView(
     val freeTags: List<String> = emptyList(),
     /** A Task's Reference links (mergeable per-URL `ref:` registers); reference-and-archive spec. */
     val referenceLinks: List<String> = emptyList(),
+    /** Hero image URL fetched from a shared link (og:image), if present. */
+    val linkImage: String? = null,
 )
 
 /** One ranked file-location proposal for an inbox item (GTD triage §6). */
@@ -664,6 +666,7 @@ class ContentReadModel(private val store: StateStore) {
         linkTitle = fields[Fields.LINK_TITLE].asString(),
         linkPreview = fields[Fields.LINK_PREVIEW].asString(),
         linkUrl = fields[Fields.LINK_URL].asString(),
+        linkImage = fields[Fields.LINK_IMAGE].asString(),
         freeTags = fields.entries
             .filter { it.key.startsWith(Fields.FREE_TAG_PREFIX) && (it.value as? JsonPrimitive)?.content == "true" }
             .map { it.key.removePrefix(Fields.FREE_TAG_PREFIX) }

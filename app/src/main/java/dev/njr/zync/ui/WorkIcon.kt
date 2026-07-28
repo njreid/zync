@@ -1,23 +1,14 @@
 package dev.njr.zync.ui
 
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.text.font.FontStyle
 
 /**
- * Work-profile app icons render colour-INVERTED everywhere they appear (search drawer, the
- * action bar, submenus, the bar-settings pickers) so a work app reads differently from a
- * personal one at a glance. Applied as a [ColorFilter] on the icon [androidx.compose.foundation.Image].
+ * App icons now render with their true colours everywhere; a work-profile app instead reads
+ * differently by ITALICIZING its NAME (see [workNameStyle]). This stays a no-op filter so the
+ * icon call sites don't need to change.
  */
-val WorkIconInvert: ColorFilter = ColorFilter.colorMatrix(
-    ColorMatrix(
-        floatArrayOf(
-            -1f, 0f, 0f, 0f, 255f,
-            0f, -1f, 0f, 0f, 255f,
-            0f, 0f, -1f, 0f, 255f,
-            0f, 0f, 0f, 1f, 0f,
-        ),
-    ),
-)
+fun workIconFilter(@Suppress("UNUSED_PARAMETER") userSerial: Long?): ColorFilter? = null
 
-/** The filter for an app icon: inverted for work-profile apps ([userSerial] != null), else none. */
-fun workIconFilter(userSerial: Long?): ColorFilter? = if (userSerial != null) WorkIconInvert else null
+/** Italic for a work-profile app name ([userSerial] != null), upright otherwise. */
+fun workNameStyle(userSerial: Long?): FontStyle = if (userSerial != null) FontStyle.Italic else FontStyle.Normal

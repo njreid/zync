@@ -56,6 +56,7 @@ class ShareReceiverActivity : ComponentActivity() {
                         LinkPreview.fetch(url)?.let { info ->
                             info.title?.let { app.opWriter.setField(node, dev.njr.zync.core.content.Fields.LINK_TITLE, kotlinx.serialization.json.JsonPrimitive(it)) }
                             info.paragraph?.let { app.opWriter.setField(node, dev.njr.zync.core.content.Fields.LINK_PREVIEW, kotlinx.serialization.json.JsonPrimitive(it)) }
+                            info.image?.let { app.opWriter.setField(node, dev.njr.zync.core.content.Fields.LINK_IMAGE, kotlinx.serialization.json.JsonPrimitive(it)) }
                             app.contentChanges.notifyChanged()
                             dev.njr.zync.sync.SyncScheduler.requestSync(app)
                         }

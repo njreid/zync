@@ -324,7 +324,15 @@ private fun FlowContent.expandedPanel(read: ContentReadModel, node: NodeView, ca
             if (ctx.isNotEmpty()) div(classes = "f-row") { icon("tag"); span("ctx") { +ctx.joinToString(" ") } }
             node.dueDate?.let { d -> div(classes = "f-row") { icon("calendar"); +DueDates.format(d) } }
             node.size?.let { s -> div(classes = "f-row") { icon("gauge"); +s } }
-            node.linkUrl?.let { url -> div(classes = "f-row") { icon("link"); a(href = url) { +linkLabel(url) } } }
+            node.linkUrl?.let { url ->
+                div(classes = "f-row link-card") {
+                    node.linkImage?.let { hero -> img(alt = "", src = hero, classes = "link-hero") }
+                    div(classes = "link-body") {
+                        span { icon("link"); a(href = url) { +(node.linkTitle ?: linkLabel(url)) } }
+                        node.linkPreview?.let { p -> div(classes = "link-snippet muted") { +p } }
+                    }
+                }
+            }
             node.notes?.let { n -> div(classes = "f-row") { +n } }
             val atts = read.attachments(node.id)
             if (atts.isNotEmpty()) div(classes = "f-row") {

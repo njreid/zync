@@ -185,7 +185,8 @@ class MainActivity : ComponentActivity() {
                     contextApp = remember(homeState.contextName, barAppsTick) {
                         ContextApps.pick(this@MainActivity, homeState.contextName)
                     },
-                    onContextTap = { launchContextApp(homeState.contextName) },
+                    // The middle bar slot always opens the app-search drawer (the old @dev behavior).
+                    onContextTap = { searchOpen = true },
                     onContextEdit = { settingsTab = dev.njr.zync.ui.settings.BarTab.Context },
                     onSwipeLaunch = ::launchSwipeApp,
                 )

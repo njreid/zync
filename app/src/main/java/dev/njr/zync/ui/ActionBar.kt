@@ -244,7 +244,7 @@ private fun MenuRow(label: String, icon: BarApp?, hot: Boolean) {
             icon?.userSerial != null -> Color(0xFF9FBEE3) // work-profile rows: blue-leaning ink
             else -> BarMuted
         }
-        BasicText(label, style = TextStyle(color = ink, fontSize = 15.sp, fontWeight = if (hot) FontWeight.SemiBold else FontWeight.Normal))
+        BasicText(label, style = TextStyle(color = ink, fontSize = 15.sp, fontWeight = if (hot) FontWeight.SemiBold else FontWeight.Normal, fontStyle = dev.njr.zync.ui.workNameStyle(icon?.userSerial)))
     }
 }
 
