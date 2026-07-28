@@ -438,7 +438,8 @@ private fun ProfileBar(event: dev.njr.zync.home.CalEvent, alpha: Float) {
         painter = painterResource(if (work) R.drawable.ic_profile_work else R.drawable.ic_profile_home),
         contentDescription = if (work) "Work" else "Home",
         colorFilter = ColorFilter.tint(tint),
-        modifier = Modifier.size(18.dp),
+        // The house glyph is visually lighter than the solid briefcase — bump it up to balance.
+        modifier = Modifier.size(if (work) 18.dp else 21.dp),
     )
 }
 
@@ -469,29 +470,27 @@ private fun EventRow(row: AgendaRow.Event, onOpenEvent: (dev.njr.zync.home.CalEv
             fun open(url: String) = runCatching {
                 locContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
             }
-            // Tapping the title opens the event in its source calendar (server-pushed events only).
-            val calLink = row.event.link
+            // Tapping the title opens the location URL when the event has one (a video-call link),
+            // else the event in its source calendar.
+            val primary = row.event.joinUrl ?: row.event.link
             BasicText(
                 row.event.title,
                 style = TextStyle(color = fg, fontSize = 15.sp, fontFamily = ZyncSans, fontWeight = if (inverted) FontWeight.SemiBold else FontWeight.Normal),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = if (calLink != null) Modifier.clickable { open(calLink) } else Modifier,
+                modifier = if (primary != null) Modifier.clickable { open(primary) } else Modifier,
             )
-            // Location under the title, quieter; a URL inside becomes a "join" link.
-            val join = row.event.joinUrl
-            when {
-                join != null -> BasicText(
-                    "join",
-                    style = TextStyle(color = C.Accent.copy(alpha = alpha), fontSize = 12.sp, fontFamily = ZyncSans, textDecoration = TextDecoration.Underline),
-                    modifier = Modifier.clickable { open(join) },
-                )
-                row.event.location != null -> BasicText(
-                    row.event.location!!,
-                    style = TextStyle(color = fg2, fontSize = 12.sp, fontFamily = ZyncSans),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            // A physical location shows quietly under the title; a URL location needs no line (the
+            // title tap opens it).
+            if (row.event.joinUrl == null) {
+                row.event.location?.let { loc ->
+                    BasicText(
+                        loc,
+                        style = TextStyle(color = fg2, fontSize = 12.sp, fontFamily = ZyncSans),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }

@@ -5,6 +5,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -71,18 +73,13 @@ fun BarSettingsScreen(
     eventSources: List<Pair<String, String>> = emptyList(),
 ) {
     val context = LocalContext.current
-    var tab by remember { mutableStateOf(initialTab) }
-    var adding by remember { mutableStateOf(false) } // list tabs: picker open
-    var pickingFor by remember { mutableStateOf<String?>(null) } // context-name / "swipe"
+    // One long scrollable page (initialTab is ignored now that there are no tabs). Choosing an app
+    // for any slot opens the shared AppPicker as a full-screen overlay; `picker` says which slot.
+    @Suppress("UNUSED_PARAMETER") val ignoredTab = initialTab
+    var picker by remember { mutableStateOf<SettingsPick?>(null) }
     var tick by remember { mutableIntStateOf(0) } // bump after any save
 
-    BackHandler(onBack = {
-        when {
-            adding -> adding = false
-            pickingFor != null -> pickingFor = null
-            else -> onDismiss()
-        }
-    })
+    BackHandler(onBack = { if (picker != null) picker = null else onDismiss() })
 
     Column(
         Modifier
@@ -96,149 +93,106 @@ fun BarSettingsScreen(
             BasicText("✕", style = TextStyle(color = C.Ink3, fontSize = 20.sp), modifier = Modifier.clickable(onClick = onDismiss).padding(4.dp))
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            BarTab.entries.forEach { t ->
-                BasicText(
-                    t.title,
-                    style = TextStyle(
-                        color = if (t == tab) C.Surface else C.Ink2,
-                        fontSize = 13.sp,
-                        fontFamily = ZyncSans,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                    modifier = Modifier
-                        .background(if (t == tab) C.Ink else C.Surface, RoundedCornerShape(999.dp))
-                        .border(1.dp, if (t == tab) C.Ink else C.Border, RoundedCornerShape(999.dp))
-                        .clickable { tab = t; adding = false; pickingFor = null }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                )
-            }
-        }
-
-        when (tab) {
-            BarTab.Messages, BarTab.Calendar -> {
-                val role = if (tab == BarTab.Messages) BarRole.Messages else BarRole.Calendar
-                key(role, tick) { RoleList(role, adding, onAdding = { adding = it }, onSaved = { tick++ }) }
-            }
-            BarTab.Context -> {
-                val target = pickingFor
-                if (target != null) {
-                    AppPicker(exclude = emptySet(), onPick = { picked ->
-                        ContextApps.save(context, target, picked)
-                        pickingFor = null
-                        tick++
-                    })
+        val p = picker
+        if (p != null) {
+            AppPicker(
+                exclude = if (p is PickRole) {
+                    BarApps.load(context, p.role).map { it.packageName + it.activityName + (it.userSerial ?: 0) }.toSet()
                 } else {
-                    BasicText(
-                        "The bar's center slot launches this app for the active context",
-                        style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
-                        modifier = Modifier.padding(vertical = 10.dp),
-                    )
-                    val explicit = remember(tick) { ContextApps.explicit(context) }
-                    LazyColumn(Modifier.weight(1f)) {
-                        items(contexts, key = { it }) { name ->
-                            val at = "@" + name.removePrefix("@")
-                            val chosen = explicit[at]
-                            val effective = chosen ?: ContextApps.defaultFor(context, at)
-                            Row(
-                                Modifier.fillMaxWidth().clickable { pickingFor = at }.padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                AppIcon(effective)
-                                Column(Modifier.weight(1f)) {
-                                    BasicText(at, style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans))
-                                    BasicText(
-                                        when {
-                                            chosen != null -> chosen.label + workTag(chosen)
-                                            effective != null -> "default: ${effective.label}" + workTag(effective)
-                                            else -> "tap to choose an app"
-                                        },
-                                        style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
-                                    )
-                                }
-                                if (chosen != null) {
-                                    RowButton("✕") { ContextApps.save(context, at, null); tick++ }
-                                }
-                            }
-                        }
+                    emptySet()
+                },
+                onPick = { picked ->
+                    when (p) {
+                        is PickRole -> BarApps.save(context, p.role, BarApps.load(context, p.role) + picked)
+                        is PickContext -> ContextApps.save(context, p.at, picked)
+                        PickSwipe -> ContextApps.saveSwipe(context, picked)
                     }
-                }
-            }
-            BarTab.Agenda -> {
-                val cals = remember { dev.njr.zync.home.CalendarSource.availableCalendars(context) }
-                val excluded = remember(tick) { dev.njr.zync.home.CalendarChoices.excluded(context) }
-                val hidden = remember(tick) { dev.njr.zync.home.EventFilters.hidden(context) }
-                LazyColumn(Modifier.weight(1f)) {
-                    item {
-                        BasicText(
-                            "Calendars shown on the agenda",
-                            style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
-                            modifier = Modifier.padding(vertical = 10.dp),
-                        )
-                    }
-                    if (cals.isEmpty()) {
-                        item {
-                            BasicText(
-                                "No calendars (grant calendar access from the home agenda first)",
-                                style = TextStyle(color = C.Ink3, fontSize = 13.sp, fontFamily = ZyncSans),
-                            )
-                        }
-                    } else {
-                        items(cals, key = { it.id }) { cal ->
-                            val on = cal.id !in excluded
-                            CheckRow(on, cal.name, cal.account.takeIf { it.isNotBlank() }) {
-                                dev.njr.zync.home.CalendarChoices.setExcluded(context, if (on) excluded + cal.id else excluded - cal.id)
-                                tick++
-                            }
-                        }
-                    }
-                    if (eventSources.isNotEmpty()) {
-                        item {
-                            BasicText(
-                                "Hide specific events (by calendar + title)",
-                                style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
-                                modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
-                            )
-                        }
-                        items(eventSources, key = { dev.njr.zync.home.EventFilters.key(it.first, it.second) }) { (source, title) ->
-                            val k = dev.njr.zync.home.EventFilters.key(source, title)
-                            val on = k !in hidden // checked = shown
-                            CheckRow(on, title, source) {
-                                dev.njr.zync.home.EventFilters.setHidden(context, if (on) hidden + k else hidden - k)
-                                tick++
-                            }
-                        }
-                    }
-                }
-            }
-            BarTab.Swipe -> {
-                if (pickingFor == "swipe") {
-                    AppPicker(exclude = emptySet(), onPick = { picked ->
-                        ContextApps.saveSwipe(context, picked)
-                        pickingFor = null
-                        tick++
-                    })
-                } else {
-                    BasicText(
-                        "Swiping from the right opens the newz feed by default — or pick an app instead; from the left opens search",
-                        style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
-                        modifier = Modifier.padding(vertical = 10.dp),
-                    )
-                    val app = remember(tick) { ContextApps.swipeApp(context) }
+                    picker = null
+                    tick++
+                },
+            )
+        } else {
+            Column(Modifier.verticalScroll(rememberScrollState()).weight(1f)) {
+                // --- Context apps ---
+                SettingsSection("Context app — the bar's center slot launches this for the active context")
+                val explicit = remember(tick) { ContextApps.explicit(context) }
+                contexts.forEach { name ->
+                    val at = "@" + name.removePrefix("@")
+                    val chosen = explicit[at]
+                    val effective = chosen ?: ContextApps.defaultFor(context, at)
                     Row(
-                        Modifier.fillMaxWidth().clickable { pickingFor = "swipe" }.padding(vertical = 8.dp),
+                        Modifier.fillMaxWidth().clickable { picker = PickContext(at) }.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        AppIcon(app)
-                        BasicText(
-                            app?.let { it.label + workTag(it) } ?: "Newz feed · built-in",
-                            style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans),
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (app != null) RowButton("✕") { ContextApps.saveSwipe(context, null); tick++ }
+                        AppIcon(effective)
+                        Column(Modifier.weight(1f)) {
+                            BasicText(at, style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans))
+                            BasicText(
+                                when {
+                                    chosen != null -> chosen.label + workTag(chosen)
+                                    effective != null -> "default: ${effective.label}" + workTag(effective)
+                                    else -> "tap to choose an app"
+                                },
+                                style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
+                            )
+                        }
+                        if (chosen != null) RowButton("✕") { ContextApps.save(context, at, null); tick++ }
                     }
+                }
+
+                // --- Calendar / Messages bar apps ---
+                SettingsSection("Calendar bar app — first = tap, rest = long-press, slide, release")
+                RoleList(BarRole.Calendar, tick) { picker = PickRole(BarRole.Calendar) }
+                SettingsSection("Messages bar app")
+                RoleList(BarRole.Messages, tick) { picker = PickRole(BarRole.Messages) }
+
+                // --- Agenda ---
+                SettingsSection("Calendars shown on the agenda")
+                val cals = remember { dev.njr.zync.home.CalendarSource.availableCalendars(context) }
+                val excluded = remember(tick) { dev.njr.zync.home.CalendarChoices.excluded(context) }
+                val hidden = remember(tick) { dev.njr.zync.home.EventFilters.hidden(context) }
+                if (cals.isEmpty()) {
+                    BasicText(
+                        "No calendars (grant calendar access from the home agenda first)",
+                        style = TextStyle(color = C.Ink3, fontSize = 13.sp, fontFamily = ZyncSans),
+                    )
+                } else {
+                    cals.forEach { cal ->
+                        val on = cal.id !in excluded
+                        CheckRow(on, cal.name, cal.account.takeIf { it.isNotBlank() }) {
+                            dev.njr.zync.home.CalendarChoices.setExcluded(context, if (on) excluded + cal.id else excluded - cal.id)
+                            tick++
+                        }
+                    }
+                }
+                if (eventSources.isNotEmpty()) {
+                    SettingsSection("Hide specific events (by calendar + title)")
+                    eventSources.forEach { (source, title) ->
+                        val k = dev.njr.zync.home.EventFilters.key(source, title)
+                        val on = k !in hidden // checked = shown
+                        CheckRow(on, title, source) {
+                            dev.njr.zync.home.EventFilters.setHidden(context, if (on) hidden + k else hidden - k)
+                            tick++
+                        }
+                    }
+                }
+
+                // --- Swipe app ---
+                SettingsSection("Swipe-right app — the default is the built-in Newz feed; left opens search")
+                val swipeApp = remember(tick) { ContextApps.swipeApp(context) }
+                Row(
+                    Modifier.fillMaxWidth().clickable { picker = PickSwipe }.padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    AppIcon(swipeApp)
+                    BasicText(
+                        swipeApp?.let { it.label + workTag(it) } ?: "Newz feed · built-in",
+                        style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans),
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (swipeApp != null) RowButton("✕") { ContextApps.saveSwipe(context, null); tick++ }
                 }
             }
         }
@@ -246,56 +200,54 @@ fun BarSettingsScreen(
 }
 
 /** The Messages/Calendar ordered list (● first = primary tap). */
+/** Which bar slot the shared app-picker overlay is choosing for. */
+private sealed interface SettingsPick
+private data class PickRole(val role: BarRole) : SettingsPick
+private data class PickContext(val at: String) : SettingsPick
+private data object PickSwipe : SettingsPick
+
+/** A settings section header inside the single scroll page. */
 @Composable
-private fun RoleList(role: BarRole, adding: Boolean, onAdding: (Boolean) -> Unit, onSaved: () -> Unit) {
+private fun SettingsSection(title: String) {
+    BasicText(
+        title,
+        style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
+        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+    )
+}
+
+/**
+ * The ordered Messages/Calendar app list (● first = primary tap), rendered inline (no LazyColumn,
+ * since it lives inside the settings scroll page). [onAdd] opens the shared picker overlay.
+ */
+@Composable
+private fun RoleList(role: BarRole, tick: Int, onAdd: () -> Unit) {
     val context = LocalContext.current
-    var apps by remember(role) { mutableStateOf(BarApps.load(context, role)) }
+    var apps by remember(role, tick) { mutableStateOf(BarApps.load(context, role)) }
+    fun persist(next: List<BarApp>) { apps = next; BarApps.save(context, role, next) }
 
-    fun persist(next: List<BarApp>) {
-        apps = next
-        BarApps.save(context, role, next)
-        onSaved()
-    }
-
-    if (adding) {
-        AppPicker(
-            exclude = apps.map { it.packageName + it.activityName + (it.userSerial ?: 0) }.toSet(),
-            onPick = { picked -> persist(apps + picked); onAdding(false) },
-        )
-    } else {
-        BasicText(
-            "First app = tap · rest = long-press, slide, release",
-            style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
-            modifier = Modifier.padding(vertical = 10.dp),
-        )
-        LazyColumn {
-            items(apps.size) { i ->
-                val app = apps[i]
-                Row(
-                    Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    AppIcon(app)
-                    BasicText(
-                        (if (i == 0) "● ${app.label}" else app.label) + workTag(app),
-                        style = TextStyle(color = workInk(app, C.Ink), fontSize = 15.sp, fontFamily = ZyncSans),
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (i > 0) RowButton("↑") { persist(apps.toMutableList().apply { add(i - 1, removeAt(i)) }) }
-                    if (i < apps.size - 1) RowButton("↓") { persist(apps.toMutableList().apply { add(i + 1, removeAt(i)) }) }
-                    RowButton("✕") { persist(apps.toMutableList().apply { removeAt(i) }) }
-                }
-            }
-            item(key = "add") {
-                BasicText(
-                    "+ Add app",
-                    style = TextStyle(color = C.Accent, fontSize = 15.sp, fontFamily = ZyncSans),
-                    modifier = Modifier.clickable { onAdding(true) }.padding(vertical = 12.dp),
-                )
-            }
+    apps.forEachIndexed { i, app ->
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            AppIcon(app)
+            BasicText(
+                (if (i == 0) "● ${app.label}" else app.label) + workTag(app),
+                style = TextStyle(color = workInk(app, C.Ink), fontSize = 15.sp, fontFamily = ZyncSans),
+                modifier = Modifier.weight(1f),
+            )
+            if (i > 0) RowButton("↑") { persist(apps.toMutableList().apply { add(i - 1, removeAt(i)) }) }
+            if (i < apps.size - 1) RowButton("↓") { persist(apps.toMutableList().apply { add(i + 1, removeAt(i)) }) }
+            RowButton("✕") { persist(apps.toMutableList().apply { removeAt(i) }) }
         }
     }
+    BasicText(
+        "+ Add app",
+        style = TextStyle(color = C.Accent, fontSize = 15.sp, fontFamily = ZyncSans),
+        modifier = Modifier.clickable(onClick = onAdd).padding(vertical = 12.dp),
+    )
 }
 
 /** " · work" marker — the badge on the icon is easy to miss at list sizes. */
