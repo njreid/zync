@@ -64,7 +64,12 @@ enum class BarTab(val title: String) {
  * and the app a right swipe launches (default: Harmonic).
  */
 @Composable
-fun BarSettingsScreen(initialTab: BarTab, contexts: List<String>, onDismiss: () -> Unit) {
+fun BarSettingsScreen(
+    initialTab: BarTab,
+    contexts: List<String>,
+    onDismiss: () -> Unit,
+    eventSources: List<Pair<String, String>> = emptyList(),
+) {
     val context = LocalContext.current
     var tab by remember { mutableStateOf(initialTab) }
     var adding by remember { mutableStateOf(false) } // list tabs: picker open
@@ -161,45 +166,47 @@ fun BarSettingsScreen(initialTab: BarTab, contexts: List<String>, onDismiss: () 
                 }
             }
             BarTab.Agenda -> {
-                BasicText(
-                    "Calendars shown on the agenda",
-                    style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
-                    modifier = Modifier.padding(vertical = 10.dp),
-                )
                 val cals = remember { dev.njr.zync.home.CalendarSource.availableCalendars(context) }
                 val excluded = remember(tick) { dev.njr.zync.home.CalendarChoices.excluded(context) }
-                if (cals.isEmpty()) {
-                    BasicText(
-                        "No calendars (grant calendar access from the home agenda first)",
-                        style = TextStyle(color = C.Ink3, fontSize = 13.sp, fontFamily = ZyncSans),
-                    )
-                } else {
-                    LazyColumn(Modifier.weight(1f)) {
+                val hidden = remember(tick) { dev.njr.zync.home.EventFilters.hidden(context) }
+                LazyColumn(Modifier.weight(1f)) {
+                    item {
+                        BasicText(
+                            "Calendars shown on the agenda",
+                            style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
+                            modifier = Modifier.padding(vertical = 10.dp),
+                        )
+                    }
+                    if (cals.isEmpty()) {
+                        item {
+                            BasicText(
+                                "No calendars (grant calendar access from the home agenda first)",
+                                style = TextStyle(color = C.Ink3, fontSize = 13.sp, fontFamily = ZyncSans),
+                            )
+                        }
+                    } else {
                         items(cals, key = { it.id }) { cal ->
                             val on = cal.id !in excluded
-                            Row(
-                                Modifier.fillMaxWidth()
-                                    .clickable {
-                                        dev.njr.zync.home.CalendarChoices.setExcluded(
-                                            context,
-                                            if (on) excluded + cal.id else excluded - cal.id,
-                                        )
-                                        tick++
-                                    }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                BasicText(
-                                    if (on) "\u2611" else "\u2610",
-                                    style = TextStyle(color = if (on) C.Accent else C.Ink3, fontSize = 18.sp),
-                                )
-                                Column(Modifier.weight(1f)) {
-                                    BasicText(cal.name, style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans))
-                                    if (cal.account.isNotBlank()) {
-                                        BasicText(cal.account, style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans))
-                                    }
-                                }
+                            CheckRow(on, cal.name, cal.account.takeIf { it.isNotBlank() }) {
+                                dev.njr.zync.home.CalendarChoices.setExcluded(context, if (on) excluded + cal.id else excluded - cal.id)
+                                tick++
+                            }
+                        }
+                    }
+                    if (eventSources.isNotEmpty()) {
+                        item {
+                            BasicText(
+                                "Hide specific events (by calendar + title)",
+                                style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans),
+                                modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
+                            )
+                        }
+                        items(eventSources, key = { dev.njr.zync.home.EventFilters.key(it.first, it.second) }) { (source, title) ->
+                            val k = dev.njr.zync.home.EventFilters.key(source, title)
+                            val on = k !in hidden // checked = shown
+                            CheckRow(on, title, source) {
+                                dev.njr.zync.home.EventFilters.setHidden(context, if (on) hidden + k else hidden - k)
+                                tick++
                             }
                         }
                     }
@@ -324,6 +331,22 @@ private fun RowButton(glyph: String, onTap: () -> Unit) {
             .clickable(onClick = onTap)
             .padding(horizontal = 10.dp, vertical = 4.dp),
     )
+}
+
+/** A checkbox row (checked = shown/included); tap toggles. Shared by the calendar + event pickers. */
+@Composable
+private fun CheckRow(on: Boolean, title: String, subtitle: String?, onToggle: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        BasicText(if (on) "☑" else "☐", style = TextStyle(color = if (on) C.Accent else C.Ink3, fontSize = 18.sp))
+        Column(Modifier.weight(1f)) {
+            BasicText(title, style = TextStyle(color = C.Ink, fontSize = 15.sp, fontFamily = ZyncSans))
+            subtitle?.let { BasicText(it, style = TextStyle(color = C.Ink3, fontSize = 12.sp, fontFamily = ZyncSans)) }
+        }
+    }
 }
 
 @Composable

@@ -66,6 +66,8 @@ data class HomeState(
     val agenda: dev.njr.zync.home.AgendaView,
     val calendarPermission: Boolean,
     val notificationsEnabled: Boolean,
+    /** Distinct (source, title) of today's agenda events — for the settings hide-events picker. */
+    val eventSources: List<Pair<String, String>> = emptyList(),
 )
 
 /** Which display box is selected (drives the WebView destination on tap). */
@@ -201,7 +203,7 @@ private fun ContextInfoRow(state: HomeState) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         InfoBox("Weather", state.weatherLine ?: "—", Modifier.weight(1f))
-        InfoBox("Agenda", state.agenda.freeMinutes?.let { "free ${it}m" } ?: "busy", Modifier.weight(1f))
+        InfoBox("Agenda", state.agenda.freeMinutes?.let { "free ${hoursMinutes(it)}" } ?: "busy", Modifier.weight(1f))
         when {
             ctx.contains("work") -> InfoBox("Due", "${state.todayCount}", Modifier.weight(1f))
             ctx.contains("home") -> InfoBox("Waiting", "${state.waitingCount}", Modifier.weight(1f))
@@ -352,7 +354,7 @@ private fun Agenda(
         if (agenda.free) {
             item(key = "free-header") {
                 BasicText(
-                    agenda.freeMinutes?.let { "free for $it min" } ?: "free",
+                    agenda.freeMinutes?.let { "free for ${hoursMinutes(it)}" } ?: "free",
                     style = TextStyle(color = C.Accent, fontSize = 13.sp, fontFamily = CharonMono, fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
                 )
@@ -509,4 +511,15 @@ private fun formatTime(millis: Long): String {
     val h = cal.get(java.util.Calendar.HOUR_OF_DAY)
     val m = cal.get(java.util.Calendar.MINUTE)
     return "$h:${if (m < 10) "0$m" else "$m"}"
+}
+
+/** A compact free-time duration: "2h 15m", "3h", or "45m". */
+private fun hoursMinutes(mins: Int): String {
+    val h = mins / 60
+    val m = mins % 60
+    return when {
+        h > 0 && m > 0 -> "${h}h ${m}m"
+        h > 0 -> "${h}h"
+        else -> "${m}m"
+    }
 }

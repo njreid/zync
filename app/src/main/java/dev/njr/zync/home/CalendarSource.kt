@@ -129,6 +129,27 @@ object CalendarSource {
     private val WORK_HINTS = listOf("work", "office", "corp")
 }
 
+/**
+ * Individual agenda events hidden by (source, title) — e.g. an all-day work-location "Home".
+ * Keyed on both so hiding one calendar's "Home" doesn't hide another's. Settings → Agenda tab.
+ */
+object EventFilters {
+    private const val PREFS = "zync_launcher"
+    private const val KEY = "agenda_hidden_events"
+
+    /** A stable key for a (source, title) pair (NUL-separated so neither field can collide). */
+    fun key(source: String, title: String) = "$source\u0000$title"
+
+    fun hidden(context: Context): Set<String> =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet(KEY, emptySet()) ?: emptySet()
+
+    fun isHidden(context: Context, source: String, title: String): Boolean = key(source, title) in hidden(context)
+
+    fun setHidden(context: Context, keys: Set<String>) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putStringSet(KEY, keys).apply()
+    }
+}
+
 /** Which device calendars the agenda skips (settings → Agenda tab); empty = all. */
 object CalendarChoices {
     private const val PREFS = "zync_launcher"

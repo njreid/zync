@@ -195,6 +195,7 @@ class MainActivity : ComponentActivity() {
                         initialTab = tab,
                         contexts = app.contentRead.contexts().mapNotNull { it.name },
                         onDismiss = { settingsTab = null; barAppsTick++; permissionTick++ },
+                        eventSources = homeState.eventSources,
                     )
                 }
                 if (syncLogOpen) {
@@ -364,11 +365,14 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }.getOrDefault(emptyList())
-        val allEvents = (
+        val polished = (
             CalendarSource.todaysEvents(this, dayStart, lookaheadEnd) +
                 notifEvents.filter { it.beginMillis in dayStart until lookaheadEnd } +
                 serverEvents.filter { it.beginMillis < lookaheadEnd && it.endMillis > dayStart }
             ).map { dev.njr.zync.home.TitleCleaner.polish(this, it) }
+        // (source, title) of everything before filtering — the settings picker toggles these.
+        val eventSources = polished.map { it.calendarName to it.title }.distinct().sortedBy { it.second.lowercase() }
+        val allEvents = polished.filter { !dev.njr.zync.home.EventFilters.isHidden(this, it.calendarName, it.title) }
         val events = allEvents.filter { it.beginMillis < dayEnd && it.endMillis > dayStart }
         val dayFmt = SimpleDateFormat("EEE d", Locale.US)
         val isoFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -394,6 +398,7 @@ class MainActivity : ComponentActivity() {
             agenda = buildAgenda(events, nowMillis, suggestions, upcoming = upcomingDays(allEvents, futureDays)),
             calendarPermission = CalendarSource.hasPermission(this),
             notificationsEnabled = NotificationEvents.listenerEnabled(this),
+            eventSources = eventSources,
         )
     }
 
