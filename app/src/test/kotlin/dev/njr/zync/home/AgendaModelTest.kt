@@ -102,4 +102,32 @@ class AgendaModelTest {
         val view = buildAgenda(listOf(fromCal, fromNotif), 100 * m, emptyList())
         assertEquals(1, view.rows.count { it is AgendaRow.Event })
     }
+
+    private fun localMidnight(date: java.time.LocalDate, zone: java.time.ZoneId) =
+        date.atStartOfDay(zone).toInstant().toEpochMilli()
+
+    @Test
+    fun allDayFromAnotherTimezoneSnapsToLocalDayAndBucketsOnce() {
+        // A server-pushed all-day event for 2026-07-20 encoded at UTC midnight, seen on a device
+        // in Berlin (UTC+2 in July): its raw [begin, end) pokes into the 21st, so before the snap
+        // it matched both day windows (today AND tomorrow). After the snap it lands on ONE day.
+        val berlin = java.time.ZoneId.of("Europe/Berlin")
+        val date = java.time.LocalDate.of(2026, 7, 20)
+        val utcMidnight = localMidnight(date, java.time.ZoneId.of("UTC"))
+        val raw = event("Home", utcMidnight, utcMidnight + 24 * 60 * m, allDay = true)
+
+        val snapped = dev.njr.zync.home.CalendarSource.normalizeAllDay(raw, java.util.TimeZone.getTimeZone(berlin))
+        val mid20 = localMidnight(date, berlin)
+        val mid21 = localMidnight(date.plusDays(1), berlin)
+        assertEquals(mid20, snapped.beginMillis)
+        assertEquals(mid21, snapped.endMillis)
+
+        val days = listOf(
+            Triple("20th", mid20, mid21),
+            Triple("21st", mid21, localMidnight(date.plusDays(2), berlin)),
+        )
+        // Raw event bucketed both days; snapped event lands only on the 20th.
+        assertEquals(listOf("20th", "21st"), upcomingDays(listOf(raw), days).map { it.label })
+        assertEquals(listOf("20th"), upcomingDays(listOf(snapped), days).map { it.label })
+    }
 }

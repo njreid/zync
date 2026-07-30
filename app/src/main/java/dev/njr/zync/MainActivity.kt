@@ -337,11 +337,17 @@ class MainActivity : ComponentActivity() {
         notifEvents: List<dev.njr.zync.home.CalEvent>,
     ): HomeState {
         val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
-        val dayStart = (cal.clone() as Calendar).apply {
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-        val dayEnd = dayStart + 24L * 60 * 60_000
-        val lookaheadEnd = dayStart + 7L * 24 * 60 * 60_000 // seven-day agenda look-ahead
+        // True local-midnight boundaries for today..+7 — NOT fixed 24h steps, so a DST change
+        // inside the look-ahead can't drift a day window off midnight and duplicate an event.
+        val dayBoundaries = (0..7).map { i ->
+            (cal.clone() as Calendar).apply {
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                add(Calendar.DAY_OF_YEAR, i)
+            }.timeInMillis
+        }
+        val dayStart = dayBoundaries[0]
+        val dayEnd = dayBoundaries[1]
+        val lookaheadEnd = dayBoundaries[7] // seven-day agenda look-ahead
         val read = app.contentRead
         val prefs = homeContextPrefs()
         val contextId = prefs.getString("context_id", null)?.let { runCatching { Ulid.parse(it) }.getOrNull() }
@@ -365,7 +371,7 @@ class MainActivity : ComponentActivity() {
             CalendarSource.todaysEvents(this, dayStart, lookaheadEnd) +
                 notifEvents.filter { it.beginMillis in dayStart until lookaheadEnd } +
                 serverEvents.filter { it.beginMillis < lookaheadEnd && it.endMillis > dayStart }
-            ).map { dev.njr.zync.home.TitleCleaner.polish(this, it) }
+            ).map { dev.njr.zync.home.CalendarSource.normalizeAllDay(dev.njr.zync.home.TitleCleaner.polish(this, it)) }
         // (source, title) of everything before filtering — the settings picker toggles these.
         val eventSources = polished.map { it.calendarName to it.title }.distinct().sortedBy { it.second.lowercase() }
         val allEvents = polished.filter { !dev.njr.zync.home.EventFilters.isHidden(this, it.calendarName, it.title) }
@@ -373,9 +379,9 @@ class MainActivity : ComponentActivity() {
         val dayFmt = SimpleDateFormat("EEE d", Locale.US)
         val isoFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val futureDays = (1..6).map { i ->
-            val s = dayStart + i * 24L * 60 * 60_000
+            val s = dayBoundaries[i]
             val cast = forecast[isoFmt.format(java.util.Date(s))]?.let { "  $it" } ?: ""
-            Triple(dayFmt.format(java.util.Date(s)) + cast, s, s + 24L * 60 * 60_000)
+            Triple(dayFmt.format(java.util.Date(s)) + cast, s, dayBoundaries[i + 1])
         }
         val dueBy = DueDates.parse(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time))!!
         val locationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==

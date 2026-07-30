@@ -98,6 +98,37 @@ object CalendarSource {
         return out
     }
 
+    /** Local midnight at the start of the day CONTAINING [millis]. */
+    fun startOfLocalDay(millis: Long, zone: java.util.TimeZone = java.util.TimeZone.getDefault()): Long =
+        java.util.Calendar.getInstance(zone).apply {
+            timeInMillis = millis
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+    /**
+     * Snap an ALL-DAY event onto the DEVICE's local calendar days, regardless of the timezone
+     * its source encoded it in. CalendarProvider events already arrive at local midnight; server
+     * feeds may encode all-day at UTC — or the calendar's — midnight, so their [begin, end) window
+     * pokes past a local-midnight boundary and matches TWO adjacent day buckets (the same event
+     * shows today AND tomorrow). We derive each endpoint's intended date from a noon anchor (robust
+     * to any zone offset within ±12h) and rebuild the span on local midnights; timed events pass
+     * through untouched. This also makes a server copy and a local copy of the same all-day event
+     * snap to identical begin millis, so the (title|begin) dedup finally merges them.
+     */
+    fun normalizeAllDay(event: CalEvent, zone: java.util.TimeZone = java.util.TimeZone.getDefault()): CalEvent {
+        if (!event.allDay) return event
+        val halfDay = 12L * 60 * 60_000
+        val begin = startOfLocalDay(event.beginMillis + halfDay, zone)
+        // end is the EXCLUSIVE next-midnight; step 12h back into the last covered day, then to its
+        // following midnight — a single-day event collapses to exactly one [midnight, +24h) window.
+        val lastDayStart = startOfLocalDay(event.endMillis - halfDay, zone)
+        val end = maxOf(lastDayStart, begin) + 24L * 60 * 60_000
+        return event.copy(beginMillis = begin, endMillis = end)
+    }
+
     /** The same UTC calendar date, as a LOCAL-midnight timestamp. */
     fun utcMidnightToLocalMidnight(
         utcMillis: Long,
