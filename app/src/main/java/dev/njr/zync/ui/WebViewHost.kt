@@ -88,9 +88,7 @@ fun ZyncShell(
     searchOpen: Boolean = false,
     onSearchOpenChange: (Boolean) -> Unit = {},
     onOpenGoogleSearch: () -> Unit = {},
-    contextApp: dev.njr.zync.launcher.BarApp? = null,
     onContextTap: () -> Unit = {},
-    onContextEdit: () -> Unit = {},
     onSwipeLaunch: () -> Unit = {},
 ) {
     // The dark surface paints edge-to-edge FIRST; insets are then applied per-region
@@ -123,9 +121,7 @@ fun ZyncShell(
                 barApps = barApps,
                 onLaunchApp = onLaunchApp,
                 onEditRole = onEditRole,
-                contextApp = contextApp,
                 onContextTap = onContextTap,
-                onContextEdit = onContextEdit,
                 onSwipeLaunch = onSwipeLaunch,
             )
         }

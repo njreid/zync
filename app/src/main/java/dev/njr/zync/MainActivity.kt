@@ -182,12 +182,8 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onOpenGoogleSearch = ::openGoogleSearch,
-                    contextApp = remember(homeState.contextName, barAppsTick) {
-                        ContextApps.pick(this@MainActivity, homeState.contextName)
-                    },
-                    // The middle bar slot always opens the app-search drawer (the old @dev behavior).
+                    // The middle bar slot always opens the app-search drawer (search icon + tap).
                     onContextTap = { searchOpen = true },
-                    onContextEdit = { settingsTab = dev.njr.zync.ui.settings.BarTab.Context },
                     onSwipeLaunch = ::launchSwipeApp,
                 )
                 settingsTab?.let { tab ->
@@ -593,17 +589,6 @@ class MainActivity : ComponentActivity() {
         val ulid = runCatching { Ulid.parse(id) }.getOrNull() ?: return null
         val title = (application as ZyncApp).contentRead.node(ulid)?.title ?: return null
         return id to title
-    }
-
-    /** Center bar slot: launch the active context's app, or invite configuration. */
-    private fun launchContextApp(contextName: String?) {
-        // The @dev context's "app" IS our custom search drawer — a reliable way to open the
-        // app/contact/settings launcher (the swipe-up gesture is device-flaky).
-        if (contextName == "dev") { searchOpen = true; return }
-        val app = ContextApps.pick(this, contextName)
-        if (app == null || !dev.njr.zync.launcher.AppLaunch.launch(this, app.toEntry())) {
-            settingsTab = dev.njr.zync.ui.settings.BarTab.Context
-        }
     }
 
     /** Right-origin swipe: an explicitly chosen app, else the built-in newz feed. */

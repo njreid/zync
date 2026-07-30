@@ -467,9 +467,9 @@ private fun EventRow(row: AgendaRow.Event, onOpenEvent: (dev.njr.zync.home.CalEv
         ProfileBar(row.event, alpha)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             val locContext = LocalContext.current
-            fun open(url: String) = runCatching {
-                locContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
-            }
+            val work = row.event.profile == dev.njr.zync.home.CalEvent.Profile.WORK
+            // A work event's URL is routed to the work profile (work Zoom etc.); see ProfileLinks.
+            fun open(url: String) = dev.njr.zync.home.ProfileLinks.open(locContext, url, work)
             // Tapping the title opens the location URL when the event has one (a video-call link),
             // else the event in its source calendar.
             val primary = row.event.joinUrl ?: row.event.link

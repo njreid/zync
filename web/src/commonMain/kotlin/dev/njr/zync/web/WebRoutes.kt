@@ -204,6 +204,15 @@ fun Route.webRoutes(
         if (file == null) call.respondText("not found", status = HttpStatusCode.NotFound)
         else call.respondBytes(WebPlatform.assetBytes("fonts/$file"), ContentType("font", "woff2"))
     }
+    get("/manifest.webmanifest") {
+        call.respondText(WebPlatform.asset("manifest.webmanifest"), ContentType("application", "manifest+json"))
+    }
+    get("/icons/{file}") {
+        // Allowlist the exact vendored names — the param is joined into a resource path.
+        val file = call.parameters["file"]?.takeIf { it.matches(Regex("(icon-192|icon-512|icon-maskable-512|apple-touch-icon)\\.png")) }
+        if (file == null) call.respondText("not found", status = HttpStatusCode.NotFound)
+        else call.respondBytes(WebPlatform.assetBytes("icons/$file"), ContentType.Image.PNG)
+    }
 
     if (changes != null) {
         sse("/updates") {

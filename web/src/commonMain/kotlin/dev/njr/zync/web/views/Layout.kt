@@ -61,6 +61,12 @@ fun HTML.page(
         meta(charset = "utf-8")
         meta(name = "viewport", content = "width=device-width, initial-scale=1")
         title { +"zync — $pageTitle" }
+        // Installable as a desktop/home-screen app (Chrome "Install"/"Save as app", iOS "Add to
+        // Home Screen"). theme-color matches the Android adaptive-icon background (#183756).
+        link(rel = "manifest", href = "/manifest.webmanifest")
+        meta(name = "theme-color", content = "#183756")
+        link(rel = "apple-touch-icon", href = "/icons/apple-touch-icon.png")
+        link(rel = "icon", href = "/icons/icon-512.png", type = "image/png")
         link(rel = "stylesheet", href = "/assets/pico.min.css")
         link(rel = "stylesheet", href = "/assets/custom.css")
         // Datastar runtime, vendored + served locally so the phone loopback works offline.

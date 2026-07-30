@@ -7,7 +7,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -71,9 +70,7 @@ fun ZyncActionBar(
     barApps: (BarRole) -> List<BarApp> = { emptyList() },
     onLaunchApp: (BarApp) -> Unit = {},
     onEditRole: (BarRole) -> Unit = {},
-    contextApp: BarApp? = null,
     onContextTap: () -> Unit = {},
-    onContextEdit: () -> Unit = {},
     onSwipeLaunch: () -> Unit = {},
 ) {
     Column(
@@ -103,38 +100,11 @@ fun ZyncActionBar(
             configurableSlot(R.drawable.ic_calendar, BarRole.Calendar, Modifier.weight(1f), barApps, onLaunchApp, onEditRole) {
                 onAction(BarAction.Calendar)
             }
-            contextSlot(contextApp, Modifier.weight(1f), onContextTap, onContextEdit)
+            barSlot(R.drawable.ic_search, "Search", Modifier.weight(1f)) { onContextTap() }
             configurableSlot(R.drawable.ic_messages, BarRole.Messages, Modifier.weight(1f), barApps, onLaunchApp, onEditRole) {
                 onAction(BarAction.Messages)
             }
             barSlot(R.drawable.ic_capture, "Capture", Modifier.weight(1f)) { onAction(BarAction.Capture) }
-        }
-    }
-}
-
-/**
- * The center slot: the active context's app, wearing its real (badged) icon —
- * no tint, no label. Tap launches; long-press edits; unset shows an @ invite.
- */
-@Composable
-private fun contextSlot(app: BarApp?, modifier: Modifier, onTap: () -> Unit, onEdit: () -> Unit) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val bitmap = remember(app) {
-        app?.let {
-            dev.njr.zync.launcher.AppLaunch.icon(context, it.packageName, it.activityName, it.userSerial)
-                ?.toBitmap(108, 108)?.asImageBitmap()
-        }
-    }
-    Column(
-        modifier
-            .pointerInput(app) { detectTapGestures(onTap = { onTap() }, onLongPress = { onEdit() }) }
-            .padding(vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        if (bitmap != null) {
-            Image(bitmap = bitmap, contentDescription = app?.label, modifier = Modifier.size(42.dp), colorFilter = workIconFilter(app?.userSerial))
-        } else {
-            BasicText("@", style = TextStyle(color = BarMuted, fontSize = 32.sp, fontWeight = FontWeight.Bold))
         }
     }
 }

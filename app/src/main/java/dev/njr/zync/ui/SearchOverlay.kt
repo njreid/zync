@@ -56,8 +56,8 @@ private val FieldBackground = Color(0xFF1A212B)
 
 /**
  * The custom multi-search drawer (launcher spec L3 + device feedback): opens on a home swipe-UP.
- * Recent APPS head the drawer as a 4-col icon grid, then every app by launch frequency; the
- * query box sits at the BOTTOM, near the thumb, and (no auto-focus) opens onto the grid. Typing
+ * The query box sits at the TOP; below it recent APPS head the drawer as a 4-col icon+label
+ * grid, then every app by launch frequency. No auto-focus — it opens onto the grid; typing
  * turns it into full multi-search — apps + settings + contacts + a web handoff.
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -120,7 +120,58 @@ fun SearchOverlay(onDismiss: () -> Unit) {
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 16.dp),
     ) {
-        // TOP: recent apps as a 4-col icon grid (apps only; icons, no text) — blank query only.
+        // TOP: the multi-search query box. No auto-focus — tap to type.
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            BasicTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Go,
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onGo = {
+                        // Enter = top result: best app, else settings, else web search.
+                        val top = AppSearch.filter(apps, query, SearchHistory.usageCounts(context)).firstOrNull()
+                        val setting = AppSearch.settingsMatches(query).firstOrNull()
+                        when {
+                            top != null -> launchRecent(
+                                RecentItem(RecentItem.Kind.App, top.label, top.packageName, top.activityName, top.userSerial),
+                            )
+                            setting != null -> launchRecent(
+                                RecentItem(RecentItem.Kind.Setting, setting.label, settingsAction = setting.action),
+                            )
+                            query.isNotBlank() -> launchRecent(RecentItem(RecentItem.Kind.Web, "Web: $query", webQuery = query))
+                        }
+                        if (query.isNotBlank()) SearchHistory.recordQuery(context, query)
+                    },
+                ),
+                textStyle = TextStyle(color = TextPrimary, fontSize = 19.sp),
+                cursorBrush = SolidColor(TextPrimary),
+                modifier = Modifier
+                    .weight(1f)
+                    .background(FieldBackground, androidx.compose.foundation.shape.RoundedCornerShape(22.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            )
+            if (query.isNotEmpty()) {
+                BasicText(
+                    "✕",
+                    style = TextStyle(color = TextMuted, fontSize = 16.sp),
+                    modifier = Modifier.clickable { query = "" }.padding(6.dp),
+                )
+            }
+            BasicText(
+                "Close",
+                style = TextStyle(color = TextMuted, fontSize = 14.sp),
+                modifier = Modifier.clickable(onClick = onDismiss).padding(6.dp),
+            )
+        }
+
+        // Recent apps as a 4-col icon+label grid — blank query only.
         if (query.isBlank() && recentApps.isNotEmpty()) {
             RecentAppsGrid(recentApps) { launchRecent(it) }
         }
@@ -261,61 +312,10 @@ fun SearchOverlay(onDismiss: () -> Unit) {
                 }
             }
         }
-
-        // BOTTOM: the multi-search query box, near the thumb. No auto-focus — tap to type.
-        Row(
-            Modifier.fillMaxWidth().padding(vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            BasicTextField(
-                value = query,
-                onValueChange = { query = it },
-                singleLine = true,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    imeAction = androidx.compose.ui.text.input.ImeAction.Go,
-                ),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                    onGo = {
-                        // Enter = top result: best app, else settings, else web search.
-                        val top = AppSearch.filter(apps, query, SearchHistory.usageCounts(context)).firstOrNull()
-                        val setting = AppSearch.settingsMatches(query).firstOrNull()
-                        when {
-                            top != null -> launchRecent(
-                                RecentItem(RecentItem.Kind.App, top.label, top.packageName, top.activityName, top.userSerial),
-                            )
-                            setting != null -> launchRecent(
-                                RecentItem(RecentItem.Kind.Setting, setting.label, settingsAction = setting.action),
-                            )
-                            query.isNotBlank() -> launchRecent(RecentItem(RecentItem.Kind.Web, "Web: $query", webQuery = query))
-                        }
-                        if (query.isNotBlank()) SearchHistory.recordQuery(context, query)
-                    },
-                ),
-                textStyle = TextStyle(color = TextPrimary, fontSize = 19.sp),
-                cursorBrush = SolidColor(TextPrimary),
-                modifier = Modifier
-                    .weight(1f)
-                    .background(FieldBackground, androidx.compose.foundation.shape.RoundedCornerShape(22.dp))
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            )
-            if (query.isNotEmpty()) {
-                BasicText(
-                    "✕",
-                    style = TextStyle(color = TextMuted, fontSize = 16.sp),
-                    modifier = Modifier.clickable { query = "" }.padding(6.dp),
-                )
-            }
-            BasicText(
-                "Close",
-                style = TextStyle(color = TextMuted, fontSize = 14.sp),
-                modifier = Modifier.clickable(onClick = onDismiss).padding(6.dp),
-            )
-        }
     }
 }
 
-/** Recent apps as a 4-column icon grid (icons only, no labels): tap to launch. */
+/** Recent apps as a 4-column icon+label grid: tap to launch. Work-profile names read italic. */
 @Composable
 private fun RecentAppsGrid(apps: List<RecentItem>, onLaunch: (RecentItem) -> Unit) {
     Column(
@@ -325,8 +325,22 @@ private fun RecentAppsGrid(apps: List<RecentItem>, onLaunch: (RecentItem) -> Uni
         apps.chunked(4).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { item ->
-                    Box(Modifier.weight(1f).clickable { onLaunch(item) }, contentAlignment = Alignment.Center) {
+                    Column(
+                        Modifier.weight(1f).clickable { onLaunch(item) },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
                         AppIcon(item.packageName!!, item.activityName!!, item.userSerial, size = 46.dp)
+                        BasicText(
+                            item.label,
+                            style = TextStyle(
+                                color = if (item.userSerial != null) TextWork else TextMuted,
+                                fontSize = 11.sp,
+                                fontStyle = workNameStyle(item.userSerial),
+                            ),
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
                     }
                 }
                 repeat(4 - row.size) { Box(Modifier.weight(1f)) {} } // pad the last row to 4 columns
