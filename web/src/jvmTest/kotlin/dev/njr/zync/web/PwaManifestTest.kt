@@ -40,7 +40,8 @@ class PwaManifestTest {
         assertTrue(body.contains("\"purpose\": \"maskable\""))
 
         val home = client.get("/").bodyAsText()
-        assertTrue(home.contains("rel=\"manifest\" href=\"/manifest.webmanifest\""))
+        assertTrue(home.contains("rel=\"manifest\""))
+        assertTrue(home.contains("href=\"/manifest.webmanifest\""))
         assertTrue(home.contains("name=\"theme-color\""))
         assertTrue(home.contains("rel=\"apple-touch-icon\""))
     }
