@@ -11,7 +11,7 @@ test('renders seeded inbox and Datastar drives live mutations', async ({ page })
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
-  await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
 
   // server-rendered content is present
   await expect(page.locator('#inbox')).toContainText('Buy milk');
@@ -54,10 +54,10 @@ test('renders seeded inbox and Datastar drives live mutations', async ({ page })
   await expect(page.locator('main')).toContainText('Subtasks'); // the editor page
 
   // context filter via the top-bar Context dropdown (the seed tags "Plan the offsite" @errands)
-  await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
   await page.locator('.context-menu > summary').click();
   const href = await page.locator('.context-menu a', { hasText: '@errands' }).getAttribute('href');
-  await page.goto(BASE + href, { waitUntil: 'networkidle' });
+  await page.goto(BASE + href, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('.context-menu > summary')).toContainText('@errands');
   await expect(page.locator('#inbox')).toContainText('Plan the offsite');
   // the Context menu's "All" returns to the unfiltered inbox

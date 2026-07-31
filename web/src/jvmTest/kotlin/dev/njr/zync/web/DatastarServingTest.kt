@@ -32,7 +32,9 @@ class DatastarServingTest {
 
         val home = client.get("/").bodyAsText()
         assertTrue(home.contains("""src="/assets/datastar.js""""), "datastar script tag missing: $home")
-        assertTrue(home.contains("""data-on:load="@get('/updates')""""), "SSE hook missing")
+        // data-init (NOT data-on:load) opens the SSE — a <div> never fires a DOM `load` event,
+        // so data-on:load was a dead listener and live updates never started.
+        assertTrue(home.contains("""data-init="@get('/updates')""""), "SSE hook missing")
         assertTrue(home.contains("""id="inbox""""))
     }
 

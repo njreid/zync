@@ -9,7 +9,7 @@ test('capture bar: typing a title and Save creates an inbox item, then resets', 
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
-  await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#capture-bar')).toBeVisible(); // desktop-only, shown headless
 
   await page.locator('#capture-title').fill('Captured from the bar');
@@ -28,7 +28,7 @@ test('capture bar: a chosen file stages a chip and attaches on Save', async ({ p
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
-  await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
 
   // setInputFiles drives the same staging path a drop does (change → addFiles → chip).
   await page.locator('#capture-files').setInputFiles({

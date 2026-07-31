@@ -504,7 +504,7 @@ fun FlowContent.referenceResults(read: ContentReadModel, folder: Ulid?, query: S
     if (!query.isNullOrBlank()) {
         val hits = read.search(query)
         if (hits.isEmpty()) p("muted") { +"No matches." }
-        else ul(classes = "ref-list") { hits.forEach { li(classes = "ref-row") { referenceHitRow(read, it) } } }
+        else ul(classes = "ref-list") { hits.forEach { li(classes = "ref-row") { id = "refrow-${it.id}"; referenceHitRow(read, it) } } }
         return
     }
     readLaterQueue(read)
@@ -522,7 +522,7 @@ fun FlowContent.referenceResults(read: ContentReadModel, folder: Ulid?, query: S
     }
     val kids = read.referenceChildren(here)
     if (kids.isEmpty()) p("muted") { +(if (folder == null) "Nothing filed yet." else "Empty folder.") }
-    else ul(classes = "ref-list") { kids.forEach { li(classes = "ref-row") { referenceRow(read, it) } } }
+    else ul(classes = "ref-list") { kids.forEach { li(classes = "ref-row") { id = "refrow-${it.id}"; referenceRow(read, it) } } }
 }
 
 /** Reference breadcrumb: Reference / folder / … up to (but not including) the current folder's name. */
@@ -559,6 +559,9 @@ private fun FlowContent.referenceRow(read: ContentReadModel, node: NodeView) {
 private fun FlowContent.referenceContextMenu(read: ContentReadModel) {
     fun reload(post: String) = "@post('$post').then(() => location.reload())"
     div(classes = "ref-ctx") {
+        // Stable id so an SSE morph of #reference preserves this element in place instead of
+        // re-creating it — which would re-run data-signals and slam the open menu shut.
+        id = "ref-ctx"
         attributes["data-signals"] = "{rctx: '', rkind: '', rname: '', cname: '', mto: ''}"
         attributes["data-show"] = "\$rctx !== ''"
         input(type = InputType.text) { attributes["data-bind:rname"] = ""; attributes["placeholder"] = "Rename to…" }

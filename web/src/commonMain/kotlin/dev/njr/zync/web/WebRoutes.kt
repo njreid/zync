@@ -76,7 +76,7 @@ fun Route.webRoutes(
                 div {
                     id = "inbox"
                     // Datastar: open the SSE stream on load; the server patches #inbox on change.
-                    attributes["data-on:load"] = "@get('/updates')"
+                    attributes["data-init"] = "@get('/updates')"
                     inboxSection(read, inbox(), now(), context)
                 }
             }
@@ -98,7 +98,7 @@ fun Route.webRoutes(
                 div {
                     id = "next"
                     // Live-refresh this surface as tasks complete/defer elsewhere.
-                    attributes["data-on:load"] = "@get('/updates/next')"
+                    attributes["data-init"] = "@get('/updates/next')"
                     nextSection(read, inbox(), now(), context)
                 }
             }
@@ -118,7 +118,7 @@ fun Route.webRoutes(
             page("Today", settingsHref, Tab.TODAY, read.contexts(), context) {
                 div {
                     id = "today"
-                    attributes["data-on:load"] = "@get('/updates/today')"
+                    attributes["data-init"] = "@get('/updates/today')"
                     todaySection(read, now(), context)
                 }
             }
@@ -129,7 +129,7 @@ fun Route.webRoutes(
             page("Projects", settingsHref, Tab.PROJECTS, read.contexts(), call.selectedContext()) {
                 div {
                     id = "projects"
-                    attributes["data-on:load"] = "@get('/updates/projects')"
+                    attributes["data-init"] = "@get('/updates/projects')"
                     projectsSection(read, now(), inbox())
                 }
             }
@@ -140,7 +140,7 @@ fun Route.webRoutes(
             page("Reference", settingsHref, Tab.REFERENCE, read.contexts(), call.selectedContext()) {
                 div {
                     id = "reference"
-                    attributes["data-on:load"] = "@get('/updates/reference')"
+                    attributes["data-init"] = "@get('/updates/reference')"
                     referenceSection(read, null)
                 }
             }
@@ -218,45 +218,39 @@ fun Route.webRoutes(
     }
 
     if (changes != null) {
+        // No initial on-connect push on any of these: the surface is already server-rendered
+        // identically at page load, so re-morphing it the moment the stream opens is redundant
+        // AND can clobber a gesture the user starts right after load (e.g. a reference long-press).
+        // Patch ONLY on real changes; the collect loop keeps the view live from then on.
         sse("/updates") {
             // The cookie at stream-open time pins the filter; a context switch is a
             // page navigation, which reopens the stream.
             val context = call.selectedContext()
-            suspend fun pushInbox() = patch(
-                patchElementsEvent(WebPlatform.renderFragment("inbox") { inboxSection(read, inbox(), now(), context) }),
-            )
-            pushInbox()
-            changes.changes.collect { pushInbox() }
+            changes.changes.collect {
+                patch(patchElementsEvent(WebPlatform.renderFragment("inbox") { inboxSection(read, inbox(), now(), context) }))
+            }
         }
         sse("/updates/next") {
             val context = call.selectedContext()
-            suspend fun pushNext() = patch(
-                patchElementsEvent(WebPlatform.renderFragment("next") { nextSection(read, inbox(), now(), context) }),
-            )
-            pushNext()
-            changes.changes.collect { pushNext() }
+            changes.changes.collect {
+                patch(patchElementsEvent(WebPlatform.renderFragment("next") { nextSection(read, inbox(), now(), context) }))
+            }
         }
         sse("/updates/today") {
             val context = call.selectedContext()
-            suspend fun pushToday() = patch(
-                patchElementsEvent(WebPlatform.renderFragment("today") { todaySection(read, now(), context) }),
-            )
-            pushToday()
-            changes.changes.collect { pushToday() }
+            changes.changes.collect {
+                patch(patchElementsEvent(WebPlatform.renderFragment("today") { todaySection(read, now(), context) }))
+            }
         }
         sse("/updates/projects") {
-            suspend fun pushProjects() = patch(
-                patchElementsEvent(WebPlatform.renderFragment("projects") { projectsSection(read, now(), inbox()) }),
-            )
-            pushProjects()
-            changes.changes.collect { pushProjects() }
+            changes.changes.collect {
+                patch(patchElementsEvent(WebPlatform.renderFragment("projects") { projectsSection(read, now(), inbox()) }))
+            }
         }
         sse("/updates/reference") {
-            suspend fun pushReference() = patch(
-                patchElementsEvent(WebPlatform.renderFragment("reference") { referenceSection(read, null) }),
-            )
-            pushReference()
-            changes.changes.collect { pushReference() }
+            changes.changes.collect {
+                patch(patchElementsEvent(WebPlatform.renderFragment("reference") { referenceSection(read, null) }))
+            }
         }
     }
 

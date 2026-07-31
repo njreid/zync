@@ -35,7 +35,7 @@ test('no CSP or JS errors from the triage panel', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
   const row = page.locator('#inbox li.swipe-row').first();
   await row.locator('.row-title').click(); // tap the title to expand the triage panel
   const bad = errors.filter((e) => /Content Security Policy|unsafe-eval|is not defined|SyntaxError/.test(e));

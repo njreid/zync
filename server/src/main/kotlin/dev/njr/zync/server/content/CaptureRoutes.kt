@@ -1,15 +1,11 @@
 package dev.njr.zync.server.content
 
-import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.server.blob.BlobService
 import dev.njr.zync.server.blob.BlobTooLargeException
-import dev.njr.zync.web.inboxFragmentHtml
-import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.respond
-import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ktor.utils.io.readRemaining
@@ -53,14 +49,10 @@ fun Route.captureRoutes(content: ServerContent, blobs: BlobService) {
             call.respond(HttpStatusCode.PayloadTooLarge)
             return@post
         }
+        // The open /updates SSE stream live-patches every viewer's #inbox off this notify — the
+        // capture bar just needs the 2xx to reset itself.
         content.changes.notifyChanged()
-        // Return the freshly-rendered inbox fragment so the bar can swap #inbox in place (live
-        // updates here ride the mutation RESPONSE, matching every other :web mutation — the
-        // /updates SSE only pushes on connect). The bar honours the same context cookie the page did.
-        val raw = call.request.queryParameters["context"] ?: call.request.cookies["zync_context"]
-        val context = if (raw.isNullOrBlank() || raw == "none") null else runCatching { Ulid.parse(raw) }.getOrNull()
-        val html = inboxFragmentHtml(content.read, null, Long.MAX_VALUE, context)
-        call.respondText(html, ContentType.Text.Html)
+        call.respond(HttpStatusCode.NoContent)
     }
 }
 

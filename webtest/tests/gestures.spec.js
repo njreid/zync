@@ -89,7 +89,7 @@ test('no CSP or JS errors from the gesture helper', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('script[src="/assets/zync-gestures.js"]')).toHaveCount(1);
   const bad = errors.filter((e) => /Content Security Policy|unsafe-eval|is not defined|SyntaxError/.test(e));
   expect(bad, bad.join('\n')).toHaveLength(0);

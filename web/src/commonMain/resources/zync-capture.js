@@ -83,11 +83,7 @@ if (bar) {
     try {
       const r = await fetch('/capture', { method: 'POST', body });
       if (r.ok) {
-        // Swap in the fresh inbox the server rendered (only present on the inbox page); the
-        // gesture layer delegates on document, so the new rows stay live.
-        const html = await r.text();
-        const inbox = document.getElementById('inbox');
-        if (inbox && html) inbox.outerHTML = html;
+        // The open /updates SSE stream live-patches #inbox with the new item; just clear the bar.
         reset();
       } else if (hint) {
         hint.textContent = r.status === 413 ? 'File too large' : 'Save failed — try again';

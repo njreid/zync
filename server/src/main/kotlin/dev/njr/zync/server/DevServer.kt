@@ -25,8 +25,10 @@ import kotlin.random.Random
  */
 fun main() {
     val port = System.getenv("ZYNC_DEV_PORT")?.toInt() ?: 8099
-    val service = SyncService(JvmZyncDatabase.inMemory())
-    val content = ServerContent(service)
+    // Mirror prod (Main.kt): every ingest fires the change feed, so the /updates SSE live-updates.
+    val changes = dev.njr.zync.web.sse.ChangeNotifier()
+    val service = SyncService(JvmZyncDatabase.inMemory(), onIngest = { changes.notifyChanged() })
+    val content = ServerContent(service, changes)
     content.commands.createTask("Kbd complete me") // gestures.spec keyboard test completes the first row
     content.commands.createTask("Buy milk")
     content.commands.createTask("Read a book")

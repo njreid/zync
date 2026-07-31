@@ -152,7 +152,7 @@ The `:web` module renders server-side hypermedia with **Datastar v1** (vendored 
 `web/src/commonMain/resources/datastar.js`, served at `/assets/datastar.js`). Datastar's
 keyed attributes use a **colon separator**, NOT a hyphen:
 
-- Events: `data-on:click`, `data-on:load` (e.g. `data-on:click="@post('/x')"`).
+- Events: `data-on:click` (e.g. `data-on:click="@post('/x')"`); run-on-load uses `data-init="@get('/updates')"` (a `<div>` never fires a DOM `load` event, so `data-on:load` is a dead listener).
 - Two-way bind: `data-bind:<signal>` (e.g. `data-bind:title` — the signal is the key, no
   value), referenced in expressions as `$title`.
 - Actions in expressions: `@get('/url')`, `@post('/url')` — a fetch whose response is a
