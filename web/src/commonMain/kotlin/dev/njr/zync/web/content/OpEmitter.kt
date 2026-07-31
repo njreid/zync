@@ -17,4 +17,8 @@ interface OpEmitter {
     fun addTag(node: Ulid, context: Ulid)
     fun removeTag(node: Ulid, context: Ulid)
     fun tombstone(entity: Ulid)
+
+    /** Attach a (already content-addressed) blob as an [attachment] entity; [value] is the
+     *  attachment payload (nodeId, type, blobHash, relativePath). */
+    fun addAttachment(attachment: Ulid, value: JsonElement)
 }

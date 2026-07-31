@@ -24,4 +24,5 @@ class PhoneOpEmitter(
     override fun addTag(node: Ulid, context: Ulid) { writer.addTag(node, context); onLocalMutation() }
     override fun removeTag(node: Ulid, context: Ulid) { writer.removeTag(node, context); onLocalMutation() }
     override fun tombstone(entity: Ulid) { writer.tombstone(entity); onLocalMutation() }
+    override fun addAttachment(attachment: Ulid, value: JsonElement) { writer.addAttachment(attachment, value); onLocalMutation() }
 }

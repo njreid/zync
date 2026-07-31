@@ -7,16 +7,20 @@ import kotlinx.html.HTML
 import kotlinx.html.InputType
 import kotlinx.html.a
 import kotlinx.html.body
+import kotlinx.html.button
 import kotlinx.html.details
 import kotlinx.html.div
+import kotlinx.html.form
 import kotlinx.html.head
 import kotlinx.html.input
+import kotlinx.html.label
 import kotlinx.html.li
 import kotlinx.html.link
 import kotlinx.html.main
 import kotlinx.html.meta
 import kotlinx.html.nav
 import kotlinx.html.script
+import kotlinx.html.span
 import kotlinx.html.summary
 import kotlinx.html.title
 import kotlinx.html.ul
@@ -73,6 +77,8 @@ fun HTML.page(
         script(type = "module", src = "/assets/datastar.js") {}
         // Gesture + keyboard layer (swipe complete/delete, j/k cursor, g-chords).
         script(type = "module", src = "/assets/zync-gestures.js") {}
+        // Desktop capture bar: drag-drop files + text → a new inbox item (server /capture).
+        script(type = "module", src = "/assets/zync-capture.js") {}
     }
     body {
         nav(classes = "topbar") {
@@ -92,6 +98,50 @@ fun HTML.page(
             unsafe {
                 +("<b>Keys</b><br>j/k move · o expand · x done · # delete · e edit · f file · s snooze · " +
                     "w waiting · Shift+J/K reorder · / search · g then i/t/n/p/r · ? this")
+            }
+        }
+        captureBar()
+    }
+}
+
+/**
+ * The desktop-only quick-capture bar, pinned to the bottom (hidden on touch — see custom.css).
+ * Drop any files onto it and/or type a title; **Save** POSTs everything to `/capture` (server
+ * only) as one new inbox item with the files attached, **Clear** resets it. All interactivity
+ * lives in the vendored `/assets/zync-capture.js` (no inline JS — the loopback CSP forbids it);
+ * this only lays out the stable ids/classes that script binds to.
+ */
+private fun FlowContent.captureBar() {
+    div(classes = "capture-bar") {
+        attributes["id"] = "capture-bar"
+        form(classes = "capture-form") {
+            attributes["id"] = "capture-form"
+            // Drop zone doubles as a click-to-browse label for the hidden multi-file input.
+            label(classes = "capture-drop") {
+                attributes["id"] = "capture-drop"
+                input(type = InputType.file) {
+                    attributes["id"] = "capture-files"
+                    attributes["multiple"] = "true"
+                    attributes["hidden"] = "true"
+                }
+                span(classes = "capture-hint") { +"Drop files or click to attach" }
+            }
+            // Chosen files render here as removable chips (built by the script).
+            div(classes = "capture-chips") { attributes["id"] = "capture-chips" }
+            input(type = InputType.text, classes = "capture-title") {
+                attributes["id"] = "capture-title"
+                attributes["placeholder"] = "Capture to inbox…"
+                attributes["autocomplete"] = "off"
+            }
+            button(classes = "btn capture-save") {
+                attributes["id"] = "capture-save"
+                attributes["type"] = "button"
+                +"Save"
+            }
+            button(classes = "btn capture-clear") {
+                attributes["id"] = "capture-clear"
+                attributes["type"] = "button"
+                +"Clear"
             }
         }
     }

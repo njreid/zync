@@ -50,7 +50,12 @@ fun main() {
                 call.response.headers.append("Content-Security-Policy", csp)
             }
         }
-        zyncModule(service, content = content, allowUnauthenticatedWeb = true)
+        zyncModule(
+            service,
+            content = content,
+            blobs = dev.njr.zync.server.blob.BlobService(dev.njr.zync.server.blob.InMemoryBlobStore()),
+            allowUnauthenticatedWeb = true,
+        )
     }.start(wait = true)
 }
 

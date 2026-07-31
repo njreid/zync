@@ -8,6 +8,7 @@ import dev.njr.zync.server.auth.webauthn.webAuthnRoutes
 import dev.njr.zync.server.blob.BlobService
 import dev.njr.zync.server.blob.blobRoutes
 import dev.njr.zync.server.content.ServerContent
+import dev.njr.zync.server.content.captureRoutes
 import dev.njr.zync.web.webRoutes
 import io.ktor.server.sse.SSE
 import dev.njr.zync.server.debug.debugRoutes
@@ -103,6 +104,7 @@ fun Application.zyncModule(
         if (content != null) {
             val pairingPage = if (pairing?.publicAddress != null) "/settings/pairing" else null
             webRoutes(content.read, changes = content.changes, commands = content.commands, settingsHref = pairingPage)
+            if (blobs != null) captureRoutes(content, blobs)
         }
     }
 }

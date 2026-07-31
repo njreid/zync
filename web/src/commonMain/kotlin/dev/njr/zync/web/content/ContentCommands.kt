@@ -10,6 +10,8 @@ import dev.njr.zync.core.id.Ulid
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * The shared UI's mutation vocabulary (GTD intents), mapped onto op-log primitives via
@@ -23,6 +25,22 @@ class ContentCommands(private val ops: OpEmitter) {
 
     /** Convenience alias — a "project" is just a content node that has children (type is derived). */
     fun createProject(title: String, parent: Ulid? = null): Ulid = create(title, parent)
+
+    /** Attach a server-/locally-stored blob (content hash [blobHash]) to [node] as an attachment
+     *  entity; [type] is a coarse kind (mime/extension), [name] the original filename. Returns id. */
+    fun attach(node: Ulid, blobHash: String, type: String, name: String): Ulid {
+        val id = ops.newId()
+        ops.addAttachment(
+            id,
+            buildJsonObject {
+                put("nodeId", node.toString())
+                put("type", type)
+                put("blobHash", blobHash)
+                put("relativePath", name)
+            },
+        )
+        return id
+    }
 
     /**
      * Create a Reference **folder** under [parent] (reference-and-archive spec): a node carrying the

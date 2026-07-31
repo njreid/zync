@@ -178,6 +178,9 @@ class RecordingBotEmitter(
     override fun tombstone(entity: Ulid) {
         ops += Op.Tombstone(newId(), entity, EntityType.Node, hlc.now(), actor, "server", now())
     }
+    override fun addAttachment(attachment: Ulid, value: JsonElement) {
+        ops += Op.AddAttachment(newId(), attachment, EntityType.Attachment, hlc.now(), actor, "server", now(), value)
+    }
 
     /** Link a (server-stored) blob to [node] as an attachment entity; returns its id. */
     fun attach(node: Ulid, type: String, blobHash: String, name: String): Ulid {

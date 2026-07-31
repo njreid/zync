@@ -38,6 +38,8 @@ class ServerOpEmitter(
         ingest(Op.RemoveTag(newId(), node, EntityType.Tag, hlc.now(), Actor.Human, "server", now(), context))
     override fun tombstone(entity: Ulid) =
         ingest(Op.Tombstone(newId(), entity, EntityType.Node, hlc.now(), Actor.Human, "server", now()))
+    override fun addAttachment(attachment: Ulid, value: JsonElement) =
+        ingest(Op.AddAttachment(newId(), attachment, EntityType.Attachment, hlc.now(), Actor.Human, "server", now(), value))
 
     private fun ingest(op: Op) {
         service.ingestLocal(op)

@@ -35,6 +35,8 @@ class RecordingEmitter(private val store: StateStore) : OpEmitter {
         emit(Op.RemoveTag(uid(), node, EntityType.Tag, hlc(), Actor.Human, "dev", 0, context))
     override fun tombstone(entity: Ulid) =
         emit(Op.Tombstone(uid(), entity, EntityType.Node, hlc(), Actor.Human, "dev", 0))
+    override fun addAttachment(attachment: Ulid, value: JsonElement) =
+        emit(Op.AddAttachment(uid(), attachment, EntityType.Attachment, hlc(), Actor.Human, "dev", 0, value))
 
     private fun uid(): Ulid { val n = ++counter; return Ulid.generate(FixedClock(n.toLong()), Random(n.toLong())) }
     private fun hlc(): Hlc = Hlc((++counter).toLong(), 0, "dev")

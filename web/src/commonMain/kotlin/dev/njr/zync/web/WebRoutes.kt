@@ -192,6 +192,9 @@ fun Route.webRoutes(
     get("/assets/zync-gestures.js") {
         call.respondText(WebPlatform.asset("zync-gestures.js"), ContentType("application", "javascript"))
     }
+    get("/assets/zync-capture.js") {
+        call.respondText(WebPlatform.asset("zync-capture.js"), ContentType("application", "javascript"))
+    }
     get("/assets/pico.min.css") {
         call.respondText(WebPlatform.asset("pico.min.css"), ContentType.Text.CSS)
     }
