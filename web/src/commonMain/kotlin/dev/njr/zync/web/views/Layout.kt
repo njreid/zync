@@ -87,6 +87,7 @@ fun HTML.page(
     body(classes = if (browser) "browser" else "app") {
         nav(classes = "topbar") {
             viewMenu(activeTab, settingsHref)
+            viewTabs(activeTab)
             contextMenu(activeTab, contexts, selectedContext)
         }
         main(classes = "container") {
@@ -147,6 +148,24 @@ private fun FlowContent.captureBar() {
                 attributes["id"] = "capture-clear"
                 attributes["type"] = "button"
                 +"Clear"
+            }
+        }
+    }
+}
+
+/**
+ * The fixed views as an inline button row — shown when the window is wide enough (else the
+ * [viewMenu] dropdown; see custom.css). `data-vi` is the 1-based index the Ctrl+N shortcut
+ * targets (also present when hidden, so Ctrl+N works at any width); `data-key` keeps g-chords.
+ */
+private fun FlowContent.viewTabs(active: Tab) {
+    div(classes = "view-tabs") {
+        Tab.VIEWS.forEachIndexed { i, tab ->
+            a(href = tab.href, classes = if (tab == active) "view-tab active" else "view-tab") {
+                attributes["data-key"] = tab.key
+                attributes["data-vi"] = "${i + 1}"
+                attributes["title"] = "${tab.label} (Ctrl+${i + 1})"
+                +tab.label
             }
         }
     }

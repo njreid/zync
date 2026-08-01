@@ -52,6 +52,19 @@ main.container {
   padding-top: calc(3.4rem + env(safe-area-inset-top));
   padding-bottom: calc(1rem + env(safe-area-inset-bottom));
 }
+/* View tabs: an inline button row when the window is wide; the Views dropdown otherwise. Both are
+   always in the DOM (Ctrl+N targets [data-vi] regardless of which is shown). */
+.view-tabs { display: none; }
+@media (min-width: 640px) {
+  nav.topbar .view-menu { display: none; }
+  .view-tabs { display: flex; gap: .2rem; align-items: center; flex-wrap: wrap; }
+}
+.view-tab {
+  padding: .3rem .6rem; border-radius: .4rem; text-decoration: none; font-size: .9rem;
+  color: var(--pico-muted-color, #8a91a0); white-space: nowrap;
+}
+.view-tab:hover { background: var(--pico-card-background-color); text-decoration: none; }
+.view-tab.active { color: var(--pico-color); background: var(--pico-card-background-color); font-weight: 700; }
 nav.topbar .menu { position: relative; margin: 0; }
 nav.topbar .menu > summary {
   display: inline-flex;

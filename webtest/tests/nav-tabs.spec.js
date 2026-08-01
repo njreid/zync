@@ -6,6 +6,7 @@ const { test, expect } = require('@playwright/test');
 const BASE = process.env.ZYNC_BASE || 'http://127.0.0.1:8099';
 
 test('top-bar View dropdown navigates the fixed GTD categories', async ({ page }) => {
+  await page.setViewportSize({ width: 480, height: 800 }); // narrow: the dropdown, not the tab row
   await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
 
   // The top bar carries the View + Context dropdowns; the old bottom tab bar is gone.

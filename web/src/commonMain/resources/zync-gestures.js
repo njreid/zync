@@ -228,6 +228,13 @@ function pageAction(key) {
 function toggleHelp() { document.querySelector('.kbd-help')?.classList.toggle('show'); }
 
 document.addEventListener('keydown', (e) => {
+  // Ctrl+1..9 jump to the Nth view (also while a field is focused). Reliable in the installed PWA;
+  // a plain browser tab may capture Ctrl+1-8 for tab switching before the page sees it.
+  if (e.ctrlKey && !e.altKey && !e.metaKey && /^[1-9]$/.test(e.key)) {
+    const el = document.querySelector('[data-vi="' + e.key + '"]');
+    if (el) { e.preventDefault(); location.href = el.getAttribute('href'); }
+    return;
+  }
   if (editing()) { if (e.key === 'Escape') document.activeElement.blur(); return; }
 
   if (e.key === '/') { if (listSearch) { e.preventDefault(); listSearch.classList.add('show'); listSearch.focus(); } return; }

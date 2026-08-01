@@ -436,6 +436,8 @@ internal fun FlowContent.fileSection(
         span("fp-head ctx") { +label }
         root?.let { r ->
             button(classes = "btn") {
+                // The Projects root is the default target `f`-then-Enter files to (see zync-gestures).
+                if (area == FileArea.PROJECTS) attributes["data-file-default"] = "true"
                 attributes["data-on:click"] = "@post('/node/${node.id}/file-to?target=$r')"
                 icon("folder"); +" $label"
             }
