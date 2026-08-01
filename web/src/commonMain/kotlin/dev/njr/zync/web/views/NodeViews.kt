@@ -185,7 +185,8 @@ fun FlowContent.todaySection(read: ContentReadModel, now: Long, context: Ulid? =
 fun FlowContent.projectsSection(read: ContentReadModel, now: Long, inbox: Ulid? = null) {
     h2 { +"Projects" }
     val projects = read.projects().filter { it.id.toString() != inbox?.toString() }
-    if (projects.isEmpty()) {
+    val loose = read.projectRootItems(now) // standalone tasks filed to the Projects root (f→Enter)
+    if (projects.isEmpty() && loose.isEmpty()) {
         p("muted") { +"No projects yet. Give an inbox item a subtask to start one." }
         return
     }
@@ -199,6 +200,8 @@ fun FlowContent.projectsSection(read: ContentReadModel, now: Long, inbox: Ulid? 
             }
             itemLi(read, project, now = now, lead = badge)
         }
+        // Loose next-actions parked at the Projects root — give one a subtask (`s`) to grow a project.
+        loose.forEach { task -> itemLi(read, task, now = now) }
     }
 }
 

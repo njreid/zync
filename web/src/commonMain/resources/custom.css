@@ -653,3 +653,9 @@ body.browser main.container { padding-bottom: 4.5rem; }
    surface, hidden in the phone WebView where swipe covers those actions. */
 .browser-only { display: none; }
 body.browser .browser-only { display: inline-flex; }
+
+/* Projects move-mode: the staged row is outlined until Enter commits / Esc reverts. */
+.swipe-row.moving { outline: 2px solid #6ea8fe; outline-offset: -2px; background: rgba(110, 168, 254, .08); border-radius: .4rem; }
+/* Inline "add subtask" field (Projects `s`). */
+.inline-sub { padding: .35rem 0 .1rem; }
+.inline-sub input { margin: 0; }

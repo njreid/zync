@@ -101,8 +101,9 @@ fun HTML.page(
         // Desktop-only keyboard cheatsheet (toggled by '?'; hidden on touch — see custom.css).
         div(classes = "kbd-help") {
             unsafe {
-                +("<b>Keys</b><br>j/k move · o expand · x done · # delete · e edit · f file · s snooze · " +
-                    "w waiting · Shift+J/K reorder · / search · g then i/t/n/p/r · ? this")
+                +("<b>Keys</b><br>j/k move · o expand · x done · # delete · e edit · f file (then Enter → Projects) · " +
+                    "s snooze · w waiting · Shift+J/K reorder · Ctrl+1–5 views · g then i/t/n/p/r · / search · ? this" +
+                    "<br><b>Projects</b>: s subtask · m move (j/k, Enter=confirm, Esc=cancel)")
             }
         }
         if (browser) captureBar()

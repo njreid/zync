@@ -20,9 +20,12 @@ function commitPx(row) {
 let active = null; // { row, startX, startY, pointerId, moved }
 let cursor = -1;   // index into the live .swipe-row NodeList
 let pendingG = 0;  // timestamp of a pending `g` chord
+let fileArmed = null; // inbox row whose file picker `f` just opened, awaiting Enter → Projects root
+let moveMode = null;  // { row, before, parent } while staging a Projects reorder (Esc cancels)
 
 function rows() {
-  return Array.from(document.querySelectorAll('.swipe-row'));
+  // Only VISIBLE rows — so the j/k cursor skips anything the '/' list-filter has hidden.
+  return Array.from(document.querySelectorAll('.swipe-row')).filter((r) => r.offsetParent !== null);
 }
 
 function fire(row, kind) {
@@ -227,6 +230,54 @@ function pageAction(key) {
 }
 function toggleHelp() { document.querySelector('.kbd-help')?.classList.toggle('show'); }
 
+// The Projects surface (its list carries id="projects"); `s`/`m` behave specially there.
+const inProjects = () => !!document.getElementById('projects');
+
+// --- Projects move-mode: a STAGED reorder (DOM-only) committed on Enter, reverted on Esc ---
+function enterMove(row) {
+  moveMode = { row, before: row.nextElementSibling, parent: row.parentNode };
+  row.classList.add('moving');
+  row.scrollIntoView({ block: 'nearest' });
+}
+function exitMove() { if (moveMode) moveMode.row.classList.remove('moving'); moveMode = null; }
+function nudgeMove(dir) {
+  const row = moveMode.row;
+  if (dir === 'up') { const p = row.previousElementSibling; if (p) row.parentNode.insertBefore(row, p); }
+  else { const n = row.nextElementSibling; if (n) row.parentNode.insertBefore(n, row); }
+  row.scrollIntoView({ block: 'nearest' });
+}
+function commitMove() {
+  const row = moveMode.row, id = row.getAttribute('data-node');
+  const next = row.nextElementSibling;
+  const beforeId = next ? (next.getAttribute('data-node') || '') : '';
+  if (id) fetch('/project/' + id + '/reorder-before?before=' + beforeId, { method: 'POST' });
+  exitMove();
+}
+function cancelMove() { moveMode.parent.insertBefore(moveMode.row, moveMode.before); exitMove(); }
+
+// Inline "add subtask" field on a project row (Projects `s`). Enter saves, Esc discards. Its own
+// listener handles those keys — the global handler bails while an input is focused.
+function inlineSubtask(row) {
+  const id = row.getAttribute('data-node');
+  if (!id || row.querySelector('.inline-sub')) return;
+  const box = document.createElement('div');
+  box.className = 'inline-sub';
+  const input = document.createElement('input');
+  input.type = 'text'; input.placeholder = 'New subtask…';
+  box.appendChild(input);
+  row.appendChild(box);
+  input.focus();
+  input.addEventListener('keydown', (ev) => {
+    ev.stopPropagation();
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      const title = input.value.trim();
+      if (title) fetch('/node/' + id + '/subtask?title=' + encodeURIComponent(title), { method: 'POST' });
+      box.remove();
+    } else if (ev.key === 'Escape') { ev.preventDefault(); box.remove(); }
+  });
+}
+
 document.addEventListener('keydown', (e) => {
   // Ctrl+1..9 jump to the Nth view (also while a field is focused). Reliable in the installed PWA;
   // a plain browser tab may capture Ctrl+1-8 for tab switching before the page sees it.
@@ -248,11 +299,30 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key === 'g') { pendingG = Date.now(); e.preventDefault(); return; }
+
+  // Projects move-mode owns the arrows/Enter/Esc while staging: j/k/↑/↓ nudge, Enter commits,
+  // Esc reverts the DOM to the original order. Everything else is swallowed until it exits.
+  if (moveMode) {
+    e.preventDefault();
+    if (e.key === 'Enter') commitMove();
+    else if (e.key === 'Escape') cancelMove();
+    else if (e.key === 'j' || e.key === 'ArrowDown') nudgeMove('down');
+    else if (e.key === 'k' || e.key === 'ArrowUp') nudgeMove('up');
+    return;
+  }
   if (e.key === 'Escape') { pendingG = 0; document.querySelector('.kbd-help')?.classList.remove('show'); setCursor(rows(), -1); cursor = -1; return; }
 
   const list = rows();
   if (list.length === 0) { pageAction(e.key); return; } // Edit page: act on its buttons
   const cur = (cursor >= 0 && cursor < list.length) ? list[cursor] : null;
+
+  // `f` arms a one-shot: the very next Enter files the item to the Projects root (its default target).
+  const armed = fileArmed; fileArmed = null;
+  if (armed && e.key === 'Enter') {
+    e.preventDefault();
+    armed.querySelector('[data-file-default]')?.click();
+    return;
+  }
 
   switch (e.key) {
     case 'j': e.preventDefault(); setCursor(list, Math.min(cursor + 1, list.length - 1)); break;
@@ -266,8 +336,10 @@ document.addEventListener('keydown', (e) => {
     case 'Delete':
     case 'Backspace': if (cur) { e.preventDefault(); startPending(cur, 'trash'); } break;
     case 'e': if (cur) { const a = cur.querySelector('[data-act="edit"]'); if (a) { e.preventDefault(); location.href = a.getAttribute('href'); } } break;
-    case 'f': if (cur) { e.preventDefault(); actOn(cur, 'file'); } break;
-    case 's': if (cur) { e.preventDefault(); actOn(cur, 'snooze'); } break;
+    case 'f': if (cur) { e.preventDefault(); actOn(cur, 'file'); fileArmed = cur; } break;
+    // In Projects, `s` adds a subtask inline and `m` enters staged move-mode; elsewhere `s` snoozes.
+    case 's': if (cur) { e.preventDefault(); if (inProjects()) inlineSubtask(cur); else actOn(cur, 'snooze'); } break;
+    case 'm': if (cur && inProjects()) { e.preventDefault(); enterMove(cur); } break;
     case 'w': if (cur) { e.preventDefault(); actOn(cur, 'waiting'); } break;
     default: break;
   }

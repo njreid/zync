@@ -384,6 +384,17 @@ fun Route.webRoutes(
                 call.applied { writes.forEach { (node, rank) -> setRank(node, rank) } }
             }
         }
+        // Projects move-mode commit: reorder a project among its peers (their own ranked list).
+        post("/project/{id}/reorder-before") {
+            val before = call.request.queryParameters["before"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+            val id = call.nodeId()
+            if (id == null) {
+                call.respondText("bad request", status = HttpStatusCode.BadRequest)
+            } else {
+                val writes = read.reorderProjectBefore(id, before)
+                call.applied { writes.forEach { (node, rank) -> setRank(node, rank) } }
+            }
+        }
 
         // Detail-page actions patch #node-detail (not the inbox).
         suspend fun ApplicationCall.appliedDetail(id: Ulid, mutate: ContentCommands.() -> Unit) {

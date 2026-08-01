@@ -42,6 +42,10 @@ fun main() {
     // A project with an open next-action, so the Projects tab is drivable.
     val project = content.commands.createProject("Launch website")
     content.commands.addSubtask(project, "Draft the launch copy")
+    // A second project so Projects move-mode reordering is drivable (created after the first, so the
+    // default rank/ULID order is Launch website, then Ship the mobile app).
+    val project2 = content.commands.createProject("Ship the mobile app")
+    content.commands.addSubtask(project2, "Wire up CI")
     // A filed item so the Reference tab + search have content.
     content.commands.file(content.commands.createTask("Old tax return 2024"))
 

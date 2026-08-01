@@ -61,6 +61,15 @@ class ContentTest {
     }
 
     @Test
+    fun fileToProjectsRootLeavesInboxAndBecomesLooseProjectItem() {
+        val t = commands.createTask("loose task") // top-level → inbox
+        assertTrue(read.inbox(null).any { it.title == "loose task" })
+        commands.move(t, dev.njr.zync.core.content.WellKnownNodes.PROJECTS_ROOT)
+        assertTrue(read.inbox(null).none { it.title == "loose task" }, "should leave the inbox")
+        assertTrue(read.projectRootItems().any { it.title == "loose task" }, "should show at the Projects root")
+    }
+
+    @Test
     fun completeAndTrashHideFromInbox() {
         val inbox = commands.createProject("Inbox")
         val done = commands.createTask("done", inbox)

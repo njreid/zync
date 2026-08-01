@@ -27,9 +27,11 @@ test('renders seeded inbox and Datastar drives live mutations', async ({ page })
   const [r, g, b] = bg.match(/\d+/g).map(Number);
   expect(r + g + b, `body background should be dark, got ${bg}`).toBeLessThan(150);
 
-  // reactivity: swipe "Buy milk" right → Datastar @post returns an SSE patch → it drops out
+  // reactivity: swipe "Buy milk" right → Datastar @post returns an SSE patch → it drops out.
+  // Match by the row TITLE, not row text — an item's file picker can mention other items by name.
+  const byTitle = (t) => page.locator('#inbox li.swipe-row').filter({ has: page.locator('.row-title', { hasText: t }) });
   {
-    const row = page.locator('#inbox li.swipe-row', { hasText: 'Buy milk' });
+    const row = byTitle('Buy milk');
     const box = await row.boundingBox();
     const y = box.y + box.height / 2, sx = box.x + box.width / 2;
     await page.mouse.move(sx, y);
@@ -37,8 +39,8 @@ test('renders seeded inbox and Datastar drives live mutations', async ({ page })
     for (let i = 1; i <= 6; i++) await page.mouse.move(sx + (160 * i) / 6, y);
     await page.mouse.up();
   }
-  await expect(page.locator('#inbox')).not.toContainText('Buy milk', { timeout: 7000 }); // ~3s undo window
-  await expect(page.locator('#inbox')).toContainText('Read a book'); // others stay
+  await expect(byTitle('Buy milk')).toHaveCount(0, { timeout: 7000 }); // ~3s undo window
+  await expect(byTitle('Read a book')).toHaveCount(1); // others stay
 
   // the inbox is a triage surface: no VISIBLE entry field (creation belongs to capture;
   // the per-row triage panels are collapsed by default) and NO in-content context pill.

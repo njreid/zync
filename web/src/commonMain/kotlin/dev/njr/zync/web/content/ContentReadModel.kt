@@ -221,9 +221,19 @@ class ContentReadModel(private val store: StateStore) {
      * of [id]'s parent — inbox root or a project). [beforeId] == null drops it at the end. Returns
      * the rank writes (a single fractional index, or a full rebalance on a collision).
      */
-    fun reorderBefore(id: Ulid, beforeId: Ulid?, now: Long = Long.MAX_VALUE): Map<Ulid, String> {
-        val parent = store.getParent(id)
-        val list = inbox(parent, now)
+    fun reorderBefore(id: Ulid, beforeId: Ulid?, now: Long = Long.MAX_VALUE): Map<Ulid, String> =
+        reorderWithin(inbox(store.getParent(id), now), id, beforeId)
+
+    /**
+     * Reorder [id] to just before [beforeId] within the **Projects** list ([beforeId] == null → end).
+     * Projects are their own sibling list (top-level nodes-with-children, which [inbox] excludes), so
+     * they need this instead of [reorderBefore]; ranking makes [projects] order user-controlled.
+     */
+    fun reorderProjectBefore(id: Ulid, beforeId: Ulid?): Map<Ulid, String> =
+        reorderWithin(projects(), id, beforeId)
+
+    /** Shared rank math: place [id] before [beforeId] in the ordered [list], returning rank writes. */
+    private fun reorderWithin(list: List<NodeView>, id: Ulid, beforeId: Ulid?): Map<Ulid, String> {
         val moving = list.firstOrNull { it.id.toString() == id.toString() } ?: return emptyMap()
         val siblings = list.filter { it.id.toString() != id.toString() }.toMutableList()
         val idx = when (beforeId) {
@@ -580,7 +590,20 @@ class ContentReadModel(private val store: StateStore) {
             }
             .map { it.toView() }
             .filter { it.status != "DROPPED" && it.status != Status.FILED }
-            .sortedBy { it.title ?: "" }
+            // Fractional-index order (user-controlled via Projects move-mode); unranked falls back to
+            // creation order (ULID), matching the inbox — a stored order the reorder writes refine.
+            .sortedWith(compareBy { it.effectiveRank() })
+
+    /**
+     * Loose tasks filed to the Projects root (childless direct children of [WellKnownNodes.PROJECTS_ROOT]):
+     * standalone next-actions parked in Projects — where the inbox `f`-then-Enter files an item. Shown in
+     * the Projects view alongside the projects-with-children so a filed task isn't invisible.
+     */
+    fun projectRootItems(now: Long = Long.MAX_VALUE): List<NodeView> =
+        children(WellKnownNodes.PROJECTS_ROOT)
+            .filter { !hasLiveChildren(it.id) }
+            .filter { it.status != "DONE" && it.status != "DROPPED" && it.status != Status.FILED && (it.deferUntil == null || it.deferUntil <= now) }
+            .sortedWith(compareBy { it.effectiveRank() })
 
     /**
      * The context view (launcher spec L4, v0.2 semantics): live, active, non-deferred
