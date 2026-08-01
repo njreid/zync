@@ -57,6 +57,10 @@ fun HTML.page(
     activeTab: Tab = Tab.NONE,
     contexts: List<ContextView> = emptyList(),
     selectedContext: Ulid? = null,
+    /** True on the central server (a real browser); false on the phone's loopback WebView. Gates
+     *  desktop-only affordances (the capture bar, the expanded Complete/Delete buttons) — by
+     *  surface, NOT window width, so a narrow desktop window still shows them. */
+    browser: Boolean = false,
     content: FlowContent.() -> Unit,
 ) {
     attributes["lang"] = "en"
@@ -80,7 +84,7 @@ fun HTML.page(
         // Desktop capture bar: drag-drop files + text → a new inbox item (server /capture).
         script(type = "module", src = "/assets/zync-capture.js") {}
     }
-    body {
+    body(classes = if (browser) "browser" else "app") {
         nav(classes = "topbar") {
             viewMenu(activeTab, settingsHref)
             contextMenu(activeTab, contexts, selectedContext)
@@ -100,12 +104,13 @@ fun HTML.page(
                     "w waiting · Shift+J/K reorder · / search · g then i/t/n/p/r · ? this")
             }
         }
-        captureBar()
+        if (browser) captureBar()
     }
 }
 
 /**
- * The desktop-only quick-capture bar, pinned to the bottom (hidden on touch — see custom.css).
+ * The quick-capture bar, pinned to the bottom. Rendered only on the browser surface (never the
+ * phone WebView), so it shows at any window width.
  * Drop any files onto it and/or type a title; **Save** POSTs everything to `/capture` (server
  * only) as one new inbox item with the files attached, **Clear** resets it. All interactivity
  * lives in the vendored `/assets/zync-capture.js` (no inline JS — the loopback CSP forbids it);

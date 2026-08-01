@@ -33,6 +33,7 @@ test('add a folder, drill in, and open its long-press context menu', async ({ pa
   const row = page.locator('.ref-row .ref-link', { hasText: name });
   await expect(row).toBeVisible();
   await expect(row).toHaveAttribute('data-ref-kind', 'folder');
+  await page.waitForTimeout(400); // settle after the add-folder reload before pressing (a user would)
 
   // A real ~600ms press (no drag) opens the context menu via the long-press handler.
   const box = await row.boundingBox();

@@ -358,8 +358,19 @@ private fun FlowContent.expandedPanel(read: ContentReadModel, node: NodeView, ca
             }
         }
 
-        // Action row: File · Snooze · Edit.
+        // Action row: (browser only) Complete · Delete · then File · Snooze · Edit. On the phone the
+        // list uses swipe for complete/delete; a mouse browser needs explicit buttons.
         div(classes = "actions") {
+            button(classes = "btn icon-btn browser-only complete") {
+                attributes["title"] = "Complete"; attributes["aria-label"] = "Complete"
+                attributes["data-on:click"] = "@post('/node/${node.id}/complete')"
+                icon("check")
+            }
+            button(classes = "btn icon-btn browser-only trash") {
+                attributes["title"] = "Delete"; attributes["aria-label"] = "Delete"
+                attributes["data-on:click"] = "@post('/node/${node.id}/trash')"
+                icon("trash")
+            }
             div(classes = "snooze-wrap") {
                 button(classes = "btn icon-btn") {
                     attributes["data-act"] = "file"; attributes["data-key"] = "f"; attributes["title"] = "File"

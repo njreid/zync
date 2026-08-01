@@ -103,7 +103,7 @@ fun Application.zyncModule(
         }
         if (content != null) {
             val pairingPage = if (pairing?.publicAddress != null) "/settings/pairing" else null
-            webRoutes(content.read, changes = content.changes, commands = content.commands, settingsHref = pairingPage)
+            webRoutes(content.read, changes = content.changes, commands = content.commands, settingsHref = pairingPage, browser = true)
             if (blobs != null) captureRoutes(content, blobs)
         }
     }

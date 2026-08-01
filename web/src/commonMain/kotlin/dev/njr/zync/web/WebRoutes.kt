@@ -57,6 +57,9 @@ fun Route.webRoutes(
     commands: ContentCommands? = null,
     /** Nav link to the pairing/settings page — server-only (null on the phone loopback). */
     settingsHref: String? = null,
+    /** True on the central server (a real browser); false on the phone loopback WebView. Drives the
+     *  desktop-only capture bar + expanded Complete/Delete, by surface rather than window width. */
+    browser: Boolean = false,
 ) {
     get("/") {
         // ?context=<id> selects a context (persisted in a cookie so mutations and the
@@ -72,7 +75,7 @@ fun Route.webRoutes(
         }
         val context = call.selectedContext()
         call.respondHtml {
-            page("Inbox", settingsHref, Tab.INBOX, read.contexts(), context) {
+            page("Inbox", settingsHref, Tab.INBOX, read.contexts(), context, browser) {
                 div {
                     id = "inbox"
                     // Datastar: open the SSE stream on load; the server patches #inbox on change.
@@ -94,7 +97,7 @@ fun Route.webRoutes(
         }
         val context = call.selectedContext()
         call.respondHtml {
-            page("Next", settingsHref, Tab.NEXT, read.contexts(), context) {
+            page("Next", settingsHref, Tab.NEXT, read.contexts(), context, browser) {
                 div {
                     id = "next"
                     // Live-refresh this surface as tasks complete/defer elsewhere.
@@ -115,7 +118,7 @@ fun Route.webRoutes(
         }
         val context = call.selectedContext()
         call.respondHtml {
-            page("Today", settingsHref, Tab.TODAY, read.contexts(), context) {
+            page("Today", settingsHref, Tab.TODAY, read.contexts(), context, browser) {
                 div {
                     id = "today"
                     attributes["data-init"] = "@get('/updates/today')"
@@ -126,7 +129,7 @@ fun Route.webRoutes(
     }
     get("/projects") {
         call.respondHtml {
-            page("Projects", settingsHref, Tab.PROJECTS, read.contexts(), call.selectedContext()) {
+            page("Projects", settingsHref, Tab.PROJECTS, read.contexts(), call.selectedContext(), browser) {
                 div {
                     id = "projects"
                     attributes["data-init"] = "@get('/updates/projects')"
@@ -137,7 +140,7 @@ fun Route.webRoutes(
     }
     get("/reference") {
         call.respondHtml {
-            page("Reference", settingsHref, Tab.REFERENCE, read.contexts(), call.selectedContext()) {
+            page("Reference", settingsHref, Tab.REFERENCE, read.contexts(), call.selectedContext(), browser) {
                 div {
                     id = "reference"
                     attributes["data-init"] = "@get('/updates/reference')"
@@ -158,7 +161,7 @@ fun Route.webRoutes(
         if (refId == null || node == null) { call.respondText("not found", status = HttpStatusCode.NotFound); return@get }
         val isFolder = read.typeOf(refId) == dev.njr.zync.web.content.NodeType.REFERENCE_FOLDER
         call.respondHtml {
-            page("Reference", settingsHref, Tab.REFERENCE, read.contexts(), call.selectedContext()) {
+            page("Reference", settingsHref, Tab.REFERENCE, read.contexts(), call.selectedContext(), browser) {
                 div {
                     id = "reference"
                     if (isFolder) referenceSection(read, folder = refId) else referenceItemView(read, node)
@@ -167,21 +170,21 @@ fun Route.webRoutes(
         }
     }
     get("/tree") {
-        call.respondHtml { page("Tree", settingsHref, Tab.PROJECTS, read.contexts(), call.selectedContext()) { h2 { +"Tree" }; treeSection(read, null) } }
+        call.respondHtml { page("Tree", settingsHref, Tab.PROJECTS, read.contexts(), call.selectedContext(), browser) { h2 { +"Tree" }; treeSection(read, null) } }
     }
     get("/node/{id}") {
         val node = call.parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }?.let(read::node)
         if (node == null) {
             call.respondText("not found", status = HttpStatusCode.NotFound)
         } else {
-            call.respondHtml { page(node.title ?: "Node", settingsHref, Tab.NONE, read.contexts(), call.selectedContext()) { div { id = "node-detail"; nodeEditView(read, node) } } }
+            call.respondHtml { page(node.title ?: "Node", settingsHref, Tab.NONE, read.contexts(), call.selectedContext(), browser) { div { id = "node-detail"; nodeEditView(read, node) } } }
         }
     }
     get("/node/{id}/read") {
         val node = call.parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }?.let(read::node)
         if (node == null) call.respondText("not found", status = HttpStatusCode.NotFound)
         else call.respondHtml {
-            page(node.title ?: "Read", settingsHref, Tab.NONE, read.contexts(), call.selectedContext()) {
+            page(node.title ?: "Read", settingsHref, Tab.NONE, read.contexts(), call.selectedContext(), browser) {
                 div { id = "reader"; readingView(node, canChangeReadingState = commands != null) }
             }
         }

@@ -604,35 +604,39 @@ nav.topbar .context-menu ul a { font-family: "Iosevka Charon Mono", ui-monospace
 .link-body { display: flex; flex-direction: column; gap: .2rem; }
 .link-snippet { font-size: .85rem; }
 
-/* Desktop quick-capture bar, pinned to the bottom. Hidden by default; only a wide, mouse-driven
-   (non-touch) viewport shows it — the phone loopback and mobile browsers never do. */
-.capture-bar { display: none; }
-@media (hover: hover) and (pointer: fine) and (min-width: 720px) {
-  .capture-bar {
-    display: block;
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
-    background: var(--pico-card-background-color, #1a212b);
-    border-top: 1px solid var(--pico-muted-border-color, #2a313c);
-    box-shadow: 0 -6px 24px rgba(0, 0, 0, .4);
-    padding: .5rem max(.75rem, env(safe-area-inset-left));
-  }
-  .capture-form { display: flex; align-items: center; gap: .6rem; max-width: 60rem; margin: 0 auto; }
-  .capture-drop {
-    display: inline-flex; align-items: center; gap: .4rem; cursor: pointer; white-space: nowrap;
-    padding: .45rem .7rem; border: 1px dashed var(--pico-muted-border-color, #3a414c); border-radius: .5rem;
-    color: var(--pico-muted-color, #8a91a0); font-size: .85rem; transition: border-color .12s, background .12s;
-  }
-  .capture-drop.dragover { border-color: #6ea8fe; border-style: solid; background: rgba(110, 168, 254, .12); color: #cfe0ff; }
-  .capture-chips { display: flex; flex-wrap: wrap; gap: .3rem; max-width: 40%; overflow: hidden; }
-  .capture-chip {
-    display: inline-flex; align-items: center; gap: .3rem; max-width: 12rem;
-    padding: .2rem .5rem; border-radius: 1rem; font-size: .78rem; background: var(--pico-background-color, #10151c);
-    border: 1px solid var(--pico-muted-border-color, #2a313c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .capture-chip button { all: unset; cursor: pointer; color: var(--pico-muted-color, #8a91a0); line-height: 1; }
-  .capture-title { flex: 1 1 auto; margin: 0; }
-  .capture-bar .btn { margin: 0; }
-  .capture-save[aria-busy="true"] { opacity: .6; pointer-events: none; }
-  /* Keep the bar from covering the last rows of content. */
-  main.container { padding-bottom: 4.5rem; }
+/* Quick-capture bar, pinned to the bottom. Server-rendered only on the browser surface (never the
+   phone WebView — see Layout.page), so no width/pointer media query: any window width shows it. */
+.capture-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  background: var(--pico-card-background-color, #1a212b);
+  border-top: 1px solid var(--pico-muted-border-color, #2a313c);
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, .4);
+  padding: .5rem max(.75rem, env(safe-area-inset-left));
 }
+/* A single flex row: the title box takes the slack; every other control keeps its intrinsic
+   width and never shrinks, so Save/Clear aren't squashed on a narrow window. */
+.capture-form { display: flex; align-items: center; gap: .6rem; max-width: 60rem; margin: 0 auto; flex-wrap: wrap; }
+.capture-drop {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: .4rem; cursor: pointer; white-space: nowrap;
+  padding: .5rem .7rem; border: 1px dashed var(--pico-muted-border-color, #3a414c); border-radius: .5rem;
+  color: var(--pico-muted-color, #8a91a0); font-size: .85rem; transition: border-color .12s, background .12s;
+}
+.capture-drop.dragover { border-color: #6ea8fe; border-style: solid; background: rgba(110, 168, 254, .12); color: #cfe0ff; }
+.capture-chips { flex: 0 1 auto; display: flex; flex-wrap: wrap; gap: .3rem; overflow: hidden; }
+.capture-chip {
+  display: inline-flex; align-items: center; gap: .3rem; max-width: 12rem;
+  padding: .2rem .5rem; border-radius: 1rem; font-size: .78rem; background: var(--pico-background-color, #10151c);
+  border: 1px solid var(--pico-muted-border-color, #2a313c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.capture-chip button { all: unset; cursor: pointer; color: var(--pico-muted-color, #8a91a0); line-height: 1; }
+.capture-title { flex: 1 1 12rem; min-width: 8rem; margin: 0; }
+.capture-bar .btn { flex: 0 0 auto; margin: 0; white-space: nowrap; }
+.capture-save[aria-busy="true"] { opacity: .6; pointer-events: none; }
+/* Keep the bar from covering the last rows of content (browser surface only — that's where it is). */
+body.browser main.container { padding-bottom: 4.5rem; }
+
+/* Browser-only affordances (e.g. the expanded Complete/Delete buttons): shown only on the browser
+   surface, hidden in the phone WebView where swipe covers those actions. */
+.browser-only { display: none; }
+body.browser .browser-only { display: inline-flex; }
