@@ -97,18 +97,36 @@ object Fields {
      */
     const val FILE_SUGGESTIONS = "fileSuggestions"
 
-    // --- Suggestion nodes (external-op-api spec §4): a bot's proposed edit to a field on an
-    // existing node. kind="suggestion", proposed=true; accepting emits the real SetField. ---
+    // --- Suggestion nodes (external-op-api spec §4): a bot's proposed change to an existing
+    // node. kind="suggestion", proposed=true; accepting emits the real op as Actor.Human. A
+    // [SUGGESTION_KIND] discriminates the change type (absent ⇒ [SuggestionKind.SET_FIELD] for
+    // back-compat with the original field-edit-only suggestions). ---
     /** The node the suggestion targets. */
     const val TARGET_ID = "targetId"
-    /** The field on [TARGET_ID] the suggestion proposes to change. */
+    /** Which kind of change the suggestion proposes ([SuggestionKind]); absent = setField. */
+    const val SUGGESTION_KIND = "suggestionKind"
+    /** setField: the field on [TARGET_ID] the suggestion proposes to change. */
     const val TARGET_FIELD = "targetField"
-    /** The proposed new value for [TARGET_FIELD] (any JSON value). */
+    /** setField: the proposed new value for [TARGET_FIELD] (any JSON value). */
     const val PROPOSED_VALUE = "proposedValue"
+    /** move: the parent the suggestion proposes to move [TARGET_ID] under (a ULID string). */
+    const val PROPOSED_PARENT = "proposedParent"
+    /** addTag: the context/tag the suggestion proposes to add to [TARGET_ID] (a ULID string). */
+    const val PROPOSED_CONTEXT = "proposedContext"
+    /** attach: the proposed attachment as `{blobHash,type,name}` (accepted → real AddAttachment). */
+    const val PROPOSED_ATTACHMENT = "proposedAttachment"
 }
 
 /** The node kind used by external-op-api suggestion nodes (§4). */
 const val KIND_SUGGESTION = "suggestion"
+
+/** The change a [KIND_SUGGESTION] node proposes (stored in [Fields.SUGGESTION_KIND]). */
+object SuggestionKind {
+    const val SET_FIELD = "setField"
+    const val MOVE = "move"
+    const val ADD_TAG = "addTag"
+    const val ATTACH = "attach"
+}
 
 /** OCR lifecycle values for [Fields.OCR_STATUS]. */
 object OcrStatus {

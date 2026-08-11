@@ -9,6 +9,7 @@ import dev.njr.zync.core.clock.Clock
 import dev.njr.zync.core.clock.HlcGenerator
 import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.content.KIND_SUGGESTION
+import dev.njr.zync.core.content.SuggestionKind
 import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.op.Actor
@@ -29,7 +30,9 @@ import kotlin.random.Random
  * them atomically. Intents become ops via [ContentCommands] over a recording emitter that
  * stamps `Actor.Bot(id)`; the whole envelope is validated first, then ingested in one
  * transaction (spec §5, RESOLVED Q3 = atomic) — if any intent is invalid, nothing lands.
- * Commit-only for step 1; `propose` mode + suggestions arrive in step 2.
+ * In `propose` mode every state-changing verb (setField/complete/trash and the structural
+ * move/addTag/attach) mints a `kind=suggestion` node for human review instead of writing live;
+ * additive verbs (comment/free-tags) always commit.
  */
 class ExternalOpApi(
     private val service: SyncService,
@@ -94,27 +97,41 @@ class ExternalOpApi(
             "complete" -> edit(i, e, target(i), Fields.STATUS, JsonPrimitive("DONE"), propose)
             "trash" -> edit(i, e, target(i), Fields.STATUS, JsonPrimitive("DROPPED"), propose)
             "attach" -> {
-                // Live attachment ops can't be reviewed, so a propose-only bot must not commit
-                // them — reject like the other non-proposable verbs rather than silently committing.
-                if (propose) return err(i, "attach is not proposable yet")
                 val t = target(i)
                 val blobHash = requireNotNull(i.blobRef) { "blobRef required" }
+                // The blob must already be stored (PUT /api/blobs) whether we attach now or on
+                // accept, so the referenced content exists and is hash-verified either way.
                 if (blobs?.exists(blobHash) != true) {
                     return err(i, "blob not found — upload via PUT /api/blobs first")
                 }
-                ok(i, e.attach(t, i.type ?: "pdf", blobHash, i.name ?: "attachment"))
+                val type = i.type ?: "pdf"
+                val name = i.name ?: "attachment"
+                if (!propose) return ok(i, e.attach(t, type, blobHash, name))
+                proposeStructural(i, e, t, SuggestionKind.ATTACH) {
+                    e.setField(it, Fields.PROPOSED_ATTACHMENT, buildJsonObject {
+                        put("blobHash", blobHash); put("type", type); put("name", name)
+                    })
+                }
             }
             "addTag" -> {
-                if (propose) return err(i, "addTag is not proposable yet")
-                val t = target(i); c.addTag(t, Ulid.parse(requireNotNull(i.context) { "context required" })); ok(i, t)
+                val t = target(i)
+                val context = Ulid.parse(requireNotNull(i.context) { "context required" })
+                if (!propose) { c.addTag(t, context); return ok(i, t) }
+                proposeStructural(i, e, t, SuggestionKind.ADD_TAG) {
+                    e.setField(it, Fields.PROPOSED_CONTEXT, JsonPrimitive(context.toString()))
+                }
             }
             // Free-form tags are additive per-label metadata (mergeable) — always commit, so a
             // propose-only bot can still flag items relevant to it.
             "addFreeTag" -> { val t = target(i); c.addFreeTag(t, requireNotNull(i.tag) { "tag required" }); ok(i, t) }
             "removeFreeTag" -> { val t = target(i); c.removeFreeTag(t, requireNotNull(i.tag) { "tag required" }); ok(i, t) }
             "move" -> {
-                if (propose) return err(i, "move is not proposable yet")
-                val t = target(i); c.move(t, requireNotNull(resolveParent(i.parent)) { "parent required" }); ok(i, t)
+                val t = target(i)
+                val parent = requireNotNull(resolveParent(i.parent)) { "parent required" }
+                if (!propose) { c.move(t, parent); return ok(i, t) }
+                proposeStructural(i, e, t, SuggestionKind.MOVE) {
+                    e.setField(it, Fields.PROPOSED_PARENT, JsonPrimitive(parent.toString()))
+                }
             }
             else -> err(i, "unsupported op '${i.op}'")
         }
@@ -125,11 +142,30 @@ class ExternalOpApi(
     /** A field edit: commit the live `SetField`, or (propose) mint a suggestion node (§4). */
     private fun edit(i: OpIntent, e: RecordingBotEmitter, target: Ulid, field: String, value: JsonElement, propose: Boolean): IntentResult {
         if (!propose) { e.setField(target, field, value); return ok(i, target) }
+        return proposeStructural(i, e, target, SuggestionKind.SET_FIELD) {
+            e.setField(it, Fields.TARGET_FIELD, JsonPrimitive(field))
+            e.setField(it, Fields.PROPOSED_VALUE, value)
+        }
+    }
+
+    /**
+     * Mint a suggestion node of [kind] targeting [target] (external-op-api §4, generalized to
+     * structural ops): the common `kind=suggestion` / `targetId` / `suggestionKind` / `proposed`
+     * scaffolding, parented under the target like a comment; [payload] adds the kind-specific
+     * fields. Accepting emits the real op as `Actor.Human` (see `ContentCommands.acceptSuggestion`).
+     */
+    private fun proposeStructural(
+        i: OpIntent,
+        e: RecordingBotEmitter,
+        target: Ulid,
+        kind: String,
+        payload: (Ulid) -> Unit,
+    ): IntentResult {
         val sug = e.newId()
         e.setField(sug, Fields.KIND, JsonPrimitive(KIND_SUGGESTION))
+        e.setField(sug, Fields.SUGGESTION_KIND, JsonPrimitive(kind))
         e.setField(sug, Fields.TARGET_ID, JsonPrimitive(target.toString()))
-        e.setField(sug, Fields.TARGET_FIELD, JsonPrimitive(field))
-        e.setField(sug, Fields.PROPOSED_VALUE, value)
+        payload(sug)
         e.setField(sug, AgentFlow.FIELD_PROPOSED, JsonPrimitive(true))
         e.move(sug, target) // associate under the target
         return proposed(i, sug)

@@ -191,7 +191,7 @@ class ApiOpsTest {
     }
 
     @Test
-    fun attachIsRejectedInProposeMode() = run { client, _ ->
+    fun attachInProposeModeMakesASuggestionNotALiveAttachment() = run { client, service ->
         val put = client.put("/api/blobs") { header(HttpHeaders.Authorization, "Bearer secret"); setBody("bytes".toByteArray()) }
         val key = json.decodeFromString(dev.njr.zync.core.api.BlobKeyResult.serializer(), put.bodyAsText()).key
         val node = json.decodeFromString(
@@ -199,10 +199,56 @@ class ApiOpsTest {
             client.submit(OpEnvelope(intents = listOf(OpIntent(op = "create", title = "doc")))).bodyAsText(),
         ).results.single().nodeId!!
         val resp = client.submit(OpEnvelope(mode = "propose", intents = listOf(
-            OpIntent(op = "attach", target = node, blobRef = key, type = "pdf"),
+            OpIntent(op = "attach", target = node, blobRef = key, type = "pdf", name = "scan.pdf"),
         )))
-        assertEquals(HttpStatusCode.BadRequest, resp.status)
-        assertEquals("error", json.decodeFromString(EnvelopeResult.serializer(), resp.bodyAsText()).results.single().status)
+        assertEquals(HttpStatusCode.OK, resp.status)
+        assertEquals("proposed", json.decodeFromString(EnvelopeResult.serializer(), resp.bodyAsText()).results.single().status)
+        // No live attachment entity yet — a suggestion node carries the proposed attachment.
+        assertTrue(service.stateStore.project().values.none { it.fields["@attachment"] != null })
+        assertTrue(service.stateStore.project().values.any {
+            (it.fields["kind"] as? JsonPrimitive)?.content == "suggestion" &&
+                (it.fields["suggestionKind"] as? JsonPrimitive)?.content == "attach" &&
+                (it.fields["targetId"] as? JsonPrimitive)?.content == node
+        })
+    }
+
+    @Test
+    fun moveInProposeModeMakesASuggestionNotALiveMove() = run { client, service ->
+        val node = id(1)
+        val dest = id(2)
+        service.ingestLocal(Op.SetField(id(9), node, EntityType.Node, Hlc(5, 0, "server"), Actor.Human, "server", 5, "title", str("item")))
+        val resp = client.submit(OpEnvelope(mode = "propose", intents = listOf(
+            OpIntent(op = "move", target = node.toString(), parent = dest.toString()),
+        )))
+        assertEquals(HttpStatusCode.OK, resp.status)
+        assertEquals("proposed", json.decodeFromString(EnvelopeResult.serializer(), resp.bodyAsText()).results.single().status)
+        // The item is NOT reparented to dest…
+        assertTrue(service.stateStore.getParent(node)?.toString() != dest.toString())
+        // …a move suggestion carries the proposed parent.
+        assertTrue(service.stateStore.project().values.any {
+            (it.fields["suggestionKind"] as? JsonPrimitive)?.content == "move" &&
+                (it.fields["targetId"] as? JsonPrimitive)?.content == node.toString() &&
+                (it.fields["proposedParent"] as? JsonPrimitive)?.content == dest.toString()
+        })
+    }
+
+    @Test
+    fun addTagInProposeModeMakesASuggestionNotALiveTag() = run { client, service ->
+        val node = id(1)
+        val ctx = id(2)
+        service.ingestLocal(Op.SetField(id(9), node, EntityType.Node, Hlc(5, 0, "server"), Actor.Human, "server", 5, "title", str("item")))
+        val resp = client.submit(OpEnvelope(mode = "propose", intents = listOf(
+            OpIntent(op = "addTag", target = node.toString(), context = ctx.toString()),
+        )))
+        assertEquals(HttpStatusCode.OK, resp.status)
+        assertEquals("proposed", json.decodeFromString(EnvelopeResult.serializer(), resp.bodyAsText()).results.single().status)
+        // The tag is NOT applied live…
+        assertTrue(service.stateStore.project()[node]?.tags?.contains(ctx) != true)
+        // …an addTag suggestion carries the proposed context.
+        assertTrue(service.stateStore.project().values.any {
+            (it.fields["suggestionKind"] as? JsonPrimitive)?.content == "addTag" &&
+                (it.fields["proposedContext"] as? JsonPrimitive)?.content == ctx.toString()
+        })
     }
 
     @Test

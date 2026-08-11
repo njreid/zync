@@ -5,10 +5,12 @@ import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.content.Size
 import dev.njr.zync.core.content.ReadingState
 import dev.njr.zync.core.content.Status
+import dev.njr.zync.core.content.SuggestionKind
 import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.id.Ulid
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -176,6 +178,24 @@ class ContentCommands(private val ops: OpEmitter) {
     fun acceptSuggestion(suggestion: Ulid, target: Ulid, field: String, value: JsonElement) {
         ops.setField(target, field, value)
         ops.tombstone(suggestion)
+    }
+
+    /**
+     * Accept a suggestion of any kind (external-op-api §4, structural): emit the proposed op as
+     * a human op (so it wins the merge), then tombstone the suggestion. Dispatches on
+     * [SuggestionView.kind]; a malformed variant just tombstones (nothing to apply).
+     */
+    fun acceptSuggestion(s: SuggestionView) {
+        when (s.kind) {
+            SuggestionKind.MOVE -> s.proposedParent?.let { move(s.targetId, it) }
+            SuggestionKind.ADD_TAG -> s.proposedContext?.let { addTag(s.targetId, it) }
+            SuggestionKind.ATTACH -> (s.proposedAttachment as? JsonObject)?.let { a ->
+                fun str(k: String) = (a[k] as? JsonPrimitive)?.content
+                str("blobHash")?.let { attach(s.targetId, it, str("type") ?: "pdf", str("name") ?: "attachment") }
+            }
+            else -> if (s.field != null && s.proposedValue != null) ops.setField(s.targetId, s.field, s.proposedValue)
+        }
+        ops.tombstone(s.id)
     }
 
     /** Reject a suggestion: tombstone it, no change to the target. */
