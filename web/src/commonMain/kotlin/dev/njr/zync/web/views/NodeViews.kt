@@ -96,8 +96,10 @@ fun FlowContent.suggestionsSection(read: ContentReadModel) {
             li {
                 span("proposed") { +(s.targetTitle ?: "(item)") }
                 span("status") {
-                    val proposed = (s.proposedValue as? kotlinx.serialization.json.JsonPrimitive)?.content ?: s.proposedValue.toString()
-                    +" · ${s.field}: ${s.currentValue ?: "—"} → $proposed"
+                    // setField shows the diff (current → proposed); structural kinds show their summary.
+                    if (s.kind == dev.njr.zync.core.content.SuggestionKind.SET_FIELD)
+                        +" · ${s.field}: ${s.currentValue ?: "—"} → ${(s.proposedValue as? kotlinx.serialization.json.JsonPrimitive)?.content ?: s.proposedValue?.toString() ?: ""}"
+                    else +" · ${s.summary}"
                 }
                 s.byBot?.let { span("waiting") { +" @$it" } }
                 button(classes = "action") {

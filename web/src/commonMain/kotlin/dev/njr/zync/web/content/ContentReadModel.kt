@@ -7,6 +7,7 @@ import dev.njr.zync.core.content.ReadingState
 import dev.njr.zync.core.content.Size
 import dev.njr.zync.core.content.Status
 import dev.njr.zync.core.content.KIND_SUGGESTION
+import dev.njr.zync.core.content.SuggestionKind
 import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.content.stringContent
 import dev.njr.zync.core.id.Ulid
@@ -87,14 +88,29 @@ enum class ProjectState { ACTIVE, DONE, STALLED }
 data class FileCandidate(val id: Ulid, val path: String, val score: Int)
 
 /** A bot-proposed field edit awaiting review (external-op-api §4): the diff + who proposed it. */
+/**
+ * A bot-proposed change awaiting review (external-op-api §4). [kind] discriminates what the
+ * suggestion proposes ([dev.njr.zync.core.content.SuggestionKind]); [summary] is the rendered
+ * one-liner. The kind-specific fields carry what `ContentCommands.acceptSuggestion` needs to
+ * emit the real op as `Actor.Human`.
+ */
 data class SuggestionView(
     val id: Ulid,
     val targetId: Ulid,
     val targetTitle: String?,
-    val field: String,
-    val currentValue: String?,
-    val proposedValue: JsonElement,
+    val kind: String,
+    val summary: String,
     val byBot: String?,
+    // setField
+    val field: String? = null,
+    val currentValue: String? = null,
+    val proposedValue: JsonElement? = null,
+    // move
+    val proposedParent: Ulid? = null,
+    // addTag
+    val proposedContext: Ulid? = null,
+    // attach
+    val proposedAttachment: JsonElement? = null,
 )
 
 /** A context/tag as the UI reads it. */
@@ -146,26 +162,48 @@ class ContentReadModel(private val store: StateStore) {
         snapshots().filter { it.proposed() && it.kind() != KIND_SUGGESTION }
             .map { it.toView() }.sortedBy { it.id.toString() }
 
-    /** Bot-proposed field edits awaiting review (external-op-api §4): the diff for each. */
+    /** Bot-proposed changes awaiting review (external-op-api §4): the diff/summary for each. */
     fun suggestions(): List<SuggestionView> {
         val snaps = store.project()
+        fun ulid(s: String?) = s?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+        fun title(id: Ulid?) = id?.let { snaps[it]?.fields?.get(Fields.TITLE).asString() }
         return snaps.values.asSequence()
             .filter { it.alive && it.kind() == KIND_SUGGESTION && it.proposed() }
             .mapNotNull { snap ->
-                val targetId = snap.fields[Fields.TARGET_ID].asString()
-                    ?.let { runCatching { Ulid.parse(it) }.getOrNull() } ?: return@mapNotNull null
-                val field = snap.fields[Fields.TARGET_FIELD].asString() ?: return@mapNotNull null
-                val proposed = snap.fields[Fields.PROPOSED_VALUE] ?: return@mapNotNull null
+                val targetId = ulid(snap.fields[Fields.TARGET_ID].asString()) ?: return@mapNotNull null
+                val kind = snap.fields[Fields.SUGGESTION_KIND].asString() ?: SuggestionKind.SET_FIELD
                 val target = snaps[targetId]
-                SuggestionView(
-                    id = snap.entityId,
-                    targetId = targetId,
-                    targetTitle = target?.fields?.get(Fields.TITLE).asString(),
-                    field = field,
-                    currentValue = target?.fields?.get(field).asString(),
-                    proposedValue = proposed,
-                    byBot = (store.getRegister(RegisterKey(snap.entityId, Fields.TARGET_FIELD))?.actor as? Actor.Bot)?.id,
-                )
+                val targetTitle = target?.fields?.get(Fields.TITLE).asString()
+                // Provenance: the suggestion's own registers are bot-authored; any of them works.
+                val byBot = (store.getRegister(RegisterKey(snap.entityId, Fields.TARGET_ID))?.actor as? Actor.Bot)?.id
+                val base = { summary: String ->
+                    SuggestionView(snap.entityId, targetId, targetTitle, kind, summary, byBot)
+                }
+                when (kind) {
+                    SuggestionKind.MOVE -> {
+                        val parent = ulid(snap.fields[Fields.PROPOSED_PARENT].asString()) ?: return@mapNotNull null
+                        base("move to ${title(parent) ?: "…"}").copy(proposedParent = parent)
+                    }
+                    SuggestionKind.ADD_TAG -> {
+                        val ctx = ulid(snap.fields[Fields.PROPOSED_CONTEXT].asString()) ?: return@mapNotNull null
+                        base("tag ${title(ctx) ?: ctx.toString()}").copy(proposedContext = ctx)
+                    }
+                    SuggestionKind.ATTACH -> {
+                        val payload = snap.fields[Fields.PROPOSED_ATTACHMENT] as? JsonObject ?: return@mapNotNull null
+                        val name = (payload["name"] as? JsonPrimitive)?.content ?: "attachment"
+                        base("attach $name").copy(proposedAttachment = payload)
+                    }
+                    else -> {
+                        val field = snap.fields[Fields.TARGET_FIELD].asString() ?: return@mapNotNull null
+                        val proposed = snap.fields[Fields.PROPOSED_VALUE] ?: return@mapNotNull null
+                        val proposedStr = (proposed as? JsonPrimitive)?.content ?: proposed.toString()
+                        base("$field → $proposedStr").copy(
+                            field = field,
+                            currentValue = target?.fields?.get(field).asString(),
+                            proposedValue = proposed,
+                        )
+                    }
+                }
             }
             .sortedBy { it.id.toString() }
             .toList()

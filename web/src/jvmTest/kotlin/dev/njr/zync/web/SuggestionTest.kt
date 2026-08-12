@@ -3,6 +3,7 @@ package dev.njr.zync.web
 import dev.njr.zync.core.agent.AgentFlow
 import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.content.KIND_SUGGESTION
+import dev.njr.zync.core.content.SuggestionKind
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.state.InMemoryStateStore
 import dev.njr.zync.web.content.ContentCommands
@@ -73,5 +74,28 @@ class SuggestionTest {
         client.post("/suggestion/$sug/reject")
         assertNull(read.node(task)!!.notes)
         assertTrue(read.suggestions().isEmpty())
+    }
+
+    private fun seedMoveSuggestion(target: Ulid, dest: Ulid): Ulid {
+        val sug = emitter.newId()
+        emitter.setField(sug, Fields.KIND, JsonPrimitive(KIND_SUGGESTION))
+        emitter.setField(sug, Fields.SUGGESTION_KIND, JsonPrimitive(SuggestionKind.MOVE))
+        emitter.setField(sug, Fields.TARGET_ID, JsonPrimitive(target.toString()))
+        emitter.setField(sug, Fields.PROPOSED_PARENT, JsonPrimitive(dest.toString()))
+        emitter.setField(sug, AgentFlow.FIELD_PROPOSED, JsonPrimitive(true))
+        return sug
+    }
+
+    @Test
+    fun acceptingAMoveSuggestionReparentsAsAHumanOpAndTombstones() = app { client ->
+        val item = commands.createTask("Doc")
+        val folder = commands.createTask("Folder")
+        val sug = seedMoveSuggestion(item, folder)
+        // The read model renders a human summary and carries the proposed parent.
+        assertEquals("move to Folder", read.suggestions().single().summary)
+        client.post("/suggestion/$sug/accept")
+        assertEquals(folder.toString(), store.getParent(item)?.toString())
+        assertTrue(read.suggestions().isEmpty())
+        assertNull(read.node(sug)) // tombstoned
     }
 }

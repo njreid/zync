@@ -2,10 +2,14 @@ package dev.njr.zync.server.api
 
 import dev.njr.zync.core.api.BlobKeyResult
 import dev.njr.zync.core.api.EnvelopeResult
+import dev.njr.zync.core.api.NodeListDto
 import dev.njr.zync.core.api.OpEnvelope
+import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.server.auth.bearerToken
 import dev.njr.zync.server.blob.BlobService
 import dev.njr.zync.server.blob.BlobTooLargeException
+import dev.njr.zync.web.content.ContentReadModel
+import dev.njr.zync.web.content.NodeView
 import dev.njr.zync.web.sse.ChangeNotifier
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -15,9 +19,12 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.sse.sse
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private const val MAX_INTENTS = 200
 
@@ -40,9 +47,16 @@ fun Route.apiRoutes(
     blobs: BlobService? = null,
     changes: ChangeNotifier? = null,
     head: () -> Long = { 0L },
+    read: ContentReadModel? = null,
+    /** Search backend; defaults to the read model's keyword search. Main injects hybrid
+     *  keyword+semantic search when embeddings are configured. */
+    search: ((String, Int) -> List<NodeView>)? = null,
+    /** Per-token, per-verb rate limiter. Shared with `/mcp` (Main wires one instance into both)
+     *  so a bot can't dodge its budget by switching doors; defaults to a fresh one for callers
+     *  (tests) that don't care about cross-door sharing. */
+    limiter: VerbRateLimiter = VerbRateLimiter(),
 ) {
     val idem = IdempotencyCache()
-    val limiter = VerbRateLimiter()
 
     // The react side (spec §6, Q4): a bearer-authed SSE feed. Emits a `changed` event with
     // the current head seq whenever the op log changes, so a bot knows to re-query.
@@ -51,6 +65,27 @@ fun Route.apiRoutes(
         suspend fun ping() = send(event = "changed", data = """{"head":${head()}}""")
         ping()
         changes.changes.collect { ping() }
+    }
+
+    // The read side (spec §6): a projected node by id, and keyword search — for bots (and the
+    // MCP interface) that read-then-write. Bearer-authed; returns wire-stable NodeDto shapes.
+    if (read != null) {
+        get("/api/items/{id}") {
+            if (call.bot(auth) == null) return@get call.respondText("unauthorized", status = HttpStatusCode.Unauthorized)
+            val id = call.parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }
+                ?: return@get call.respondText("bad id", status = HttpStatusCode.BadRequest)
+            val node = read.node(id) ?: return@get call.respondText("not found", status = HttpStatusCode.NotFound)
+            call.respond(node.toDto())
+        }
+        val doSearch: (String, Int) -> List<NodeView> = search ?: read::search
+        get("/api/search") {
+            if (call.bot(auth) == null) return@get call.respondText("unauthorized", status = HttpStatusCode.Unauthorized)
+            val q = call.parameters["q"].orEmpty()
+            val limit = call.parameters["limit"]?.toIntOrNull()?.coerceIn(1, 200) ?: 50
+            // Embedding is network I/O (Ollama); keep it off the event loop.
+            val hits = withContext(Dispatchers.IO) { doSearch(q, limit) }
+            call.respond(NodeListDto(hits.map { it.toDto() }))
+        }
     }
 
     if (blobs != null) put("/api/blobs") {
@@ -108,7 +143,7 @@ private sealed interface Outcome {
 }
 
 /** Per-`(botId, verb)` fixed-window rate limiter, checked atomically for the whole envelope (spec §7, Q5). */
-private class VerbRateLimiter(private val now: () -> Long = System::currentTimeMillis) {
+class VerbRateLimiter(private val now: () -> Long = System::currentTimeMillis) {
     private class Window(var start: Long, var count: Int)
     private val windows = HashMap<String, Window>()
 

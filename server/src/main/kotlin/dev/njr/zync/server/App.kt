@@ -31,7 +31,9 @@ import io.ktor.server.plugins.BadRequestException
 import dev.njr.zync.server.agenda.AgendaEndpoint
 import dev.njr.zync.server.agenda.agendaRoutes
 import dev.njr.zync.server.api.apiRoutes
+import dev.njr.zync.server.api.VerbRateLimiter
 import dev.njr.zync.server.integrations.newzRoutes
+import dev.njr.zync.server.mcp.mcpRoutes
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.doublereceive.DoubleReceive
 import io.ktor.server.plugins.statuspages.StatusPages
@@ -53,6 +55,11 @@ fun Application.zyncModule(
     newz: dev.njr.zync.server.integrations.NewzIntegration? = null,
     botApi: dev.njr.zync.server.api.ExternalOpApi? = null,
     botAuth: dev.njr.zync.server.api.BotAuth? = null,
+    mcp: dev.njr.zync.server.mcp.McpServer? = null,
+    search: ((String, Int) -> List<dev.njr.zync.web.content.NodeView>)? = null,
+    /** Shared with the [mcp] door's own rate limiter (Main wires one instance into both) so a
+     *  bot can't dodge its per-verb budget by switching doors. Null ⇒ apiRoutes uses its own. */
+    rateLimiter: VerbRateLimiter? = null,
     json: Json = Json,
     allowUnauthenticatedWeb: Boolean = false,
     usage: () -> UsageGauges = { UsageGauges() },
@@ -96,7 +103,11 @@ fun Application.zyncModule(
         if (webauthn != null) webAuthnRoutes(webauthn)
         if (agenda != null) agendaRoutes(agenda, auth)
         if (newz != null) newzRoutes(newz, auth)
-        if (botApi != null && botAuth != null) apiRoutes(botApi, botAuth, blobs, content?.changes, service::head)
+        if (botApi != null && botAuth != null) apiRoutes(
+            botApi, botAuth, blobs, content?.changes, service::head, content?.read, search,
+            limiter = rateLimiter ?: VerbRateLimiter(),
+        )
+        if (mcp != null && botAuth != null) mcpRoutes(mcp, botAuth, json)
         if (hardening != null) get("/metrics") {
             if (!call.requireAuth(auth.authenticator)) return@get
             call.respond(hardening.metrics.snapshot(usage()))

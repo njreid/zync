@@ -1,0 +1,20 @@
+{
+  "name": "zync-mcp",
+  "version": "0.1.0",
+  "description": "Connects Claude to a self-hosted Zync server over MCP (read + propose-only write) and teaches it how to help triage the inbox and organize Reference.",
+  "keywords": ["zync", "gtd", "notes", "mcp"],
+  "userConfig": {
+    "server_url": {
+      "title": "Zync server URL",
+      "description": "Base URL of your Zync server, e.g. https://zync.example.com — no trailing slash, no /mcp suffix (the plugin appends it).",
+      "type": "string",
+      "sensitive": false
+    },
+    "token": {
+      "title": "Zync bot token",
+      "description": "A bearer token minted on your Zync server with `server bot add <name>`. Only the token's SHA-256 hash is stored server-side; the token itself is never written anywhere in this repo — Claude Code stores it locally when you enter it here.",
+      "type": "string",
+      "sensitive": true
+    }
+  }
+}
