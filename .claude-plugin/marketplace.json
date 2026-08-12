@@ -1,0 +1,13 @@
+{
+  "name": "zync-marketplace",
+  "owner": {
+    "name": "njreid"
+  },
+  "plugins": [
+    {
+      "name": "zync-mcp",
+      "source": "./plugins/zync-mcp",
+      "description": "Connects Claude to a self-hosted Zync server over its stateless MCP door (read + propose-only write) and teaches it how to triage your inbox and tidy the Reference tree."
+    }
+  ]
+}
