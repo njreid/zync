@@ -32,6 +32,7 @@ import dev.njr.zync.server.agenda.AgendaEndpoint
 import dev.njr.zync.server.agenda.agendaRoutes
 import dev.njr.zync.server.api.apiRoutes
 import dev.njr.zync.server.integrations.newzRoutes
+import dev.njr.zync.server.mcp.mcpRoutes
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.doublereceive.DoubleReceive
 import io.ktor.server.plugins.statuspages.StatusPages
@@ -99,7 +100,7 @@ fun Application.zyncModule(
         if (agenda != null) agendaRoutes(agenda, auth)
         if (newz != null) newzRoutes(newz, auth)
         if (botApi != null && botAuth != null) apiRoutes(botApi, botAuth, blobs, content?.changes, service::head, content?.read, search)
-        if (mcp != null && botAuth != null) dev.njr.zync.server.mcp.mcpRoutes(mcp, botAuth, json)
+        if (mcp != null && botAuth != null) mcpRoutes(mcp, botAuth, json)
         if (hardening != null) get("/metrics") {
             if (!call.requireAuth(auth.authenticator)) return@get
             call.respond(hardening.metrics.snapshot(usage()))

@@ -4,6 +4,7 @@ import dev.njr.zync.core.clock.Hlc
 import dev.njr.zync.core.op.Actor
 import dev.njr.zync.core.op.EntityType
 import dev.njr.zync.core.op.Op
+import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.state.RegisterKey
 import dev.njr.zync.data.JvmZyncDatabase
 import dev.njr.zync.server.api.EnvBotAuth

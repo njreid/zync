@@ -41,6 +41,8 @@ import kotlin.time.Duration.Companion.minutes
  * hardening/pairing from env, and serves. litestream is PID 1 and runs this via
  * `-exec` in the container.
  */
+private val log = org.slf4j.LoggerFactory.getLogger("zync.server")
+
 fun main(args: Array<String>) {
     val dbPath = System.getenv("ZYNC_DB_PATH") ?: "zync.db"
     val keyFile = System.getenv("ZYNC_SERVER_KEY_FILE") ?: "server-identity.key"
