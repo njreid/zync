@@ -231,21 +231,41 @@ is explicitly out of scope; if it's ever wanted it's a separate spec, not a chan
   and the suggestion appears in `ContentReadModel.suggestions()` with `Actor.Bot` attribution;
   accepting it (existing human op) applies the real `SetField(Human)`.
 
-## 10. Open questions
+## 10. Open questions — RESOLVED 2026-08-12
 
-1. **Do additive ops (`comment`, `add_free_tag`) also hold for confirmation?** Today they commit
-   even in propose mode (mergeable, can't clobber). Strict reading of "any change is a proposal"
-   would stage them too. **Recommendation:** keep the existing `ExternalOpApi` semantics
-   (additive → commit) for consistency across doors, and document it; revisit if users want a
-   literally-nothing-lands mode. *Needs your call.*
-2. **Expose `attach`/`addTag`/`move`?** They require teaching `ExternalOpApi`'s propose path to
-   stage them (external-op-api §13). Do we block this spec on that, or ship read + the four
-   proposable write verbs (+ additive comment/tag) first and add them when the propose path
-   grows? **Recommendation:** ship without them; add later.
-3. **OAuth 2.1?** Bearer for v1 (decided). Add MCP OAuth when an interactive desktop client
-   without a pre-provisioned token needs to connect.
-4. **Resources vs tools-only?** v1 ships both a small resource set and read tools. If resource
-   maintenance isn't worth it, tools alone cover reads — droppable without touching writes.
+1. **Additive ops (`comment`, `add_free_tag`) hold for confirmation?** → **No — keep committing**
+   (mergeable, can't clobber a human). Consistent across `/api/ops` and `/mcp`; documented in the
+   tool descriptions. Revisit only if a literally-nothing-lands mode is wanted.
+2. **Expose `attach`/`addTag`/`move`?** → **Yes, shipped.** `ExternalOpApi`'s propose path was
+   generalized (suggestion nodes now carry `suggestionKind` + `proposedParent`/`proposedContext`/
+   `proposedAttachment`); accepting emits the real `Move`/`AddTag`/`AddAttachment` as `Actor.Human`.
+   All eleven write verbs are exposed as MCP tools; agents can organize (tag/move) reference items.
+3. **OAuth 2.1?** → **Deferred.** Bearer for v1; OAuth sits in front of the same `BotIdentity`
+   resolution when an interactive client without a pre-provisioned token needs to connect.
+4. **Resources vs tools-only?** → **Both shipped** (`zync://inbox|proposals|reference` +
+   `zync://node/{id}[/comments]`); read tools cover the same ground for tool-only clients.
+
+## 12. Semantic search (embeddings)
+
+Added alongside the read surface so `search` (the `/api/search` endpoint and the MCP `search`
+tool) is **hybrid**: the existing keyword LIKE index first, then embedding-based semantic hits it
+missed. Design decisions:
+
+- **Getting embeddings** — an `EmbeddingClient` port mirrors the `LlmClient` pattern; the default
+  adapter is **Ollama** (`ZYNC_EMBED_URL`, `nomic-embed-text`) — local-first, no third party sees
+  your data. Unset ⇒ semantic search disabled and behavior is exactly keyword-only. Voyage/OpenAI/
+  ONNX adapters drop in behind the same port (Anthropic has no embeddings API of its own).
+- **Indexing** — SQLDelight's SQLite-3.18 dialect can't compile `sqlite-vec`/FTS5 virtual-table
+  MATCH, and Android system SQLite won't reliably load native extensions (the same reason
+  `search_doc` is a LIKE table). So vectors live in an **in-memory index**, brute-force cosine —
+  a few ms at personal scale, no ANN structure, identical on server and phone. Each entry keeps a
+  content hash so only changed nodes re-embed. The corpus is embedded **lazily** on search (no
+  background worker, write path untouched); embedding is network I/O so search runs on
+  `Dispatchers.IO`.
+- **Deferred:** persisting vectors as a BLOB in the durable store (the spec's original upgrade
+  path) and, server-side only, swapping brute-force for `sqlite-vec` over raw JDBC — both behind
+  the unchanged `EmbeddingIndex`/`SemanticSearch` query API. Background (non-lazy) indexing if the
+  first-search-after-edits latency ever bites.
 
 ## 11. Sequencing (proposed)
 
