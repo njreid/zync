@@ -3,12 +3,12 @@ package dev.njr.zync.server.mcp
 import dev.njr.zync.server.api.BotAuth
 import dev.njr.zync.server.api.BotIdentity
 import dev.njr.zync.server.auth.bearerToken
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receiveText
-import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
@@ -36,12 +36,17 @@ fun Route.mcpRoutes(server: McpServer, auth: BotAuth, json: Json = Json { ignore
             json.parseToJsonElement(raw) as? JsonObject
         } catch (e: Exception) {
             null
-        } ?: return@post call.respond(HttpStatusCode.BadRequest, JsonRpc.error(null, JsonRpc.PARSE_ERROR, "parse error"))
+        } ?: return@post call.respondText(
+            JsonRpc.error(null, JsonRpc.PARSE_ERROR, "parse error").toString(),
+            ContentType.Application.Json, HttpStatusCode.BadRequest,
+        )
 
-        // A tool call may do network I/O (embedding search); keep it off the event loop.
+        // A tool call may do network I/O (embedding search); keep it off the event loop. Respond
+        // the JSON text explicitly (not via ContentNegotiation) so the raw JsonObject is emitted
+        // verbatim regardless of the app's installed converters.
         when (val out = withContext(Dispatchers.IO) { server.handle(bot, message) }) {
             McpOutcome.NoContent -> call.respondText("", status = HttpStatusCode.Accepted)
-            is McpOutcome.Response -> call.respond(out.body)
+            is McpOutcome.Response -> call.respondText(out.body.toString(), ContentType.Application.Json)
         }
     }
 
