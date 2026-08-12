@@ -97,7 +97,7 @@ Tools are the MCP-native shape of the intents (external-op-api §3) plus read pr
 | `list_children` | `parent` (ULID\|alias) | child `NodeView`s | `.children` |
 | `get_node` | `id` | one node's projected fields + comments/attachments | `.project()` snapshot |
 | `list_comments` | `id` | comment `NodeView`s | `.comments` |
-| `search` | `q` | matching nodes (FTS/reference search) | reference/FTS search |
+| `search` | `query`, `limit?` | matching nodes (hybrid keyword/semantic, see §12) | reference/FTS search |
 | `list_proposals` | — | pending proposals + suggestion nodes | `.proposals` / `.suggestions` |
 | `list_reference` | `folder?` | reference tree | `.reference` / `.referenceChildren` |
 
@@ -119,12 +119,14 @@ Each maps to one `OpIntent` and is submitted `mode:"propose"`. The **proposable 
 | `trash` | `trash` | suggestion: `status → DROPPED` |
 | `comment` | `comment` | **commits** (additive, can't clobber human state) |
 | `add_free_tag` / `remove_free_tag` | `addFreeTag`/`removeFreeTag` | **commits** (additive metadata) |
+| `move` | `move` | suggestion: `proposedParent` (organize) |
+| `add_tag` | `addTag` | suggestion: `proposedContext` |
+| `attach` | `attach` | suggestion: `proposedAttachment` (blob must be uploaded first via `PUT /api/blobs`) |
 
-> **Not yet exposed as MCP tools:** `attach`, `addTag`, `move`. `ExternalOpApi` currently
-> *rejects* these in propose mode ("not proposable yet"). Because `/mcp` is propose-only, they'd
-> always error, so we don't advertise them until the propose path learns to stage them
-> (external-op-api §13 / this spec §10). This is the one place the always-propose rule *shrinks*
-> the surface versus `/api/ops`, and it's the honest boundary.
+All eleven external-op-api write verbs are shipped as MCP tools (§10 Q2, resolved 2026-08-12) —
+`ExternalOpApi`'s propose path was generalized to stage `move`/`addTag`/`attach` as suggestion
+nodes the same way `set_field` does, so nothing about propose-only shrinks the MCP surface versus
+`/api/ops` anymore.
 
 **The additive-op question (open, §10):** `comment`/`add_free_tag` commit even under propose
 because they're mergeable and can't overwrite a human. That's the existing `ExternalOpApi`
@@ -160,12 +162,18 @@ clients) but make Zync feel native in resource-aware UIs. No subscriptions in v1
 
 - MCP tool calls are single-intent, so envelope atomicity is trivial. The adapter still routes
   through `ExternalOpApi.submit()`, inheriting its all-or-nothing guarantee.
-- **Idempotency key:** derived deterministically as `mcp:<botId>:<jsonrpc-request-id>` when the
-  client supplies a JSON-RPC `id`, or accepted explicitly via an optional `idempotencyKey` tool
-  argument. This reuses the `(botId, key)` `IdempotencyCache` in `ApiRoutes` — a retried
-  `tools/call` with the same id returns the original result and emits nothing new. (Refactor: lift
-  the idempotency lock + cache out of `apiRoutes` into a small shared `OpIngress` both `/api/ops`
-  and `/mcp` call — §7.)
+- **Idempotency key:** `McpServer` dedupes on `(botId, jsonrpc-request-id)` via its own
+  `McpIdempotencyCache` — same shape as `ApiRoutes`' `IdempotencyCache` (bounded LRU, best-effort,
+  a restart forgets it) but a separate instance, since the key space differs (`/api/ops` keys on
+  an explicit `idempotencyKey` field; `/mcp` keys on the JSON-RPC request id, which every
+  well-behaved client already sends). A retried `tools/call` with the same id returns the original
+  result and emits nothing new.
+- **Rate limit:** unlike idempotency, the per-token/per-verb `VerbRateLimiter` (§8) IS one shared
+  instance across both doors — `Main` constructs it once and passes it into both `apiRoutes(...)`
+  and `McpServer(...)`, so a bot can't reset its budget by switching transports. The originally
+  sketched single shared `OpIngress` (below) turned out to be more machinery than the actual
+  sharing need: only the rate budget has to be cross-door-consistent; idempotency dedup is
+  naturally per-door because the two keys mean different things.
 
 ## 6. React side (deferred, noted)
 
@@ -178,17 +186,24 @@ is explicitly out of scope; if it's ever wanted it's a separate spec, not a chan
 
 - `core`: no changes — reuses `OpEnvelope`/`OpIntent`/`BotCapabilities`. (Suggestion-node
   vocabulary already exists.)
-- `server`:
-  - New `mcp/` package: `McpRoutes.kt` (`POST /mcp` + `GET /mcp` → 405), `McpJsonRpc.kt`
-    (request/response/error DTOs), `McpDispatcher.kt` (method routing), `McpTools.kt`
-    (tool registry + JSON-Schemas + intent translation), `McpResources.kt`.
-  - `OpIngress` — extract the idempotency-lock + rate-limit + submit critical section from
-    `apiRoutes` so `/mcp` and `/api/ops` share one path (and one idempotency cache). The MCP
-    dispatcher forces `mode="propose"` when building the envelope.
+- `server`: new `mcp/` package, as shipped:
+  - `McpRoutes.kt` — `POST /mcp` + `GET /mcp` → 405, bearer auth, hands the parsed JSON-RPC
+    object to `McpServer.handle`.
+  - `McpJsonRpc.kt` — request/response/error DTOs and error codes.
+  - `McpServer.kt` — method routing, tool dispatch, resource reads, and the always-propose clamp
+    (folds in what this section originally sketched as a separate `McpDispatcher.kt`/
+    `McpResources.kt` — one class turned out simpler than three for this surface area).
+  - `McpTools.kt` — tool registry + JSON-Schemas + intent translation (`McpCatalog`).
+  - `McpIdempotency.kt` — `McpIdempotencyCache`, the `/mcp`-side idempotency dedup (§5).
+  - `VerbRateLimiter` (in `api/ApiRoutes.kt`, made non-private) is constructed once in `Main` and
+    passed into both `apiRoutes(...)` and `McpServer(...)` — the actual cross-door sharing
+    mechanism; see §5. There is no separate `OpIngress` type.
   - Read tools call a `ContentReadModel` bound to the server's `StateStore` (already available
     via `ServerContent`).
-  - Wire into `App.zyncModule` next to `apiRoutes(...)`; add `/mcp` to `SESSION_EXEMPT`; reuse
-    `installHardening` (size caps, remote-IP backstop) and the per-verb `VerbRateLimiter`.
+  - Wired into `App.zyncModule` next to `apiRoutes(...)`; `/mcp` joins `SESSION_EXEMPT`; reuses
+    `installHardening` (size caps, remote-IP backstop) and the shared per-verb `VerbRateLimiter`.
+  - `embed/` package (added alongside, §12): `OllamaEmbeddingClient`, `SemanticSearch` — the
+    hybrid backend the MCP `search` tool and `/api/search` both call through.
 - `web`: none — proposals/suggestions already render in the proposals panel; MCP writes surface
   there identically to `/api/ops` proposals.
 - `app`: none — the phone loopback can serve `/mcp` too (same op stack) if on-device MCP clients
@@ -245,7 +260,7 @@ is explicitly out of scope; if it's ever wanted it's a separate spec, not a chan
 4. **Resources vs tools-only?** → **Both shipped** (`zync://inbox|proposals|reference` +
    `zync://node/{id}[/comments]`); read tools cover the same ground for tool-only clients.
 
-## 12. Semantic search (embeddings)
+## 11. Semantic search (embeddings)
 
 Added alongside the read surface so `search` (the `/api/search` endpoint and the MCP `search`
 tool) is **hybrid**: the existing keyword LIKE index first, then embedding-based semantic hits it
@@ -267,10 +282,10 @@ missed. Design decisions:
   the unchanged `EmbeddingIndex`/`SemanticSearch` query API. Background (non-lazy) indexing if the
   first-search-after-edits latency ever bites.
 
-## 11. Sequencing (proposed)
+## 12. Sequencing (as built)
 
-0. **`OpIngress` refactor** — lift the idempotency/rate-limit/submit critical section out of
-   `apiRoutes` so `/mcp` and `/api/ops` share it (pure refactor, existing tests guard it).
+0. ~~`OpIngress` refactor~~ — superseded (§5): only the rate limiter needed cross-door sharing,
+   done by passing one `VerbRateLimiter` instance into both routers, not a shared submit path.
 1. **`POST /mcp` skeleton** — `initialize`/`ping`/`tools/list`, bearer auth, stateless, `GET`→405.
 2. **Read tools** — `list_inbox`/`list_children`/`get_node`/`search`/`list_comments` over
    `ContentReadModel`.

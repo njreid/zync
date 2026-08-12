@@ -1,5 +1,6 @@
 package dev.njr.zync.server.mcp
 
+import dev.njr.zync.core.api.NodeDto
 import dev.njr.zync.core.api.NodeListDto
 import dev.njr.zync.core.api.OpEnvelope
 import dev.njr.zync.core.api.OpIntent
@@ -7,11 +8,14 @@ import dev.njr.zync.core.content.WellKnownNodes
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.server.api.BotIdentity
 import dev.njr.zync.server.api.ExternalOpApi
+import dev.njr.zync.server.api.VerbRateLimiter
 import dev.njr.zync.server.api.toDto
 import dev.njr.zync.web.content.ContentReadModel
+import dev.njr.zync.web.content.NodeView
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -32,13 +36,17 @@ class McpServer(
     private val serverVersion: String = "0.1",
     private val protocolVersion: String = "2025-06-18",
     /** Search backend for the `search` tool; defaults to keyword. Main injects hybrid search. */
-    private val search: (String, Int) -> List<dev.njr.zync.web.content.NodeView> = read::search,
+    private val search: (String, Int) -> List<NodeView> = read::search,
+    /** Per-token, per-verb rate limiter for write tools (spec §8) — the SAME instance Main wires
+     *  into `/api/ops`, so a bot can't dodge its budget by switching doors. Null (tests) disables
+     *  MCP-side rate limiting entirely. */
+    private val rateLimiter: VerbRateLimiter? = null,
 ) {
     private val idempotency = McpIdempotencyCache()
 
     fun handle(bot: BotIdentity, message: JsonObject): McpOutcome {
         val id: JsonElement? = message["id"]
-        val method = (message["method"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+        val method = (message["method"] as? JsonPrimitive)?.content
         val params = message["params"] as? JsonObject ?: JsonObject(emptyMap())
 
         // A notification (no id) gets no response, per JSON-RPC. `notifications/initialized` and
@@ -84,7 +92,7 @@ class McpServer(
     // --- tools/call ---
 
     private fun callTool(bot: BotIdentity, id: JsonElement, params: JsonObject): JsonObject {
-        val name = (params["name"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+        val name = (params["name"] as? JsonPrimitive)?.content
             ?: return toolError("missing tool name")
         val args = params["arguments"] as? JsonObject ?: JsonObject(emptyMap())
         val tool = McpCatalog.byName[name] ?: return toolError("unknown tool '$name'")
@@ -96,10 +104,16 @@ class McpServer(
 
         if (tool.isRead) return runCatching { executeRead(tool, args) }
             .getOrElse { toolError(it.message ?: "read failed") }
+        checkNotNull(verb) { "write tool '$name' has no backing verb" } // isRead == (verb == null)
 
         // Write: force propose. Idempotent per (bot, JSON-RPC id) so a retried call re-proposes nothing.
         val key = bot.id + ":" + id.toString()
         idempotency.get(key)?.let { return it }
+        // Same per-token, per-verb budget as /api/ops (spec §8) — a cached retry above never
+        // reaches here, so it costs no budget.
+        if (rateLimiter != null && !rateLimiter.tryConsume(bot.id, mapOf(verb to 1), bot.capabilities)) {
+            return toolError("rate limit exceeded")
+        }
         val intent = McpCatalog.intentFor(tool, args) ?: return toolError("cannot build intent for '$name'")
         val out = runCatching { submitProposal(bot, intent) }.getOrElse { toolError(it.message ?: "submit failed") }
         idempotency.put(key, out)
@@ -124,16 +138,16 @@ class McpServer(
     }
 
     private fun executeRead(tool: McpTool, args: JsonObject): JsonObject {
-        fun s(k: String) = (args[k] as? kotlinx.serialization.json.JsonPrimitive)?.content
+        fun s(k: String) = (args[k] as? JsonPrimitive)?.content
         fun ulid(k: String) = s(k)?.let { Ulid.parse(it) }
         return when (tool.name) {
             "list_inbox" -> nodesResult(read.inbox(null))
             "list_children" -> nodesResult(read.children(resolveParent(s("parent"))))
             "get_node" -> {
                 val node = ulid("id")?.let { read.node(it) } ?: return toolError("node not found")
-                toolResult("node ${node.id}", json.encodeToJsonElement(dev.njr.zync.core.api.NodeDto.serializer(), node.toDto()) as JsonObject)
+                toolResult("node ${node.id}", json.encodeToJsonElement(NodeDto.serializer(), node.toDto()) as JsonObject)
             }
-            "search" -> nodesResult(search(s("query").orEmpty(), (args["limit"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull()?.coerceIn(1, 200) ?: 50))
+            "search" -> nodesResult(search(s("query").orEmpty(), (args["limit"] as? JsonPrimitive)?.content?.toIntOrNull()?.coerceIn(1, 200) ?: 50))
             "list_comments" -> nodesResult(read.comments(ulid("id") ?: return toolError("id required")))
             "list_proposals" -> {
                 val proposals = read.proposals().map { it.toDto() }
@@ -162,7 +176,7 @@ class McpServer(
         else -> Ulid.parse(p)
     }
 
-    private fun nodesResult(nodes: List<dev.njr.zync.web.content.NodeView>): JsonObject {
+    private fun nodesResult(nodes: List<NodeView>): JsonObject {
         val dto = NodeListDto(nodes.map { it.toDto() })
         return toolResult("${dto.nodes.size} node(s)", json.encodeToJsonElement(NodeListDto.serializer(), dto) as JsonObject)
     }
@@ -189,7 +203,7 @@ class McpServer(
     }
 
     private fun readResource(id: JsonElement, params: JsonObject): JsonObject {
-        val uri = (params["uri"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+        val uri = (params["uri"] as? JsonPrimitive)?.content
             ?: return JsonRpc.error(id, JsonRpc.INVALID_PARAMS, "missing uri")
         val body: JsonElement? = when {
             uri == "zync://inbox" -> json.encodeToJsonElement(NodeListDto.serializer(), NodeListDto(read.inbox(null).map { it.toDto() }))
@@ -204,7 +218,7 @@ class McpServer(
                 } else {
                     val nid = runCatching { Ulid.parse(rest) }.getOrNull()
                         ?: return JsonRpc.error(id, JsonRpc.INVALID_PARAMS, "bad node id")
-                    read.node(nid)?.let { json.encodeToJsonElement(dev.njr.zync.core.api.NodeDto.serializer(), it.toDto()) }
+                    read.node(nid)?.let { json.encodeToJsonElement(NodeDto.serializer(), it.toDto()) }
                 }
             }
             else -> null

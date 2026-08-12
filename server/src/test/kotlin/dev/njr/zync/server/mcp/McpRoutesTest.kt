@@ -151,4 +151,29 @@ class McpRoutesTest {
         val nodes = result["structuredContent"]!!.jsonObject["nodes"]!!.jsonArray
         assertTrue(nodes.any { it.jsonObject["title"]?.jsonPrimitive?.content == "Buy oat milk" })
     }
+
+    @Test
+    fun writeToolsShareTheApiOpsRateBudget() = testApplication {
+        // Regression: /mcp write tools must consume the SAME per-verb budget as /api/ops (spec
+        // §8) — a bot can't dodge its rate limit by switching doors.
+        val service = SyncService(JvmZyncDatabase.inMemory())
+        val api = ExternalOpApi(service)
+        val limiter = dev.njr.zync.server.api.VerbRateLimiter()
+        val caps = dev.njr.zync.core.api.BotCapabilities(rateLimit = mapOf("create" to 1))
+        val auth = dev.njr.zync.server.api.BotAuth { token -> if (token == "secret") dev.njr.zync.server.api.BotIdentity("bot", caps) else null }
+        val server = McpServer(ContentReadModel(service.stateStore), api, rateLimiter = limiter)
+        application {
+            install(ContentNegotiation) { json() }
+            routing { mcpRoutes(server, auth) }
+        }
+        suspend fun createTask(rpcId: Int) = client.rpc(
+            "tools/call", callParams("create_task", buildJsonObject { put("title", "task $rpcId") }), id = rpcId,
+        ).obj()["result"]!!.jsonObject
+
+        val first = createTask(1)
+        assertEquals(false, first["isError"]!!.jsonPrimitive.content.toBoolean())
+
+        val second = createTask(2)
+        assertEquals(true, second["isError"]!!.jsonPrimitive.content.toBoolean())
+    }
 }

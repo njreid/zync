@@ -106,9 +106,14 @@ fun main(args: Array<String>) {
     val semantic = embedder?.let { dev.njr.zync.server.embed.SemanticSearch(content.read, service.stateStore, it) }
     val searchFn = semantic?.let { s -> { q: String, n: Int -> s.search(q, n) } }
     log.info(if (embedder != null) "semantic search enabled (embeddings via ZYNC_EMBED_URL)" else "semantic search disabled (keyword only; set ZYNC_EMBED_URL)")
+    // Shared with /api/ops (apiRoutes, below) so a bot can't dodge its per-verb rate budget by
+    // switching doors.
+    val rateLimiter = dev.njr.zync.server.api.VerbRateLimiter()
     // Stateless MCP door: read tools over the content model + propose-only write tools (every
     // mutation via /mcp is forced to propose, whatever the bot's own mode).
-    val mcp = dev.njr.zync.server.mcp.McpServer(content.read, botApi, search = searchFn ?: content.read::search)
+    val mcp = dev.njr.zync.server.mcp.McpServer(
+        content.read, botApi, search = searchFn ?: content.read::search, rateLimiter = rateLimiter,
+    )
 
     // Op-log compaction: daily by default; 0 disables. Retention via ZYNC_OPLOG_RETAIN_*.
     val compactor = OplogCompactor(db, CompactionPolicy.fromEnv(System::getenv), metrics = hardening.metrics)
@@ -143,6 +148,7 @@ fun main(args: Array<String>) {
             botAuth = botAuth,
             mcp = mcp,
             search = searchFn,
+            rateLimiter = rateLimiter,
             allowUnauthenticatedWeb = System.getenv("ZYNC_ALLOW_UNAUTHENTICATED_WEB") == "true",
             usage = usage,
             compactionFloor = compactor::floor,

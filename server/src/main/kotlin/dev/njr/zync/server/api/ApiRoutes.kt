@@ -51,9 +51,12 @@ fun Route.apiRoutes(
     /** Search backend; defaults to the read model's keyword search. Main injects hybrid
      *  keyword+semantic search when embeddings are configured. */
     search: ((String, Int) -> List<NodeView>)? = null,
+    /** Per-token, per-verb rate limiter. Shared with `/mcp` (Main wires one instance into both)
+     *  so a bot can't dodge its budget by switching doors; defaults to a fresh one for callers
+     *  (tests) that don't care about cross-door sharing. */
+    limiter: VerbRateLimiter = VerbRateLimiter(),
 ) {
     val idem = IdempotencyCache()
-    val limiter = VerbRateLimiter()
 
     // The react side (spec §6, Q4): a bearer-authed SSE feed. Emits a `changed` event with
     // the current head seq whenever the op log changes, so a bot knows to re-query.
@@ -140,7 +143,7 @@ private sealed interface Outcome {
 }
 
 /** Per-`(botId, verb)` fixed-window rate limiter, checked atomically for the whole envelope (spec §7, Q5). */
-private class VerbRateLimiter(private val now: () -> Long = System::currentTimeMillis) {
+class VerbRateLimiter(private val now: () -> Long = System::currentTimeMillis) {
     private class Window(var start: Long, var count: Int)
     private val windows = HashMap<String, Window>()
 
