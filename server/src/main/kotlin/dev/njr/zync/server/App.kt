@@ -53,6 +53,7 @@ fun Application.zyncModule(
     newz: dev.njr.zync.server.integrations.NewzIntegration? = null,
     botApi: dev.njr.zync.server.api.ExternalOpApi? = null,
     botAuth: dev.njr.zync.server.api.BotAuth? = null,
+    mcp: dev.njr.zync.server.mcp.McpServer? = null,
     json: Json = Json,
     allowUnauthenticatedWeb: Boolean = false,
     usage: () -> UsageGauges = { UsageGauges() },
@@ -97,6 +98,7 @@ fun Application.zyncModule(
         if (agenda != null) agendaRoutes(agenda, auth)
         if (newz != null) newzRoutes(newz, auth)
         if (botApi != null && botAuth != null) apiRoutes(botApi, botAuth, blobs, content?.changes, service::head, content?.read)
+        if (mcp != null && botAuth != null) dev.njr.zync.server.mcp.mcpRoutes(mcp, botAuth, json)
         if (hardening != null) get("/metrics") {
             if (!call.requireAuth(auth.authenticator)) return@get
             call.respond(hardening.metrics.snapshot(usage()))

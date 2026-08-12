@@ -98,6 +98,9 @@ fun main(args: Array<String>) {
     val botRegistry = dev.njr.zync.server.api.SqlBotRegistry(db)
     val botAuth = envBot + botRegistry // env token first, then the persisted registry
     val botApi = dev.njr.zync.server.api.ExternalOpApi(service, blobs = blobs)
+    // Stateless MCP door: read tools over the content model + propose-only write tools (every
+    // mutation via /mcp is forced to propose, whatever the bot's own mode).
+    val mcp = dev.njr.zync.server.mcp.McpServer(content.read, botApi)
 
     // Op-log compaction: daily by default; 0 disables. Retention via ZYNC_OPLOG_RETAIN_*.
     val compactor = OplogCompactor(db, CompactionPolicy.fromEnv(System::getenv), metrics = hardening.metrics)
@@ -130,6 +133,7 @@ fun main(args: Array<String>) {
             newz = newz,
             botApi = botApi,
             botAuth = botAuth,
+            mcp = mcp,
             allowUnauthenticatedWeb = System.getenv("ZYNC_ALLOW_UNAUTHENTICATED_WEB") == "true",
             usage = usage,
             compactionFloor = compactor::floor,
