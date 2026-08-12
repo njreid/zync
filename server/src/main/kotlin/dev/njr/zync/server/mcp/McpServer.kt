@@ -106,18 +106,28 @@ class McpServer(
             .getOrElse { toolError(it.message ?: "read failed") }
         checkNotNull(verb) { "write tool '$name' has no backing verb" } // isRead == (verb == null)
 
-        // Write: force propose. Idempotent per (bot, JSON-RPC id) so a retried call re-proposes nothing.
-        val key = bot.id + ":" + id.toString()
-        idempotency.get(key)?.let { return it }
-        // Same per-token, per-verb budget as /api/ops (spec §8) — a cached retry above never
-        // reaches here, so it costs no budget.
-        if (rateLimiter != null && !rateLimiter.tryConsume(bot.id, mapOf(verb to 1), bot.capabilities)) {
-            return toolError("rate limit exceeded")
+        // Write: force propose. Idempotent per (bot, JSON-RPC id, tool, args) so a retried call
+        // re-proposes nothing — the tool/args are part of the key (not just the JSON-RPC id) so
+        // two DIFFERENT calls that happen to reuse an id (plausible: ids are per-request, not
+        // conversation-scoped, and plenty of clients just send id=1 every time) don't collide and
+        // silently return one call's cached result for the other's request.
+        val key = "${bot.id}:$id:$name:$args"
+        // Dedup-check → rate-check → submit → cache, all under a per-key lock — mirrors
+        // ApiRoutes.IdempotencyCache.withKeyLock — so a retry storm on the same key can't have two
+        // requests both pass the cache-miss check before either caches its result (each submit
+        // mints fresh ids, so op-id dedup wouldn't catch the double-apply).
+        return idempotency.withKeyLock(key) {
+            idempotency.get(key)?.let { return@withKeyLock it }
+            // Same per-token, per-verb budget as /api/ops (spec §8) — a cached retry above never
+            // reaches here, so it costs no budget.
+            if (rateLimiter != null && !rateLimiter.tryConsume(bot.id, mapOf(verb to 1), bot.capabilities)) {
+                return@withKeyLock toolError("rate limit exceeded")
+            }
+            val intent = McpCatalog.intentFor(tool, args) ?: return@withKeyLock toolError("cannot build intent for '$name'")
+            val out = runCatching { submitProposal(bot, intent) }.getOrElse { toolError(it.message ?: "submit failed") }
+            idempotency.put(key, out)
+            out
         }
-        val intent = McpCatalog.intentFor(tool, args) ?: return toolError("cannot build intent for '$name'")
-        val out = runCatching { submitProposal(bot, intent) }.getOrElse { toolError(it.message ?: "submit failed") }
-        idempotency.put(key, out)
-        return out
     }
 
     private fun submitProposal(bot: BotIdentity, intent: OpIntent): JsonObject {

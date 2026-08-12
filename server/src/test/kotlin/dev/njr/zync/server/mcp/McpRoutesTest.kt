@@ -127,6 +127,33 @@ class McpRoutesTest {
     }
 
     @Test
+    fun idempotencyKeyDoesNotCollideAcrossDifferentCallsSharingAJsonRpcId() = run { client, service ->
+        // Regression: the idempotency key must include the tool + args, not just (bot, jsonrpc
+        // id) — otherwise two unrelated write calls reusing the same id (very plausible; ids are
+        // per-request, and this test's own `id = 1` default shows how easy that is) collapse into
+        // one, silently dropping the second mutation while reporting success.
+        val created = client.rpc("tools/call", callParams("create_task", buildJsonObject { put("title", "First") }), id = 1)
+            .obj()["result"]!!.jsonObject
+        val secondNode = client.rpc("tools/call", callParams("create_task", buildJsonObject { put("title", "Second") }), id = 1)
+            .obj()["result"]!!.jsonObject
+        assertEquals(false, created["isError"]!!.jsonPrimitive.content.toBoolean())
+        assertEquals(false, secondNode["isError"]!!.jsonPrimitive.content.toBoolean())
+        assertTrue(service.stateStore.project().values.any { (it.fields["title"] as? JsonPrimitive)?.content == "First" })
+        assertTrue(service.stateStore.project().values.any { (it.fields["title"] as? JsonPrimitive)?.content == "Second" })
+    }
+
+    @Test
+    fun retriedIdempotencyKeyReusesTheSameProposalRatherThanDoubleSubmitting() = run { client, service ->
+        // Same (bot, id, tool, args) called twice — a genuine retry — must return the cached
+        // result and mint exactly one proposal, not two.
+        val args = buildJsonObject { put("title", "Retried task") }
+        client.rpc("tools/call", callParams("create_task", args), id = 7)
+        client.rpc("tools/call", callParams("create_task", args), id = 7)
+        val matches = service.stateStore.project().values.count { (it.fields["title"] as? JsonPrimitive)?.content == "Retried task" }
+        assertEquals(1, matches)
+    }
+
+    @Test
     fun commitCapableBotStillOnlyProposesThroughMcp() = run { client, service ->
         // The env bot is commit-capable (default caps). A live human title exists.
         val node = id(1)

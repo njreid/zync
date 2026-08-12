@@ -13,6 +13,15 @@ class McpIdempotencyCache(private val max: Int = 1024) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, JsonObject>): Boolean = size > max
     }
 
+    // Striped monitors (bounded, unlike a per-key map that would grow forever), same shape as
+    // ApiRoutes.IdempotencyCache: same key -> same stripe, so concurrent same-key calls serialize
+    // through the check-rate-limit-submit-cache sequence instead of racing it (see McpServer.callTool).
+    private val stripes = Array(64) { Any() }
+
+    /** Run [block] holding [key]'s stripe. No suspension inside. */
+    fun <T> withKeyLock(key: String, block: () -> T): T =
+        synchronized(stripes[(key.hashCode() and 0x7fffffff) % stripes.size], block)
+
     @Synchronized fun get(key: String): JsonObject? = map[key]
 
     @Synchronized fun put(key: String, value: JsonObject) {

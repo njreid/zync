@@ -39,8 +39,14 @@ class SemanticSearch(
         return text.ifBlank { null }
     }
 
+    /** Serializes [refreshCorpus] so concurrent searches (each called off the event loop, so they
+     *  can run on different threads at once) can't race the read-dirty-set → embed → write-back
+     *  sequence against each other — e.g. one re-inserting a vector for a node the other's
+     *  removal pass just dropped. */
+    private val refreshLock = Any()
+
     /** Bring the index in line with the current projection: drop removed nodes, embed changed ones. */
-    private fun refreshCorpus(client: EmbeddingClient) {
+    private fun refreshCorpus(client: EmbeddingClient): Unit = synchronized(refreshLock) {
         val live = HashMap<String, Pair<Int, String>>() // id -> (contentHash, text)
         for (s in store.project().values) {
             if (!s.alive) continue
@@ -49,8 +55,8 @@ class SemanticSearch(
         }
         (index.ids() - live.keys).forEach { index.remove(it) }
         val dirty = live.entries.filter { index.contentHash(it.key) != it.value.first }.take(maxCorpusPerRefresh)
-        if (dirty.isEmpty()) return
-        val vecs = client.embed(dirty.map { it.value.second }) ?: return
+        if (dirty.isEmpty()) return@synchronized
+        val vecs = client.embed(dirty.map { it.value.second }) ?: return@synchronized
         dirty.forEachIndexed { i, e -> vecs.getOrNull(i)?.let { index.put(e.key, e.value.first, it) } }
     }
 
