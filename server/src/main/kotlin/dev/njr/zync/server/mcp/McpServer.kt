@@ -31,6 +31,8 @@ class McpServer(
     private val serverName: String = "zync",
     private val serverVersion: String = "0.1",
     private val protocolVersion: String = "2025-06-18",
+    /** Search backend for the `search` tool; defaults to keyword. Main injects hybrid search. */
+    private val search: (String, Int) -> List<dev.njr.zync.web.content.NodeView> = read::search,
 ) {
     private val idempotency = McpIdempotencyCache()
 
@@ -131,7 +133,7 @@ class McpServer(
                 val node = ulid("id")?.let { read.node(it) } ?: return toolError("node not found")
                 toolResult("node ${node.id}", json.encodeToJsonElement(dev.njr.zync.core.api.NodeDto.serializer(), node.toDto()) as JsonObject)
             }
-            "search" -> nodesResult(read.search(s("query").orEmpty(), (args["limit"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull()?.coerceIn(1, 200) ?: 50))
+            "search" -> nodesResult(search(s("query").orEmpty(), (args["limit"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull()?.coerceIn(1, 200) ?: 50))
             "list_comments" -> nodesResult(read.comments(ulid("id") ?: return toolError("id required")))
             "list_proposals" -> {
                 val proposals = read.proposals().map { it.toDto() }

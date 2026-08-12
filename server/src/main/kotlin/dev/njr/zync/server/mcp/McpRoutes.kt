@@ -13,6 +13,8 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 
@@ -36,7 +38,8 @@ fun Route.mcpRoutes(server: McpServer, auth: BotAuth, json: Json = Json { ignore
             null
         } ?: return@post call.respond(HttpStatusCode.BadRequest, JsonRpc.error(null, JsonRpc.PARSE_ERROR, "parse error"))
 
-        when (val out = server.handle(bot, message)) {
+        // A tool call may do network I/O (embedding search); keep it off the event loop.
+        when (val out = withContext(Dispatchers.IO) { server.handle(bot, message) }) {
             McpOutcome.NoContent -> call.respondText("", status = HttpStatusCode.Accepted)
             is McpOutcome.Response -> call.respond(out.body)
         }

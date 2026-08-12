@@ -9,6 +9,7 @@ import dev.njr.zync.server.auth.bearerToken
 import dev.njr.zync.server.blob.BlobService
 import dev.njr.zync.server.blob.BlobTooLargeException
 import dev.njr.zync.web.content.ContentReadModel
+import dev.njr.zync.web.content.NodeView
 import dev.njr.zync.web.sse.ChangeNotifier
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -22,6 +23,8 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.sse.sse
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private const val MAX_INTENTS = 200
 
@@ -45,6 +48,9 @@ fun Route.apiRoutes(
     changes: ChangeNotifier? = null,
     head: () -> Long = { 0L },
     read: ContentReadModel? = null,
+    /** Search backend; defaults to the read model's keyword search. Main injects hybrid
+     *  keyword+semantic search when embeddings are configured. */
+    search: ((String, Int) -> List<NodeView>)? = null,
 ) {
     val idem = IdempotencyCache()
     val limiter = VerbRateLimiter()
@@ -68,11 +74,14 @@ fun Route.apiRoutes(
             val node = read.node(id) ?: return@get call.respondText("not found", status = HttpStatusCode.NotFound)
             call.respond(node.toDto())
         }
+        val doSearch: (String, Int) -> List<NodeView> = search ?: read::search
         get("/api/search") {
             if (call.bot(auth) == null) return@get call.respondText("unauthorized", status = HttpStatusCode.Unauthorized)
             val q = call.parameters["q"].orEmpty()
             val limit = call.parameters["limit"]?.toIntOrNull()?.coerceIn(1, 200) ?: 50
-            call.respond(NodeListDto(read.search(q, limit).map { it.toDto() }))
+            // Embedding is network I/O (Ollama); keep it off the event loop.
+            val hits = withContext(Dispatchers.IO) { doSearch(q, limit) }
+            call.respond(NodeListDto(hits.map { it.toDto() }))
         }
     }
 

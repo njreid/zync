@@ -98,9 +98,15 @@ fun main(args: Array<String>) {
     val botRegistry = dev.njr.zync.server.api.SqlBotRegistry(db)
     val botAuth = envBot + botRegistry // env token first, then the persisted registry
     val botApi = dev.njr.zync.server.api.ExternalOpApi(service, blobs = blobs)
+    // Semantic search: local-first embeddings (Ollama) behind ZYNC_EMBED_URL. Unset ⇒ null ⇒
+    // keyword-only search, unchanged. When set, /api/search and the MCP `search` tool go hybrid.
+    val embedder = dev.njr.zync.server.embed.OllamaEmbeddingClient.fromEnv()
+    val semantic = embedder?.let { dev.njr.zync.server.embed.SemanticSearch(content.read, service.stateStore, it) }
+    val searchFn = semantic?.let { s -> { q: String, n: Int -> s.search(q, n) } }
+    log.info(if (embedder != null) "semantic search enabled (embeddings via ZYNC_EMBED_URL)" else "semantic search disabled (keyword only; set ZYNC_EMBED_URL)")
     // Stateless MCP door: read tools over the content model + propose-only write tools (every
     // mutation via /mcp is forced to propose, whatever the bot's own mode).
-    val mcp = dev.njr.zync.server.mcp.McpServer(content.read, botApi)
+    val mcp = dev.njr.zync.server.mcp.McpServer(content.read, botApi, search = searchFn ?: content.read::search)
 
     // Op-log compaction: daily by default; 0 disables. Retention via ZYNC_OPLOG_RETAIN_*.
     val compactor = OplogCompactor(db, CompactionPolicy.fromEnv(System::getenv), metrics = hardening.metrics)
@@ -134,6 +140,7 @@ fun main(args: Array<String>) {
             botApi = botApi,
             botAuth = botAuth,
             mcp = mcp,
+            search = searchFn,
             allowUnauthenticatedWeb = System.getenv("ZYNC_ALLOW_UNAUTHENTICATED_WEB") == "true",
             usage = usage,
             compactionFloor = compactor::floor,
