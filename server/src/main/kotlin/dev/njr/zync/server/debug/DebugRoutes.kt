@@ -1,5 +1,6 @@
 package dev.njr.zync.server.debug
 
+import dev.njr.zync.core.op.typeName
 import dev.njr.zync.server.auth.ServerAuth
 import dev.njr.zync.server.auth.requireAuth
 import dev.njr.zync.server.sync.SyncService
@@ -45,7 +46,7 @@ private fun renderDebug(service: SyncService): String {
     sb.append("<table><tr><th>seq</th><th>type</th><th>entity</th><th>hlc</th><th>actor</th></tr>")
     for (op in ops) {
         sb.append("<tr><td>").append(op.seq ?: "—")
-            .append("</td><td>").append(esc(op::class.simpleName ?: "?"))
+            .append("</td><td>").append(esc(op.typeName))
             .append("</td><td>").append(esc(op.entityId.toString()))
             .append("</td><td>").append(esc(op.hlc.pack()))
             .append("</td><td>").append(esc(op.actor.toString()))

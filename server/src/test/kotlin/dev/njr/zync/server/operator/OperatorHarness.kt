@@ -19,6 +19,7 @@ import dev.njr.zync.server.blob.BlobService
 import dev.njr.zync.server.blob.InMemoryBlobStore
 import dev.njr.zync.server.hlc
 import dev.njr.zync.server.str
+import dev.njr.zync.server.testServerHlc
 import dev.njr.zync.server.sync.SettableIngestHook
 import dev.njr.zync.server.sync.SyncService
 import java.util.concurrent.Executor
@@ -45,6 +46,7 @@ class OperatorHarness(
         scopes = scopes,
         llm = llm,
         emit = service::ingestLocal,
+        hlc = testServerHlc(),
         blobText = { key -> blobs.fetch(key)?.toString(Charsets.UTF_8) },
         completers = completersFor(service.stateStore),
         clock = Clock { 1_000_000L },
