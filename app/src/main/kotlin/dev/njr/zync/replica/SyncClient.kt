@@ -2,7 +2,12 @@ package dev.njr.zync.replica
 
 import dev.njr.zync.core.merge.apply
 import dev.njr.zync.core.op.Op
+import dev.njr.zync.core.state.RegisterKey
+import dev.njr.zync.core.state.RegisterValue
 import dev.njr.zync.core.state.StateStore
+import dev.njr.zync.core.state.TagKey
+import dev.njr.zync.core.state.TagValue
+import dev.njr.zync.core.sync.BootstrapSnapshot
 import dev.njr.zync.core.sync.PullResponse
 import dev.njr.zync.core.sync.PushRequest
 import dev.njr.zync.core.sync.PushResponse
@@ -65,7 +70,12 @@ class SyncClient(
 ) {
     suspend fun sync() {
         push()
-        pull()
+        // A truly fresh install (never synced, AND no locally-authored content yet)
+        // consumes the server's compacted bootstrap snapshot instead of replaying the
+        // full retained op log from seq 0. Any device with existing local content —
+        // even one whose cursor was reset by a re-pair — falls back to the normal,
+        // always-safe pull() path: never seed over live local state.
+        if (isFreshInstall()) consumeBootstrap() else pull()
     }
 
     suspend fun push() {
@@ -110,6 +120,70 @@ class SyncClient(
                 db.transportQueries.setCursor(peer, cursor)
             }
             if (page.ops.size < pageLimit) break
+        }
+    }
+
+    /**
+     * A device is fresh only if it has BOTH never advanced a cursor AND holds no
+     * local content — checking the cursor alone is not enough: a device re-paired
+     * with a reset cursor could still have genuine local-only content (e.g. captured
+     * offline before its first ever sync), and unconditionally seeding from bootstrap
+     * in that case would clobber or double-seed it. When in doubt this fails closed
+     * to `false`, i.e. the existing "normal pull from cursor" path.
+     */
+    private fun isFreshInstall(): Boolean {
+        if (db.transportQueries.getCursor(peer).executeAsOneOrNull() != null) return false
+        return store.allRegisters().isEmpty() &&
+            store.allTombstones().isEmpty() &&
+            store.allTags().isEmpty() &&
+            store.moveLog().isEmpty()
+    }
+
+    /**
+     * Fetch the server's compacted bootstrap snapshot (spec §6): the flattened
+     * register map + tombstones + tags + move-log tail + head seq, in place of the
+     * full retained op log from cursor zero.
+     */
+    suspend fun bootstrap(): BootstrapSnapshot {
+        val response = http.get("$baseUrl/sync/bootstrap") {
+            authHeaders("GET", "/sync/bootstrap").forEach { (k, v) -> header(k, v) }
+        }
+        response.requireOk("bootstrap")
+        return json.decodeFromString(BootstrapSnapshot.serializer(), response.bodyAsText())
+    }
+
+    /**
+     * Seed local state from the bootstrap snapshot, entirely inside one
+     * [db.transaction], so a thrown exception partway through rolls back with NO
+     * partial state — safe to retry the whole pass from scratch on the next sync
+     * (the device is simply still "fresh" as far as the cursor/local-store check is
+     * concerned). Only called when [isFreshInstall] holds, so the store is known
+     * empty going in: each entry is written directly (equivalent to what `pull()`'s
+     * per-op LWW merge would do against an empty store), except `Op.Move`, which
+     * reuses the exact same [apply] primitive `pull()` uses for ops, since moves
+     * carry a real `opId`/dedupe semantics and integrate the move log via
+     * `reintegrateMoves`.
+     */
+    private suspend fun consumeBootstrap() {
+        val snapshot = bootstrap()
+        db.transaction {
+            snapshot.registers.forEach { entry ->
+                hlc.observe(entry.hlc)
+                store.putRegister(RegisterKey(entry.entityId, entry.field), RegisterValue(entry.value, entry.hlc, entry.actor))
+            }
+            snapshot.tombstones.forEach { entry ->
+                hlc.observe(entry.hlc)
+                store.putTombstone(entry.entityId, entry.hlc)
+            }
+            snapshot.tags.forEach { entry ->
+                hlc.observe(entry.hlc)
+                store.putTag(TagKey(entry.nodeId, entry.contextId), TagValue(entry.present, entry.hlc))
+            }
+            snapshot.moves.forEach { move ->
+                hlc.observe(move.hlc)
+                apply(move, store)
+            }
+            db.transportQueries.setCursor(peer, snapshot.headSeq)
         }
     }
 
