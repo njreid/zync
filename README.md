@@ -36,7 +36,10 @@ can; **browsers** are thin clients that sign in with a passkey. All three run th
   over SSE. Both the server and the phone's loopback serve it, so there is one UI.
 - **`server/`** — the central Ktor server: op-log sync, Ed25519 **device pairing**
   (terminal-QR), an S3 content-addressed blob store, litestream durability, rate-limit
-  / metrics hardening, and **WebAuthn passkey** auth gating the browser UI.
+  / metrics hardening, **WebAuthn passkey** auth gating the browser UI, an external-op
+  API for bots/scripts (`/api/ops`, propose or commit), and a stateless **MCP** door
+  (`/mcp`) so LLM clients (Claude Code, agent runtimes) can read your content and
+  *propose* changes — never commit directly — see [`docs/mcp.md`](docs/mcp.md).
 - **`app/`** — the Android app: an offline op-log replica (capture via voice / doc-scan
   / share / quick-add), a native **Compose shell** hosting a WebView that loads the
   `:web` UI over a loopback `ZyncServer`, and WorkManager background sync.
@@ -189,3 +192,8 @@ The design is captured as specs + dated milestone plans under `docs/superpowers/
 [`plans/2026-07-08-rebuild-roadmap.md`](docs/superpowers/plans/2026-07-08-rebuild-roadmap.md);
 end-to-end acceptance checks are in
 [`plans/2026-07-13-acceptance-runbook.md`](docs/superpowers/plans/2026-07-13-acceptance-runbook.md).
+The MCP door is specced in
+[`specs/2026-08-11-stateless-mcp-interface.md`](docs/superpowers/specs/2026-08-11-stateless-mcp-interface.md)
+(user-facing usage: [`docs/mcp.md`](docs/mcp.md)); FCM push-to-sync (in progress on a
+feature branch, not yet on `main`) is specced in
+[`specs/2026-08-11-fcm-push-sync-design.md`](docs/superpowers/specs/2026-08-11-fcm-push-sync-design.md).
