@@ -75,7 +75,22 @@ class SyncClient(
         // full retained op log from seq 0. Any device with existing local content —
         // even one whose cursor was reset by a re-pair — falls back to the normal,
         // always-safe pull() path: never seed over live local state.
-        if (isFreshInstall()) consumeBootstrap() else pull()
+        //
+        // isFreshInstall() and consumeBootstrap()'s write are separated by a network
+        // round-trip (bootstrap()'s HTTP fetch), so a local capture could commit in
+        // between and make the store non-empty by the time we'd write. consumeBootstrap()
+        // re-verifies emptiness atomically inside its own transaction and aborts (without
+        // committing anything) if the race was lost; fall back to the normal pull() path
+        // in that case so the freshly-committed local content is never clobbered.
+        if (isFreshInstall()) {
+            try {
+                consumeBootstrap()
+            } catch (e: BootstrapRaceLostException) {
+                pull()
+            }
+        } else {
+            pull()
+        }
     }
 
     suspend fun push() {
@@ -133,11 +148,19 @@ class SyncClient(
      */
     private fun isFreshInstall(): Boolean {
         if (db.transportQueries.getCursor(peer).executeAsOneOrNull() != null) return false
-        return store.allRegisters().isEmpty() &&
+        return isStoreEmpty()
+    }
+
+    /**
+     * The store-emptiness half of [isFreshInstall]'s check, factored out so
+     * [consumeBootstrap] can re-run the exact same check atomically inside its
+     * write transaction (see that function's doc comment for why).
+     */
+    private fun isStoreEmpty(): Boolean =
+        store.allRegisters().isEmpty() &&
             store.allTombstones().isEmpty() &&
             store.allTags().isEmpty() &&
             store.moveLog().isEmpty()
-    }
 
     /**
      * Fetch the server's compacted bootstrap snapshot (spec §6): the flattened
@@ -157,8 +180,15 @@ class SyncClient(
      * [db.transaction], so a thrown exception partway through rolls back with NO
      * partial state — safe to retry the whole pass from scratch on the next sync
      * (the device is simply still "fresh" as far as the cursor/local-store check is
-     * concerned). Only called when [isFreshInstall] holds, so the store is known
-     * empty going in: each entry is written directly (equivalent to what `pull()`'s
+     * concerned). Only called when [isFreshInstall] held at the time of the check:
+     * that check and this write are separated by [bootstrap]'s network round-trip, so
+     * the store's emptiness is re-verified atomically here, immediately before the
+     * first write, inside the same transaction — not merely assumed from the earlier
+     * check. If a local capture landed in between and the store is no longer empty,
+     * this throws [BootstrapRaceLostException] before writing anything, which rolls
+     * the transaction back (SQLDelight rolls back and rethrows on an exception
+     * escaping `transaction {}`); [sync] catches it and falls back to [pull]. Once
+     * past that guard, each entry is written directly (equivalent to what `pull()`'s
      * per-op LWW merge would do against an empty store), except `Op.Move`, which
      * reuses the exact same [apply] primitive `pull()` uses for ops, since moves
      * carry a real `opId`/dedupe semantics and integrate the move log via
@@ -167,6 +197,7 @@ class SyncClient(
     private suspend fun consumeBootstrap() {
         val snapshot = bootstrap()
         db.transaction {
+            if (!isStoreEmpty()) throw BootstrapRaceLostException()
             snapshot.registers.forEach { entry ->
                 hlc.observe(entry.hlc)
                 store.putRegister(RegisterKey(entry.entityId, entry.field), RegisterValue(entry.value, entry.hlc, entry.actor))
@@ -186,6 +217,16 @@ class SyncClient(
             db.transportQueries.setCursor(peer, snapshot.headSeq)
         }
     }
+
+    /**
+     * Thrown from inside [consumeBootstrap]'s transaction when the store's
+     * re-verified-at-write-time emptiness check finds it's no longer empty — i.e.
+     * the check-then-act race against [bootstrap]'s network round-trip was lost.
+     * Escaping the `transaction {}` block rolls it back (no bootstrap writes are
+     * committed); [sync] catches this specific exception and falls back to [pull].
+     */
+    private class BootstrapRaceLostException :
+        Exception("store no longer empty when bootstrap snapshot was ready to write; a local capture raced the bootstrap fetch")
 
     /** The agenda side channel: all sources' upcoming externally-pushed events. */
     suspend fun fetchAgenda(): dev.njr.zync.core.agenda.AgendaSnapshot {
