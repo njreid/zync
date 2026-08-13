@@ -1,11 +1,11 @@
 package dev.njr.zync.server.content
 
 import dev.njr.zync.core.clock.Clock
-import dev.njr.zync.core.clock.HlcGenerator
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.op.Actor
 import dev.njr.zync.core.op.EntityType
 import dev.njr.zync.core.op.Op
+import dev.njr.zync.server.clock.ServerHlc
 import dev.njr.zync.server.sync.SyncService
 import dev.njr.zync.web.content.ContentCommands
 import dev.njr.zync.web.content.ContentReadModel
@@ -21,11 +21,11 @@ import kotlin.random.Random
  */
 class ServerOpEmitter(
     private val service: SyncService,
+    private val hlc: ServerHlc,
     private val now: () -> Long = System::currentTimeMillis,
     private val random: Random = Random.Default,
 ) : OpEmitter {
     private val clock = Clock { now() }
-    private val hlc = HlcGenerator("server", clock)
 
     override fun newId(): Ulid = Ulid.generate(clock, random)
     override fun setField(entity: Ulid, field: String, value: JsonElement) =
@@ -51,7 +51,7 @@ class ServerOpEmitter(
  * ingest server-authored ops, and a change feed the browser SSE follows (fired on any
  * ingest — browser mutations AND phone pushes).
  */
-class ServerContent(service: SyncService, val changes: ChangeNotifier = ChangeNotifier()) {
+class ServerContent(service: SyncService, hlc: ServerHlc, val changes: ChangeNotifier = ChangeNotifier()) {
     val read = ContentReadModel(service.stateStore)
-    val commands = ContentCommands(ServerOpEmitter(service))
+    val commands = ContentCommands(ServerOpEmitter(service, hlc))
 }

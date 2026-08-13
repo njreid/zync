@@ -41,7 +41,7 @@ class BotRegistryTest {
     @Test
     fun capabilityRejectsDisallowedVerbAndField() {
         val service = SyncService(JvmZyncDatabase.inMemory())
-        val api = ExternalOpApi(service)
+        val api = ExternalOpApi(service, dev.njr.zync.server.testServerHlc())
         // Only allowed to create, and only set the notes field.
         val bot = BotIdentity("scoped", BotCapabilities(verbs = setOf("create", "setField"), fields = setOf("notes")))
 

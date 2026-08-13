@@ -33,7 +33,7 @@ class SdkE2ETest {
     fun kotlinSdkRoundTripsThroughARealServer() {
         val service = SyncService(JvmZyncDatabase.inMemory())
         val blobs = BlobService(InMemoryBlobStore())
-        val api = ExternalOpApi(service, blobs = blobs)
+        val api = ExternalOpApi(service, dev.njr.zync.server.testServerHlc(), blobs = blobs)
         val server = embeddedServer(Netty, port = 0) {
             install(ContentNegotiation) { json() }
             routing { apiRoutes(api, EnvBotAuth("secret", "newz"), blobs) }

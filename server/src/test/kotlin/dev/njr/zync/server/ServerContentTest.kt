@@ -18,7 +18,7 @@ class ServerContentTest {
     fun serverRendersUiAndBrowserMutationConverges() = testApplication {
         val db = JvmZyncDatabase.inMemory()
         val service = SyncService(db)
-        val content = ServerContent(service)
+        val content = ServerContent(service, testServerHlc())
         application { zyncModule(service, content = content, allowUnauthenticatedWeb = true) }
 
         // the assembled server serves the shared UI
@@ -43,7 +43,7 @@ class ServerContentTest {
     fun refusesToServeWebWithoutBrowserAuthUnlessExplicitlyAllowed() = testApplication {
         val db = JvmZyncDatabase.inMemory()
         val service = SyncService(db)
-        val content = ServerContent(service)
+        val content = ServerContent(service, testServerHlc())
         application { zyncModule(service, content = content) }
 
         // Startup must fail closed: content + no webauthn + no explicit dev opt-in.

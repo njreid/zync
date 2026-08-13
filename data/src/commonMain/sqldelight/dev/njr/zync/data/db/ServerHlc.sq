@@ -1,0 +1,16 @@
+-- The server's own last-issued HLC (mirrors the phone's persisted HLC via
+-- AndroidHlcStore/LocalHlc). A single row, id fixed at 0. Persisted so a server
+-- restart doesn't reset the clock to zero, which could otherwise make new
+-- server-authored ops lose to older ones after a wall-clock rollback.
+CREATE TABLE server_hlc (
+  id INTEGER NOT NULL PRIMARY KEY,
+  physical INTEGER NOT NULL,
+  counter INTEGER NOT NULL,
+  device_id TEXT NOT NULL
+);
+
+loadServerHlc:
+SELECT physical, counter, device_id FROM server_hlc WHERE id = 0;
+
+saveServerHlc:
+INSERT OR REPLACE INTO server_hlc(id, physical, counter, device_id) VALUES (0, ?, ?, ?);

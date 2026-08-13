@@ -31,7 +31,7 @@ class UpdatesSseTest {
     @Test
     fun updatesPushesInboxOnChange() = testApplication {
         val service = SyncService(JvmZyncDatabase.inMemory())
-        val content = ServerContent(service)
+        val content = ServerContent(service, testServerHlc())
         content.commands.createTask("Seed item")
         application {
             install(SSE)
