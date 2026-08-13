@@ -148,6 +148,25 @@ class ContentReadModel(private val store: StateStore) {
             .map { it.toView() }
             .sortedBy { it.title ?: "" }
 
+    /**
+     * The full parent → children index, built from ONE snapshot pass — same filter, ordering,
+     * and exclusions as [children], but computes every parent's children at once instead of
+     * one [store.project] scan per call. For recursive tree rendering (see NodeViews.subtaskTree/
+     * treeSection), which previously called [children] once per node, making a full-tree render
+     * roughly quadratic in the number of live nodes.
+     */
+    fun childrenIndex(): Map<Ulid?, List<NodeView>> {
+        val snaps = snapshots()
+        val byIdView = snaps.associate { it.entityId to it.toView() }
+        return snaps
+            .filter {
+                it.kind() != "context" && it.kind() != "comment" &&
+                    it.kind() !in AgentFlow.INTERNAL_KINDS && !it.proposed()
+            }
+            .groupBy { it.parent }
+            .mapValues { (_, group) -> group.mapNotNull { byIdView[it.entityId] }.sortedBy { it.title ?: "" } }
+    }
+
     /** Comments/annotations under [node], oldest first (unreviewed proposals + trashed excluded). */
     fun comments(node: Ulid): List<NodeView> =
         snapshots()

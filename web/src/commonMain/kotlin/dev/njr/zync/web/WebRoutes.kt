@@ -170,7 +170,8 @@ fun Route.webRoutes(
         }
     }
     get("/tree") {
-        call.respondHtml { page("Tree", settingsHref, Tab.PROJECTS, read.contexts(), call.selectedContext(), browser) { h2 { +"Tree" }; treeSection(read, null) } }
+        val treeIndex = read.childrenIndex()
+        call.respondHtml { page("Tree", settingsHref, Tab.PROJECTS, read.contexts(), call.selectedContext(), browser) { h2 { +"Tree" }; treeSection(treeIndex, null) } }
     }
     get("/node/{id}") {
         val node = call.parameters["id"]?.let { runCatching { Ulid.parse(it) }.getOrNull() }?.let(read::node)
