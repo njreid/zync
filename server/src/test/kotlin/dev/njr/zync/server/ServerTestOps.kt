@@ -6,6 +6,8 @@ import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.op.Actor
 import dev.njr.zync.core.op.EntityType
 import dev.njr.zync.core.op.Op
+import dev.njr.zync.server.clock.HlcStore
+import dev.njr.zync.server.clock.ServerHlc
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.random.Random
@@ -17,6 +19,12 @@ private class FixedClock(private val millis: Long) : Clock {
 fun id(seed: Int): Ulid = Ulid.generate(FixedClock(seed.toLong()), Random(seed.toLong()))
 
 fun hlc(ms: Long, ctr: Int = 0, dev: String = "phone") = Hlc(ms, ctr, dev)
+
+/** A fresh, unpersisted [ServerHlc] for tests that don't care about persistence — a plain no-op store. */
+fun testServerHlc(): ServerHlc = ServerHlc(object : HlcStore {
+    override fun load(): Hlc? = null
+    override fun save(hlc: Hlc) {}
+})
 
 fun str(value: String): JsonElement = JsonPrimitive(value)
 

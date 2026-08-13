@@ -65,6 +65,7 @@ fun main(args: Array<String>) {
     val gateway = System.getenv("ZYNC_LITESTREAM_URL")?.let(::LitestreamCli) ?: DbBackupGateway.None
     val db = StartupSequence.open(dbPath, gateway)
 
+    val serverHlc = dev.njr.zync.server.clock.ServerHlc(dev.njr.zync.server.clock.SqlHlcStore(db))
     val changes = ChangeNotifier()
     val ingestHook = SettableIngestHook()
     val service = SyncService(db, onIngest = { changes.notifyChanged() }, hook = ingestHook)
@@ -92,14 +93,14 @@ fun main(args: Array<String>) {
     }
     // The summarize operator reads OCR text from the blob store; wired here now
     // that blobs exist. Degrades to disabled without ANTHROPIC_API_KEY.
-    wireOperators(db, service, ingestHook, blobs)
+    wireOperators(db, service, ingestHook, blobs, serverHlc)
     val hardening = Hardening(TokenBucketRateLimiter(capacity = 240, refillPerSecond = 4.0))
-    val content = ServerContent(service, changes)
+    val content = ServerContent(service, serverHlc, changes)
     // External op API (bots/scripts/integrations): the env token AND the registry both work.
     val envBot = dev.njr.zync.server.api.EnvBotAuth.fromEnv()
     val botRegistry = dev.njr.zync.server.api.SqlBotRegistry(db)
     val botAuth = envBot + botRegistry // env token first, then the persisted registry
-    val botApi = dev.njr.zync.server.api.ExternalOpApi(service, blobs = blobs)
+    val botApi = dev.njr.zync.server.api.ExternalOpApi(service, serverHlc, blobs = blobs)
     // Semantic search: local-first embeddings (Ollama) behind ZYNC_EMBED_URL. Unset ⇒ null ⇒
     // keyword-only search, unchanged. When set, /api/search and the MCP `search` tool go hybrid.
     val embedder = dev.njr.zync.server.embed.OllamaEmbeddingClient.fromEnv()
@@ -162,7 +163,13 @@ fun main(args: Array<String>) {
  * summarize) need `ANTHROPIC_API_KEY`; the retrieval operators (suggest-file,
  * auto-file-done) are deterministic keyword scorers and run regardless.
  */
-private fun wireOperators(db: ZyncDatabase, service: SyncService, hook: SettableIngestHook, blobs: BlobService?) {
+private fun wireOperators(
+    db: ZyncDatabase,
+    service: SyncService,
+    hook: SettableIngestHook,
+    blobs: BlobService?,
+    serverHlc: dev.njr.zync.server.clock.ServerHlc,
+) {
     val log = org.slf4j.LoggerFactory.getLogger("zync.operators")
     val llm = AnthropicLlmClient.fromEnv()
     val blobText: (String) -> String? =
@@ -182,6 +189,7 @@ private fun wireOperators(db: ZyncDatabase, service: SyncService, hook: Settable
         scopes = ReadScopeResolver.default(),
         llm = llm ?: DisabledLlmClient,
         emit = service::ingestLocal,
+        hlc = serverHlc,
         blobText = blobText,
         completers = completers,
     )

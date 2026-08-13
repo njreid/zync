@@ -134,4 +134,31 @@ class MigrationTest {
         assertEquals("Standup", row.title)
         assertNull(row.link, "pre-migration events migrate with a NULL link")
     }
+
+    @Test
+    fun v8MigratesToV9WithServerHlc() {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        // agenda_event (2.sqm/4.sqm/7.sqm shape) must exist for earlier migrations when
+        // migrating forward from v8 to HEAD.
+        driver.execute(
+            null,
+            """CREATE TABLE agenda_event (
+                 source TEXT NOT NULL, title TEXT NOT NULL, begin_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
+                 all_day INTEGER NOT NULL DEFAULT 0, profile TEXT NOT NULL DEFAULT 'WORK', location TEXT,
+                 link TEXT
+               )""",
+            0,
+        )
+        driver.execute(null, "PRAGMA user_version = 8", 0)
+
+        val db = dev.njr.zync.data.JvmZyncDatabase.open(driver)
+        assertEquals(listOf(ZyncDatabase.Schema.version.toString()), query(driver, "PRAGMA user_version"))
+        // server_hlc created by 8.sqm; round-trips a row via the generated queries.
+        assertNull(db.serverHlcQueries.loadServerHlc().executeAsOneOrNull(), "no row until the server saves one")
+        db.serverHlcQueries.saveServerHlc(12345L, 6L, "server")
+        val loaded = db.serverHlcQueries.loadServerHlc().executeAsOne()
+        assertEquals(12345L, loaded.physical)
+        assertEquals(6L, loaded.counter)
+        assertEquals("server", loaded.device_id)
+    }
 }

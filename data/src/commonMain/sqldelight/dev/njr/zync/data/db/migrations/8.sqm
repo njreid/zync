@@ -1,0 +1,7 @@
+-- v8 → v9: persist the server's own HLC (see docs/superpowers/plans/2026-08-12-codex-review-followups.md item 3).
+CREATE TABLE server_hlc (
+  id INTEGER NOT NULL PRIMARY KEY,
+  physical INTEGER NOT NULL,
+  counter INTEGER NOT NULL,
+  device_id TEXT NOT NULL
+);

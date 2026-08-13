@@ -107,10 +107,17 @@ class VoiceCaptureActivity : ComponentActivity() {
         }
         val app = application as ZyncApp
         lifecycleScope.launch(Dispatchers.IO) {
-            val bytes = file.readBytes()
-            app.captureToInbox("Voice note", AttachmentType.AUDIO, bytes, "m4a")
-            file.delete()
-            withContext(Dispatchers.Main) { finishWith("Added voice note to Inbox") }
+            runCatching {
+                val bytes = file.readBytes()
+                app.captureToInbox("Voice note", AttachmentType.AUDIO, bytes, "m4a")
+                file.delete()
+            }.onSuccess {
+                withContext(Dispatchers.Main) { finishWith("Added voice note to Inbox") }
+            }.onFailure { e ->
+                withContext(Dispatchers.Main) {
+                    finishWith(e.message ?: "Could not save voice note")
+                }
+            }
         }
     }
 

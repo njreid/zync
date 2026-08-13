@@ -6,7 +6,6 @@ import dev.njr.zync.core.api.OpEnvelope
 import dev.njr.zync.core.api.OpIntent
 import dev.njr.zync.core.agent.AgentFlow
 import dev.njr.zync.core.clock.Clock
-import dev.njr.zync.core.clock.HlcGenerator
 import dev.njr.zync.core.content.Fields
 import dev.njr.zync.core.content.KIND_SUGGESTION
 import dev.njr.zync.core.content.SuggestionKind
@@ -15,6 +14,7 @@ import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.op.Actor
 import dev.njr.zync.core.op.EntityType
 import dev.njr.zync.core.op.Op
+import dev.njr.zync.server.clock.ServerHlc
 import dev.njr.zync.server.sync.SyncService
 import dev.njr.zync.web.content.ContentCommands
 import dev.njr.zync.web.content.OpEmitter
@@ -36,6 +36,7 @@ import kotlin.random.Random
  */
 class ExternalOpApi(
     private val service: SyncService,
+    private val hlc: ServerHlc,
     private val now: () -> Long = System::currentTimeMillis,
     private val random: Random = Random.Default,
     /** The well-known inbox root (null = tree root), for the "inbox" parent alias. */
@@ -47,7 +48,7 @@ class ExternalOpApi(
         // Effective mode: a bot without commit capability, or an envelope asking to propose,
         // routes mutations through the proposal path (spec §4). Committing needs both.
         val propose = !bot.commits || env.mode == "propose"
-        val emitter = RecordingBotEmitter(bot.id, now, random)
+        val emitter = RecordingBotEmitter(bot.id, hlc, now, random)
         val commands = ContentCommands(emitter)
         val results = env.intents.map { translate(it, commands, emitter, propose, bot.capabilities) }
         if (results.any { it.status == "error" }) {
@@ -190,11 +191,11 @@ class ExternalOpApi(
  */
 class RecordingBotEmitter(
     botId: String,
+    private val hlc: ServerHlc,
     private val now: () -> Long,
     private val random: Random,
 ) : OpEmitter {
     private val clock = Clock { now() }
-    private val hlc = HlcGenerator("server", clock)
     private val actor = Actor.Bot(botId)
     val ops = mutableListOf<Op>()
 

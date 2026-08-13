@@ -12,6 +12,7 @@ import dev.njr.zync.server.api.ExternalOpApi
 import dev.njr.zync.server.id
 import dev.njr.zync.server.str
 import dev.njr.zync.server.sync.SyncService
+import dev.njr.zync.server.testServerHlc
 import dev.njr.zync.web.content.ContentReadModel
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -48,7 +49,7 @@ class McpRoutesTest {
     private fun run(block: suspend (io.ktor.client.HttpClient, SyncService) -> Unit) = testApplication {
         val service = SyncService(JvmZyncDatabase.inMemory())
         val blobs = dev.njr.zync.server.blob.BlobService(dev.njr.zync.server.blob.InMemoryBlobStore())
-        val api = ExternalOpApi(service, blobs = blobs)
+        val api = ExternalOpApi(service, testServerHlc(), blobs = blobs)
         val server = McpServer(ContentReadModel(service.stateStore), api)
         application {
             install(ContentNegotiation) { json() }
@@ -184,7 +185,7 @@ class McpRoutesTest {
         // Regression: /mcp write tools must consume the SAME per-verb budget as /api/ops (spec
         // §8) — a bot can't dodge its rate limit by switching doors.
         val service = SyncService(JvmZyncDatabase.inMemory())
-        val api = ExternalOpApi(service)
+        val api = ExternalOpApi(service, testServerHlc())
         val limiter = dev.njr.zync.server.api.VerbRateLimiter()
         val caps = dev.njr.zync.core.api.BotCapabilities(rateLimit = mapOf("create" to 1))
         val auth = dev.njr.zync.server.api.BotAuth { token -> if (token == "secret") dev.njr.zync.server.api.BotIdentity("bot", caps) else null }

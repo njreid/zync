@@ -7,7 +7,6 @@ import dev.njr.zync.core.clock.Clock
 import dev.njr.zync.data.AndroidZyncDatabase
 import dev.njr.zync.data.SqlDelightStateStore
 import dev.njr.zync.replica.AndroidHlcStore
-import dev.njr.zync.replica.LocalBlobStore
 import dev.njr.zync.replica.LocalHlc
 import dev.njr.zync.replica.OpWriter
 import dev.njr.zync.replica.PhoneOpEmitter
@@ -15,7 +14,6 @@ import dev.njr.zync.replica.ReplicaCapture
 import dev.njr.zync.web.content.ContentCommands
 import dev.njr.zync.web.content.ContentReadModel
 import dev.njr.zync.web.sse.ChangeNotifier
-import java.io.File
 import kotlin.random.Random
 import dev.njr.zync.server.ZyncServer
 import java.util.UUID
@@ -45,20 +43,19 @@ class ZyncApp : Application() {
     }
     val opDatabase: dev.njr.zync.data.db.ZyncDatabase by lazy { AndroidZyncDatabase.create(this) }
     val opStore: SqlDelightStateStore by lazy { SqlDelightStateStore(opDatabase) }
-    val localBlobs: LocalBlobStore by lazy { LocalBlobStore(File(filesDir, "blobs")) }
     /** Shared HLC: the op writer issues, the sync client observes — one clock. */
     val localHlc: LocalHlc by lazy { LocalHlc(AndroidHlcStore(this), deviceId, opClock) }
     val pairingStore: dev.njr.zync.replica.PairingStore by lazy { dev.njr.zync.replica.AndroidPairingStore(this) }
     val opWriter: OpWriter by lazy {
         OpWriter(opDatabase, opStore, localHlc, deviceId, opClock, Random.Default)
     }
-    val replicaCapture: ReplicaCapture by lazy { ReplicaCapture(opWriter, localBlobs, inbox = { null }) }
+    val replicaCapture: ReplicaCapture by lazy { ReplicaCapture(opWriter, captureGraph.localBlobs, inbox = { null }) }
 
-    /** Scanned-doc OCR: Drive transport + the WorkManager-free pipeline the OcrWorker drives. */
-    val driveOcr: dev.njr.zync.replica.DriveOcr by lazy { dev.njr.zync.replica.GoogleDriveOcr(this) }
-    val ocrProcessor: dev.njr.zync.replica.OcrProcessor by lazy {
-        dev.njr.zync.replica.OcrProcessor(localBlobs, opWriter, driveOcr, opStore, onChanged = { contentChanges.notifyChanged() })
-    }
+    /** Capture/OCR construction cluster: local blob store, Drive OCR transport, OCR pipeline. */
+    val captureGraph: CaptureGraph by lazy { CaptureGraph(this) }
+
+    /** Thin passthrough for [dev.njr.zync.sync.OcrWorker], which reaches this via `(applicationContext as ZyncApp).ocrProcessor`. */
+    val ocrProcessor: dev.njr.zync.replica.OcrProcessor get() = captureGraph.ocrProcessor
     val contentChanges: ChangeNotifier = ChangeNotifier()
     val contentRead: ContentReadModel by lazy { ContentReadModel(opStore) }
     val contentCommands: ContentCommands by lazy {
@@ -130,7 +127,7 @@ class ZyncApp : Application() {
                     now = now,
                     nonce = nonce,
                 ),
-                blobs = dev.njr.zync.replica.BlobUploader(http, paired.address, localBlobs, signer, now, nonce),
+                blobs = dev.njr.zync.replica.BlobUploader(http, paired.address, captureGraph.localBlobs, signer, now, nonce),
                 db = opDatabase,
                 warn = {
                     Log.w(TAG, it)

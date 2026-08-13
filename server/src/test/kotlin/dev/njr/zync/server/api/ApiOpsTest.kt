@@ -13,6 +13,7 @@ import dev.njr.zync.data.JvmZyncDatabase
 import dev.njr.zync.server.id
 import dev.njr.zync.server.str
 import dev.njr.zync.server.sync.SyncService
+import dev.njr.zync.server.testServerHlc
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.put
@@ -41,7 +42,7 @@ class ApiOpsTest {
         testApplication {
             val service = SyncService(JvmZyncDatabase.inMemory())
             val blobs = dev.njr.zync.server.blob.BlobService(dev.njr.zync.server.blob.InMemoryBlobStore())
-            val api = ExternalOpApi(service, blobs = blobs)
+            val api = ExternalOpApi(service, testServerHlc(), blobs = blobs)
             application {
                 install(ContentNegotiation) { json() }
                 routing { apiRoutes(api, EnvBotAuth(token, "newz"), blobs) }
@@ -254,7 +255,7 @@ class ApiOpsTest {
     @Test
     fun createCannotBypassTheFieldWhitelistOrTagGrant() {
         val service = SyncService(JvmZyncDatabase.inMemory())
-        val api = ExternalOpApi(service)
+        val api = ExternalOpApi(service, testServerHlc())
         val bot = BotIdentity("x", dev.njr.zync.core.api.BotCapabilities(verbs = setOf("create"), fields = setOf("notes")))
         // A field outside the whitelist, and a tag without the addTag grant, are both rejected on create.
         assertEquals("error", api.submit(bot, OpEnvelope(intents = listOf(

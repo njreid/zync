@@ -13,8 +13,15 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 class SessionStore(
     private val ttlMillis: Long = 30 * 24 * 60 * 60 * 1000L,
     private val tokenGenerator: () -> String = ::randomToken,
+    private val maxSessions: Int = 1024,
 ) {
-    private val sessions = mutableMapOf<String, Long>() // token -> expiry
+    // Bounded LRU (token -> expiry), same pattern as `IdempotencyCache` in ApiRoutes.kt: an
+    // access-order LinkedHashMap that self-evicts the least-recently-used entry once over cap.
+    // This is a backstop against unbounded growth, not a replacement for the TTL expiry below —
+    // an evicted-but-unexpired session simply logs that browser out early, same as a restart.
+    private val sessions = object : LinkedHashMap<String, Long>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>): Boolean = size > maxSessions
+    }
 
     /** Issue a fresh session token. Call only after the credential has been verified. */
     @Synchronized
@@ -38,6 +45,10 @@ class SessionStore(
     fun logout(token: String) {
         sessions.remove(token)
     }
+
+    /** Current number of live (not-yet-expired-or-evicted) sessions. Exposed for testing. */
+    @Synchronized
+    fun size(): Int = sessions.size
 
     companion object {
         private val random = SecureRandom()
