@@ -6,6 +6,7 @@ import dev.njr.zync.core.merge.apply
 import dev.njr.zync.core.op.Actor
 import dev.njr.zync.core.op.EntityType
 import dev.njr.zync.core.op.Op
+import dev.njr.zync.core.op.typeName
 import dev.njr.zync.core.state.StateStore
 import dev.njr.zync.data.db.ZyncDatabase
 import kotlinx.serialization.json.Json
@@ -82,7 +83,7 @@ class OpWriter(
                 seq = null, // assigned by the server on ingest
                 entity_id = op.entityId.toString(),
                 entity_type = op.entityType.name,
-                op_type = op::class.simpleName ?: "Op",
+                op_type = op.typeName,
                 payload = json.encodeToString(Op.serializer(), op),
                 hlc_physical = op.hlc.physical,
                 hlc_counter = op.hlc.counter.toLong(),
