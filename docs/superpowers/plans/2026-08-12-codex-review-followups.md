@@ -35,11 +35,18 @@ still real and worth doing, with current evidence — not the full original revi
 8. **Reflection-based op-type naming duplicated.** `op::class.simpleName` is still used
    independently in both `OpWriter.kt:85` and `SyncService.kt:155` — no shared serial/type
    identifier. (Original #19.)
-9. **Double `notifyChanged()` on browser mutations — confirmed, precise, real bug.**
-   `WebRoutes.kt`'s `applied {}` helper calls `commands.mutate()` (which already routes through
-   `onIngest → notifyChanged()`) and then explicitly calls `changes?.notifyChanged()` again
-   (`WebRoutes.kt:261-263`). Every browser mutation double-fires the SSE change event. Cheapest
-   item on this list to fix — worth doing opportunistically. (Original #20.)
+~~9. Double `notifyChanged()` on browser mutations.~~ **CORRECTED 2026-08-12, not a bug.** This
+   doc originally claimed `WebRoutes.kt`'s `applied {}` calling `changes?.notifyChanged()`
+   after `commands.mutate()` was a double-fire, because `commands.mutate()` "already routes
+   through `onIngest → notifyChanged()`." That's false: `SyncService.ingestLocal(op)` — the path
+   `ContentCommands`/`OpEmitter` actually takes for a web mutation — has an explicit doc comment
+   stating it **deliberately does NOT fire `onIngest`**; that callback is reserved for the
+   replica-push boundary (`push()`), a different path entirely. `WebRoutes.kt`'s explicit
+   `changes?.notifyChanged()` is the *only* trigger for a browser mutation's SSE notification, by
+   design — removing it (as this doc originally recommended) would have broken live UI updates
+   for every browser mutation. Caught during implementation by an implementer who verified
+   empirically (a diagnostic test counting emissions) instead of trusting this doc's diagnosis.
+   (Original #20 — the original 2026-07-13 Codex review's diagnosis was itself wrong here.)
 
 ## Partially resolved — may want a follow-up pass
 
