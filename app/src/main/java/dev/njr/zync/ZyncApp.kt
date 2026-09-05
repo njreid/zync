@@ -90,7 +90,7 @@ class ZyncApp : Application() {
      * into [MainActivity]); persists the credentials and kicks a first sync.
      */
     suspend fun pairFromUri(uri: String): dev.njr.zync.replica.PairingOutcome {
-        val http = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp)
+        val http = dev.njr.zync.net.buildZyncHttpClient()
         return try {
             dev.njr.zync.replica.pairFromUri(http, uri, replicaId = deviceId, store = pairingStore).also {
                 if (it is dev.njr.zync.replica.PairingOutcome.Paired) {
@@ -111,7 +111,7 @@ class ZyncApp : Application() {
     suspend fun syncOnce() {
         val paired = pairingStore.load() ?: return
         dev.njr.zync.sync.SyncMonitor.begin()
-        val http = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp)
+        val http = dev.njr.zync.net.buildZyncHttpClient()
         try {
             val signer = dev.njr.zync.replica.Ed25519DeviceSigner(paired.deviceId, paired.deviceSeed)
             val now = { System.currentTimeMillis() }

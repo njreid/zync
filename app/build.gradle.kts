@@ -48,6 +48,11 @@ android {
         targetSdk = 36
         versionCode = zyncVersionCode
         versionName = zyncVersionName
+
+        val cfAccessClientId = releaseValue("CF_ACCESS_CLIENT_ID", "CF_ACCESS_CLIENT_ID") ?: ""
+        val cfAccessClientSecret = releaseValue("CF_ACCESS_CLIENT_SECRET", "CF_ACCESS_CLIENT_SECRET") ?: ""
+        buildConfigField("String", "CF_ACCESS_CLIENT_ID", "\"$cfAccessClientId\"")
+        buildConfigField("String", "CF_ACCESS_CLIENT_SECRET", "\"$cfAccessClientSecret\"")
     }
 
     signingConfigs {
@@ -75,7 +80,7 @@ android {
     buildFeatures {
       compose = true
       aidl = false
-      buildConfig = false
+      buildConfig = true
       shaders = false
     }
 
