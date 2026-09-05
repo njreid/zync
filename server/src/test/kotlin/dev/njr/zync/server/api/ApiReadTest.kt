@@ -7,6 +7,7 @@ import dev.njr.zync.core.api.OpEnvelope
 import dev.njr.zync.core.api.OpIntent
 import dev.njr.zync.data.JvmZyncDatabase
 import dev.njr.zync.server.sync.SyncService
+import dev.njr.zync.server.testServerHlc
 import dev.njr.zync.web.content.ContentReadModel
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -34,7 +35,7 @@ class ApiReadTest {
     private fun run(block: suspend (io.ktor.client.HttpClient, SyncService) -> Unit) = testApplication {
         val service = SyncService(JvmZyncDatabase.inMemory())
         val blobs = dev.njr.zync.server.blob.BlobService(dev.njr.zync.server.blob.InMemoryBlobStore())
-        val api = ExternalOpApi(service, blobs = blobs)
+        val api = ExternalOpApi(service, testServerHlc(), blobs = blobs)
         val read = ContentReadModel(service.stateStore)
         application {
             install(ContentNegotiation) { json() }

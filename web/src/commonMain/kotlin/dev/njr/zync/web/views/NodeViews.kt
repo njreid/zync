@@ -350,8 +350,10 @@ private fun FlowContent.expandedPanel(read: ContentReadModel, node: NodeView, ca
             node.person?.let { p -> div(classes = "f-row") { icon("waiting"); +"@$p" } }
         }
 
-        // Subtasks (nested to the model's 4 levels; tap one to open it).
-        if (read.children(node.id).isNotEmpty()) subtaskTree(read, node.id, levelsLeft = 3)
+        // Subtasks (nested to the model's 4 levels; tap one to open it). Build the parent→children
+        // index once here (this row's own top-level render) instead of per-node during recursion.
+        val subtaskIndex = read.childrenIndex()
+        if (subtaskIndex[node.id].orEmpty().isNotEmpty()) subtaskTree(subtaskIndex, node.id, levelsLeft = 3)
 
         // Operator file suggestions (if any) remain available as quick chips.
         if (node.fileSuggestions.isNotEmpty()) div(classes = "f-row chips-row") {
@@ -664,9 +666,9 @@ private fun readingMinutes(markdown: String): Int =
  * The descendant task tree under [parent], one row per line and indented per level, capped at
  * [levelsLeft] more levels (the data model allows 4 levels total, so an inbox item passes 3).
  */
-private fun FlowContent.subtaskTree(read: ContentReadModel, parent: Ulid, levelsLeft: Int) {
+private fun FlowContent.subtaskTree(index: Map<Ulid?, List<NodeView>>, parent: Ulid, levelsLeft: Int) {
     if (levelsLeft <= 0) return
-    val children = read.children(parent)
+    val children = index[parent].orEmpty()
     if (children.isEmpty()) return
     ul(classes = "subtasks-list") {
         children.forEach { child ->
@@ -674,21 +676,21 @@ private fun FlowContent.subtaskTree(read: ContentReadModel, parent: Ulid, levels
                 a(href = "/node/${child.id}") { +(child.title ?: "(untitled)") }
                 child.size?.let { span("size-badge") { +it } }
                 child.status?.let { span("status") { +" · $it" } }
-                subtaskTree(read, child.id, levelsLeft - 1)
+                subtaskTree(index, child.id, levelsLeft - 1)
             }
         }
     }
 }
 
 /** The tree under [parent] (null = root), rendered recursively. */
-fun FlowContent.treeSection(read: ContentReadModel, parent: Ulid?) {
-    val children = read.children(parent)
+fun FlowContent.treeSection(index: Map<Ulid?, List<NodeView>>, parent: Ulid?) {
+    val children = index[parent].orEmpty()
     if (children.isEmpty()) return
     ul {
         children.forEach { child ->
             li {
                 nodeRow(child)
-                treeSection(read, child.id)
+                treeSection(index, child.id)
             }
         }
     }

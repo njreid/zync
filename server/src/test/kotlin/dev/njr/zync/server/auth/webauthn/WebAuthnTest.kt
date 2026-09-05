@@ -57,7 +57,7 @@ class WebAuthnTest {
 
     private fun ApplicationTestBuilder.wire(db: ZyncDatabase, sessions: SessionStore, regToken: String?): WebAuthnEndpoint {
         val service = SyncService(db)
-        val content = ServerContent(service)
+        val content = ServerContent(service, dev.njr.zync.server.testServerHlc())
         val endpoint = WebAuthnEndpoint(
             WebAuthnService(config(), WebauthnCredentialStore(db), ChallengeStore()), sessions, regToken,
         )

@@ -40,8 +40,8 @@ class M6AcceptanceTest {
 
         val serverInbox = WebPlatform.renderFragment("inbox") { inboxSection(serverRead, inbox, Long.MAX_VALUE) }
         val phoneInbox = WebPlatform.renderFragment("inbox") { inboxSection(phoneRead, inbox, Long.MAX_VALUE) }
-        val serverTree = WebPlatform.renderFragment("tree") { treeSection(serverRead, null) }
-        val phoneTree = WebPlatform.renderFragment("tree") { treeSection(phoneRead, null) }
+        val serverTree = WebPlatform.renderFragment("tree") { treeSection(serverRead.childrenIndex(), null) }
+        val phoneTree = WebPlatform.renderFragment("tree") { treeSection(phoneRead.childrenIndex(), null) }
 
         assertEquals(serverInbox, phoneInbox) // identical inbox UI on both surfaces
         assertEquals(serverTree, phoneTree)   // identical tree UI on both surfaces

@@ -611,7 +611,7 @@ class MainActivity : ComponentActivity() {
     private suspend fun mintNewzUrl(): Result<String> {
         val app = application as ZyncApp
         val paired = app.pairingStore.load() ?: return Result.failure(dev.njr.zync.ui.NewzNotPaired())
-        val http = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp)
+        val http = dev.njr.zync.net.buildZyncHttpClient()
         return try {
             withContext(Dispatchers.IO) {
                 runCatching {

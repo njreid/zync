@@ -17,6 +17,9 @@ fun releaseValue(propertyName: String, envName: String): String? =
     (releaseKeyProperties.getProperty(propertyName) ?: providers.environmentVariable(envName).orNull)
         ?.takeIf { it.isNotBlank() }
 
+fun String.asKotlinStringLiteral(): String =
+    "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
 val releaseStoreFile = releaseValue("storeFile", "ZYNC_KEYSTORE_FILE")
 val releaseStorePassword = releaseValue("storePassword", "ZYNC_KEYSTORE_PASSWORD")
 val releaseKeyAlias = releaseValue("keyAlias", "ZYNC_KEY_ALIAS")
@@ -48,6 +51,11 @@ android {
         targetSdk = 36
         versionCode = zyncVersionCode
         versionName = zyncVersionName
+
+        val cfAccessClientId = releaseValue("CF_ACCESS_CLIENT_ID", "CF_ACCESS_CLIENT_ID") ?: ""
+        val cfAccessClientSecret = releaseValue("CF_ACCESS_CLIENT_SECRET", "CF_ACCESS_CLIENT_SECRET") ?: ""
+        buildConfigField("String", "CF_ACCESS_CLIENT_ID", cfAccessClientId.asKotlinStringLiteral())
+        buildConfigField("String", "CF_ACCESS_CLIENT_SECRET", cfAccessClientSecret.asKotlinStringLiteral())
     }
 
     signingConfigs {
@@ -75,7 +83,7 @@ android {
     buildFeatures {
       compose = true
       aidl = false
-      buildConfig = false
+      buildConfig = true
       shaders = false
     }
 

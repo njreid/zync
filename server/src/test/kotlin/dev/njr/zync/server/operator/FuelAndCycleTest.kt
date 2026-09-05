@@ -10,6 +10,7 @@ import dev.njr.zync.core.operator.TriggerKind
 import dev.njr.zync.data.JvmZyncDatabase
 import dev.njr.zync.server.id
 import dev.njr.zync.server.sync.SyncService
+import dev.njr.zync.server.testServerHlc
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -140,6 +141,7 @@ class FuelAndCycleTest {
             ),
             llm = FakeLlmClient(),
             emit = service::ingestLocal,
+            hlc = testServerHlc(),
             clock = Clock { 0L },
         )
     }

@@ -28,7 +28,12 @@ fun main() {
     // Mirror prod (Main.kt): every ingest fires the change feed, so the /updates SSE live-updates.
     val changes = dev.njr.zync.web.sse.ChangeNotifier()
     val service = SyncService(JvmZyncDatabase.inMemory(), onIngest = { changes.notifyChanged() })
-    val content = ServerContent(service, changes)
+    // Dev server is ephemeral (in-memory DB) — no persistence needed for the HLC either.
+    val serverHlc = dev.njr.zync.server.clock.ServerHlc(object : dev.njr.zync.server.clock.HlcStore {
+        override fun load(): Hlc? = null
+        override fun save(hlc: Hlc) {}
+    })
+    val content = ServerContent(service, serverHlc, changes)
     content.commands.createTask("Kbd complete me") // gestures.spec keyboard test completes the first row
     content.commands.createTask("Buy milk")
     content.commands.createTask("Read a book")

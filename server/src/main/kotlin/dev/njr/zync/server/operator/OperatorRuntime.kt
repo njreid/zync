@@ -1,7 +1,6 @@
 package dev.njr.zync.server.operator
 
 import dev.njr.zync.core.clock.Clock
-import dev.njr.zync.core.clock.HlcGenerator
 import dev.njr.zync.core.id.Ulid
 import dev.njr.zync.core.merge.project
 import dev.njr.zync.core.op.Actor
@@ -17,6 +16,7 @@ import dev.njr.zync.core.operator.evaluate
 import dev.njr.zync.core.state.EntitySnapshot
 import dev.njr.zync.core.state.StateStore
 import dev.njr.zync.data.db.ZyncDatabase
+import dev.njr.zync.server.clock.ServerHlc
 import dev.njr.zync.server.sync.OpIngestHook
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -65,6 +65,14 @@ class OperatorRuntime(
     scopes: ReadScopeResolver,
     private val llm: LlmClient,
     private val emit: (Op) -> Op,
+    /**
+     * The server's ONE shared HLC (device id "server" — same as [ServerHlc]'s default),
+     * also advanced by [dev.njr.zync.server.content.ServerOpEmitter] (browser ops) and
+     * [dev.njr.zync.server.api.RecordingBotEmitter] (bot ops). A separate, unsynchronized
+     * `HlcGenerator("server", clock)` here would let operator-authored ops collide with or
+     * land non-monotonically relative to those two paths — see [ServerHlc]'s kdoc.
+     */
+    private val hlc: ServerHlc,
     private val blobText: (String) -> String? = { null },
     /** Per-operator-id completion override (retrieval operators); default = the LLM. */
     private val completers: Map<String, CompletionSource> = emptyMap(),
@@ -74,7 +82,6 @@ class OperatorRuntime(
     private val json: Json = Json,
 ) : OpIngestHook {
     private val log = LoggerFactory.getLogger("zync.operators")
-    private val hlc = HlcGenerator(DEVICE_ID, clock)
     private val emitting = ThreadLocal.withInitial { false }
 
     private class Registered(val manifest: OperatorManifest, val scope: ReadScope)
