@@ -7,10 +7,11 @@ import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.header
 
 /**
- * The one place both of [dev.njr.zync.ZyncApp]'s HTTP call sites (device pairing and
- * op-log sync) build their client, so the Cloudflare Access service-token headers
- * (Task 5/6 of the shared-host migration) land on every non-interactive request
- * without each call site remembering to add them.
+ * The one place every non-interactive HTTP call site against the zync server
+ * ([dev.njr.zync.ZyncApp]'s device pairing and op-log sync, and
+ * [dev.njr.zync.MainActivity]'s newz handoff mint) builds its client, so the
+ * Cloudflare Access service-token headers (Task 5/6 of the shared-host migration)
+ * land on every such request without each call site remembering to add them.
  */
 fun buildZyncHttpClient(): HttpClient {
     val credentials = CfAccessCredentials.from(BuildConfig.CF_ACCESS_CLIENT_ID, BuildConfig.CF_ACCESS_CLIENT_SECRET)
